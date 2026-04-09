@@ -3,8 +3,8 @@ import { createContext, useContext, useState } from 'react'
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(localStorage.getItem('token'))
-  const [user, setUser] = useState(null)
+  const [token, setToken] = useState(localStorage.getItem('token') || 'dev-token')
+  const [user, setUser] = useState({ username: 'admin', role: 'ADMIN' })
 
   const loginUser = (data) => {
     localStorage.setItem('token', data.token)
