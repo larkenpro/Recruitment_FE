@@ -9,14 +9,8 @@ import { useAuth } from '../context/AuthContext'
 const { Header, Sider, Content } = Layout
 
 const menuItems = [
-  { key: '/dashboard', icon: <DashboardOutlined />, label: 'Dashboard' },
   { key: '/colleges', icon: <BankOutlined />, label: 'Colleges' },
   { key: '/events', icon: <CalendarOutlined />, label: 'Events' },
-  { key: '/candidates', icon: <UserOutlined />, label: 'Candidates' },
-  { key: '/offers', icon: <GiftOutlined />, label: 'Offers' },
-  { key: '/joining', icon: <CheckCircleOutlined />, label: 'Joining' },
-  { key: '/evaluation', icon: <AuditOutlined />, label: 'Evaluation' },
-  { key: '/analytics', icon: <BarChartOutlined />, label: 'Analytics' },
 ]
 
 export default function AppLayout({ children }) {
