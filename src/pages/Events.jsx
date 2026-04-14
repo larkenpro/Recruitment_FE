@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Card, Table, Button, Modal, Form, Input, Select, Tag, message, Space, Divider, InputNumber, List } from 'antd'
 import { PlusOutlined, LinkOutlined, CopyOutlined, UnorderedListOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -42,7 +42,7 @@ export default function Events() {
 
   const handleGenerateLink = async (eventId) => {
     const res = await generateLink(eventId)
-    setLinks(prev => ({ ...prev, [eventId]: res.data.data.applyUrl }))
+    setLinks(prev => ({ ...prev, [eventId]: res.data }))
     message.success('Link generated!')
   }
 
@@ -72,7 +72,7 @@ export default function Events() {
             disabled={r.status !== 'ACTIVE'}>
             Generate Link
           </Button>
-          {links[r.id] && <Button size="small" icon={<CopyOutlined />} onClick={() => handleCopy(links[r.id])}>Copy</Button>}
+          {links[r.id] && <Button size="small" icon={<CopyOutlined />} onClick={() => handleCopy(links[r.id].data)}>Copy</Button>}
           <Button size="small" icon={<UnorderedListOutlined />} onClick={() => setRoundsModal(r)}>
             Rounds
           </Button>
@@ -81,6 +81,9 @@ export default function Events() {
     },
   ]
 
+  useEffect(() => {
+    console.log(links)
+  }, [links])
   return (
     <>
       <Card

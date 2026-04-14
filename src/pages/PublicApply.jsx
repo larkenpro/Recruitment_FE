@@ -19,8 +19,8 @@ export default function PublicApply() {
   const [step, setStep] = useState(0)
 
   useEffect(() => {
-    getApplyForm(token).then(r => setEventInfo(r.data.data)).catch(() => setError('Invalid or expired link'))
-    axios.get(`${import.meta.env.VITE_PUBLIC_API_URL}/public/positions`).then(r => setPositions(r.data.data))
+    getApplyForm(token).then(r => setEventInfo(r.data)).catch(() => setError('Invalid or expired link'))
+    axios.get(`${import.meta.env.VITE_PUBLIC_API_URL}/public/positions`).then(r => setPositions(r.data))
   }, [token])
 
   const handleSubmit = async (values) => {
@@ -166,7 +166,7 @@ export default function PublicApply() {
                     <Input type="number" step="0.01" placeholder="8.5" size="large" />
                   </Form.Item>
                 </Col>
-                <Col xs={24} sm={12}>
+                <Col xs={24} sm={12}> 
                   <Form.Item name="pgDegree" label="PG Degree (if applicable)">
                     <Input placeholder="M.Tech CSE" size="large" />
                   </Form.Item>
