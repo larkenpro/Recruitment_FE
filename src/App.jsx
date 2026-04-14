@@ -33,7 +33,7 @@ export default function App() {
               <Route path="/apply/:token" element={<PublicApply />} />
               <Route path="/" element={<Navigate to="/colleges" replace />} />
               <Route path="/colleges" element={<P><Colleges /></P>} />
-              <Route path="/events" element={<P><Events /></P>} />
+              <Route path="/events" element={<P><Events/></P>} />
               <Route path="/candidates/:id" element={<P><CandidateDetail /></P>} />
             </Routes>
           </BrowserRouter>

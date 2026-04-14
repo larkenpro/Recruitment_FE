@@ -13,8 +13,9 @@ export const uploadResume = (candidateId, file) => {
 }
 
 // Public apply — no auth
+// validates token in backend
 export const getApplyForm = (token) =>
-  axios.get(`${import.meta.env.VITE_PUBLIC_API_URL}/public/apply/${token}`)
+  axios.get(`${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/links/validate/${token}`)
 
 export const submitApplication = (token, data) =>
   axios.post(`${import.meta.env.VITE_PUBLIC_API_URL}/public/apply/${token}`, data)
