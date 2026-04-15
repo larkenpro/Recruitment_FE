@@ -7,6 +7,7 @@ import AppLayout from './components/Layout'
 import Login from './pages/Login'
 import Colleges from './pages/Colleges'
 import Events from './pages/Events'
+import Positions from './pages/Positions'
 import CandidateDetail from './pages/CandidateDetail'
 import PublicApply from './pages/PublicApply'
 
@@ -34,6 +35,7 @@ export default function App() {
               <Route path="/" element={<Navigate to="/colleges" replace />} />
               <Route path="/colleges" element={<P><Colleges /></P>} />
               <Route path="/events" element={<P><Events/></P>} />
+              <Route path="/positions" element={<P><Positions /></P>} />
               <Route path="/candidates/:id" element={<P><CandidateDetail /></P>} />
             </Routes>
           </BrowserRouter>
