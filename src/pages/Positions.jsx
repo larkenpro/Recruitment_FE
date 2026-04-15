@@ -15,7 +15,7 @@ export default function Positions() {
 
   const { data: positions, isLoading } = useQuery({
     queryKey: ['positions'],
-    queryFn: () => getPositions().then(r => r.data)
+    queryFn: () => getPositions().then(r => r.data.data)
   })
 
   const createMutation = useMutation({
