@@ -3,13 +3,14 @@ import { useParams } from 'react-router-dom'
 import { Form, Input, Select, Button, Card, Row, Col, Typography, Divider, Upload, Alert, Steps, Result } from 'antd'
 import { UploadOutlined, UserOutlined, BookOutlined, AimOutlined } from '@ant-design/icons'
 import { getApplyForm, submitApplication, uploadResume } from '../api/candidates'
-import axios from 'axios'
+import { getPublicPositions } from '../api/positions'
 
 const { Title, Text } = Typography
 
 export default function PublicApply() {
   const { token } = useParams()
   const [form] = Form.useForm()
+  const pref1 = Form.useWatch('preferredPositionId1', form)
   const [eventInfo, setEventInfo] = useState(null)
   const [positions, setPositions] = useState([])
   const [submitted, setSubmitted] = useState(false)
@@ -20,8 +21,12 @@ export default function PublicApply() {
 
   useEffect(() => {
     getApplyForm(token).then(r => setEventInfo(r.data)).catch(() => setError('Invalid or expired link'))
-    axios.get(`${import.meta.env.VITE_PUBLIC_API_URL}/public/positions`).then(r => setPositions(r.data))
+    getPublicPositions().then(r => setPositions(r.data.data))
   }, [token])
+
+  useEffect(() => {
+    console.log(eventInfo)
+  }, [eventInfo]);
 
   const handleSubmit = async (values) => {
     setLoading(true)
@@ -74,14 +79,14 @@ export default function PublicApply() {
   ]
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: '40px 16px' }}>
+    <div style={{ minHeight: '100vh', background: ' ', padding: '40px 16px' }}>
       <div style={{ maxWidth: 720, margin: '0 auto' }}>
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: 24, color: 'white' }}>
-          <div style={{ fontSize: 40, marginBottom: 8 }}>🎯</div>
-          <Title level={2} style={{ color: 'white', margin: 0 }}>Campus Recruitment</Title>
-          <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 16 }}>
-            {eventInfo.event?.college?.name} — {eventInfo.event?.recruitmentYear}
+          {/* <div style={{ fontSize: 40, marginBottom: 8 }}>🎯</div>q¯ */}
+          <Title level={2} style={{ color: 'black', margin: 0 }}>Campus Recruitment</Title>
+          <Text style={{ color: 'black', fontSize: 16 }}>
+            {eventInfo.data.event?.college?.name} — {eventInfo.data.event?.recruitmentYear}
           </Text>
         </div>
 
@@ -122,10 +127,33 @@ export default function PublicApply() {
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12}>
-                  <Form.Item name="branch" label="Branch">
-                    <Input placeholder="Computer Science" size="large" />
+                  <Form.Item 
+                    name="branch" 
+                    label="Branch"
+                    rules={[{ required: true, message: 'Please select your branch!' }]}
+                  >
+                    <Select 
+                      showSearch
+                      size="large" 
+                      placeholder="Select your branch"
+                    >
+                      <Option value="Computer Science & Engineering">Computer Science & Engineering</Option>
+                      <Option value="Electronics & Communication Engineering">Electronics & Communication Engineering</Option>
+                      <Option value="Electrical Engineering">Electrical Engineering</Option>
+                      <Option value="Mechanical Engineering">Mechanical Engineering</Option>
+                      <Option value="Chemical Engineering">Chemical Engineering</Option>
+                      <Option value="Civil Engineering">Civil Engineering</Option>
+                      <Option value="Information Technology">Information Technology</Option>
+                      <Option value="Production Engineering">Production Engineering</Option>
+                      <Option value="Biomedical Engineering">Biomedical Engineering</Option>
+                      <Option value="Biotechnology">Biotechnology</Option>
+                      <Option value="Instrumentation Engineering">Instrumentation Engineering</Option>
+                      <Option value="Metallurgical Engineering">Metallurgical Engineering</Option>
+                      <Option value="Others">Others</Option>
+                    </Select>
                   </Form.Item>
                 </Col>
+                
               </Row>
               <Button type="primary" size="large" block onClick={() => {
                 form.validateFields(['name', 'username', 'email']).then(() => setStep(1))
@@ -157,7 +185,7 @@ export default function PublicApply() {
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12}>
-                  <Form.Item name="ugDegree" label="UG Degree & Specialization">
+                  <Form.Item name="ugDegree" label="UG Specialization (if applicable)">
                     <Input placeholder="B.Tech Computer Science" size="large" />
                   </Form.Item>
                 </Col>
@@ -199,7 +227,7 @@ export default function PublicApply() {
                 </Col>
                 <Col xs={24} sm={12}>
                   <Form.Item name="preferredPositionId2" label="Interested Role - Preference 2">
-                    <Select size="large" placeholder="Select role" options={positions.map(p => ({ value: p.id, label: p.title }))} allowClear />
+                    <Select size="large" placeholder="Select role" options={positions.filter(p => p.id !== pref1).map(p => ({ value: p.id, label: p.title }))} allowClear />
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12}>
