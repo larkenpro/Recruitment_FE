@@ -18,4 +18,4 @@ export const getApplyForm = (token) =>
   axios.get(`${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/links/validate/${token}`)
 
 export const submitApplication = (token, data) =>
-  axios.post(`${import.meta.env.VITE_PUBLIC_API_URL}/public/apply/${token}`, data)
+  axios.post(`${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/public/apply/${token}`, data)
