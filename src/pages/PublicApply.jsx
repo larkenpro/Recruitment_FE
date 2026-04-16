@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
-import { Form, Input, Select, Button, Card, Row, Col, Typography, Divider, Upload, Alert, Steps, Result } from 'antd'
+import { Form, Input, Select, Button, Card, Row, Col, Typography, Divider, Upload, Alert, Steps, Result, DatePicker } from 'antd'
 import { UploadOutlined, UserOutlined, BookOutlined, AimOutlined } from '@ant-design/icons'
 import { getApplyForm, submitApplication, uploadResume } from '../api/candidates'
 import { getPublicPositions } from '../api/positions'
@@ -32,8 +32,14 @@ export default function PublicApply() {
     setLoading(true)
     setError('')
     try {
+      const [start, end] = values.internshipAvailability ?? []
+      const internshipAvailability = start && end
+        ? `${start.format('MMMM-YYYY')} to ${end.format('MMMM-YYYY')}`
+        : null
+
       const res = await submitApplication(token, {
         ...values,
+        internshipAvailability,
         ugCgpa: values.ugCgpa ? Number(values.ugCgpa) : null,
         tenthMark: values.tenthMark ? Number(values.tenthMark) : null,
         twelfthMark: values.twelfthMark ? Number(values.twelfthMark) : null,
@@ -44,7 +50,7 @@ export default function PublicApply() {
         preferredPositionId1: values.preferredPositionId1 ? Number(values.preferredPositionId1) : null,
         preferredPositionId2: values.preferredPositionId2 ? Number(values.preferredPositionId2) : null,
       })
-      const candidateId = res.data.data.candidate?.id
+      const candidateId = res.data.data.candidateId
       if (resumeFile && candidateId) await uploadResume(candidateId, resumeFile)
       setSubmitted(true)
     } catch (err) {
@@ -107,11 +113,6 @@ export default function PublicApply() {
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12}>
-                  <Form.Item name="username" label="Username" rules={[{ required: true }]}>
-                    <Input placeholder="john_doe" size="large" />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} sm={12}>
                   <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email' }]}>
                     <Input placeholder="john@example.com" size="large" />
                   </Form.Item>
@@ -156,7 +157,7 @@ export default function PublicApply() {
                 
               </Row>
               <Button type="primary" size="large" block onClick={() => {
-                form.validateFields(['name', 'username', 'email']).then(() => setStep(1))
+                form.validateFields(['name', 'email']).then(() => setStep(1))
               }}>Next →</Button>
             </div>
 
@@ -251,7 +252,12 @@ export default function PublicApply() {
                 </Col>
                 <Col xs={24} sm={12}>
                   <Form.Item name="internshipAvailability" label="Internship Availability">
-                    <Input placeholder="June 2026 - August 2026" size="large" />
+                    <DatePicker.RangePicker
+                      picker="month"
+                      size="large"
+                      style={{ width: '100%' }}
+                      format="MMMM YYYY"
+                    />
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12}>
