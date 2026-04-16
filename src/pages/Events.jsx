@@ -4,6 +4,14 @@ import { PlusOutlined, LinkOutlined, CopyOutlined, UnorderedListOutlined } from 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getEvents, createEvent, generateLink, updateEventStatus, getRounds, createRound } from '../api/events'
 import { getColleges } from '../api/colleges'
+import { useColumnFilter } from '../hooks/useColumnFilter'
+import FilterBar from '../components/FilterBar'
+
+const FILTER_KEYS = [
+  { key: 'college',         label: 'College', getVal: r => r.college?.name },
+  { key: 'recruitmentYear', label: 'Year',    getVal: r => r.recruitmentYear },
+  { key: 'status',          label: 'Status',  getVal: r => r.status },
+]
 
 export default function Events() {
   const queryClient = useQueryClient()
@@ -14,6 +22,8 @@ export default function Events() {
   const [roundForm] = Form.useForm()
 
   const { data: events, isLoading } = useQuery({ queryKey: ['events'], queryFn: () => getEvents().then(r => r.data.data) })
+
+  const { filteredData, filters, setFilter, removeFilter, optionMap } = useColumnFilter(events, FILTER_KEYS)
   const { data: colleges } = useQuery({ queryKey: ['colleges'], queryFn: () => getColleges().then(r => r.data.data) })
   const { data: rounds } = useQuery({
     queryKey: ['rounds', roundsModal?.id],
@@ -91,7 +101,14 @@ export default function Events() {
         extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>Create Event</Button>}
         bordered={false} style={{ borderRadius: 12 }}
       >
-        <Table dataSource={events ?? []} columns={columns} rowKey="id" loading={isLoading} />
+        <FilterBar
+          filterKeys={FILTER_KEYS}
+          optionMap={optionMap}
+          filters={filters}
+          setFilter={setFilter}
+          removeFilter={removeFilter}
+        />
+        <Table dataSource={filteredData} columns={columns} rowKey="id" loading={isLoading} />
       </Card>
 
       {/* Create Event Modal */}

@@ -4,6 +4,14 @@ import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getCandidate } from '../api/candidates'
 import api from '../api/axios'
+import { useColumnFilter } from '../hooks/useColumnFilter'
+import FilterBar from '../components/FilterBar'
+
+const SCORE_FILTER_KEYS = [
+  { key: 'round',  label: 'Round',  getVal: r => r.round?.name },
+  { key: 'type',   label: 'Type',   getVal: r => r.round?.roundType },
+  { key: 'result', label: 'Result', getVal: r => r.result },
+]
 
 const { Title, Text } = Typography
 
@@ -26,6 +34,8 @@ export default function CandidateDetail() {
     queryKey: ['stage-history', id],
     queryFn: () => api.get(`/candidates/${id}/stage-history`).then(r => r.data.data)
   })
+
+  const { filteredData: filteredScores, filters: scoreFilters, setFilter: setScoreFilter, removeFilter: removeScoreFilter, optionMap: scoreOptionMap } = useColumnFilter(scores, SCORE_FILTER_KEYS)
 
   if (isLoading) return <Card loading style={{ borderRadius: 12 }} />
   if (!candidate) return <Empty />
@@ -88,7 +98,16 @@ export default function CandidateDetail() {
     {
       key: 'scores', label: `Scores (${scores?.length ?? 0})`,
       children: scores?.length > 0
-        ? <Table dataSource={scores} columns={scoreColumns} rowKey={(r) => `${r.id?.roundId}`} pagination={false} size="small" />
+        ? <>
+            <FilterBar
+              filterKeys={SCORE_FILTER_KEYS}
+              optionMap={scoreOptionMap}
+              filters={scoreFilters}
+              setFilter={setScoreFilter}
+              removeFilter={removeScoreFilter}
+            />
+            <Table dataSource={filteredScores} columns={scoreColumns} rowKey={(r) => `${r.id?.roundId}`} pagination={false} size="small" />
+          </>
         : <Empty description="No scores recorded yet" />
     },
     {

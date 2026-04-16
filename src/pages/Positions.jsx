@@ -3,9 +3,16 @@ import { Card, Table, Button, Modal, Form, Input, Select, Tag, message, Space, P
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getPositions, createPosition, updatePosition, deletePosition } from '../api/positions'
+import { useColumnFilter } from '../hooks/useColumnFilter'
+import FilterBar from '../components/FilterBar'
 
 const TYPE_COLORS = { 'Full-Time': 'green', 'Part-Time': 'blue', 'Internship': 'orange', 'Contract': 'purple' }
 const TYPE_OPTIONS = ['Full-Time', 'Part-Time', 'Internship', 'Contract'].map(v => ({ value: v }))
+
+const FILTER_KEYS = [
+  { key: 'department', label: 'Department', getVal: r => r.department },
+  { key: 'type',       label: 'Type',       getVal: r => r.type },
+]
 
 export default function Positions() {
   const queryClient = useQueryClient()
@@ -17,6 +24,8 @@ export default function Positions() {
     queryKey: ['positions'],
     queryFn: () => getPositions().then(r => r.data.data)
   })
+
+  const { filteredData, filters, setFilter, removeFilter, optionMap } = useColumnFilter(positions, FILTER_KEYS)
 
   const createMutation = useMutation({
     mutationFn: createPosition,
@@ -75,7 +84,14 @@ export default function Positions() {
       extra={<Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>Add Position</Button>}
       bordered={false} style={{ borderRadius: 12 }}
     >
-      <Table dataSource={positions ?? []} columns={columns} rowKey="id" loading={isLoading} />
+      <FilterBar
+        filterKeys={FILTER_KEYS}
+        optionMap={optionMap}
+        filters={filters}
+        setFilter={setFilter}
+        removeFilter={removeFilter}
+      />
+      <Table dataSource={filteredData} columns={columns} rowKey="id" loading={isLoading} />
 
       <Modal
         title={editing ? 'Edit Position' : 'Add Position'}
