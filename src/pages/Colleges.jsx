@@ -3,6 +3,14 @@ import { Card, Table, Button, Modal, Form, Input, Select, Tag } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getColleges, createCollege } from '../api/colleges'
+import { useColumnFilter } from '../hooks/useColumnFilter'
+import FilterBar from '../components/FilterBar'
+
+const FILTER_KEYS = [
+  { key: 'city',  label: 'City',  getVal: r => r.city },
+  { key: 'state', label: 'State', getVal: r => r.state },
+  { key: 'tier',  label: 'Tier',  getVal: r => r.tier },
+]
 
 export default function Colleges() {
   const queryClient = useQueryClient()
@@ -10,6 +18,8 @@ export default function Colleges() {
   const [form] = Form.useForm()
 
   const { data: colleges, isLoading } = useQuery({ queryKey: ['colleges'], queryFn: () => getColleges().then(r => r.data.data) })
+
+  const { filteredData, filters, setFilter, removeFilter, optionMap } = useColumnFilter(colleges, FILTER_KEYS)
 
   const mutation = useMutation({
     mutationFn: createCollege,
@@ -30,7 +40,14 @@ export default function Colleges() {
       extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>Add College</Button>}
       bordered={false} style={{ borderRadius: 12 }}
     >
-      <Table dataSource={colleges ?? []} columns={columns} rowKey="id" loading={isLoading} />
+      <FilterBar
+        filterKeys={FILTER_KEYS}
+        optionMap={optionMap}
+        filters={filters}
+        setFilter={setFilter}
+        removeFilter={removeFilter}
+      />
+      <Table dataSource={filteredData} columns={columns} rowKey="id" loading={isLoading} />
 
       <Modal title="Add College" open={open} onCancel={() => setOpen(false)}
         onOk={() => form.validateFields().then(v => mutation.mutate(v))} okText="Save">
