@@ -56,22 +56,82 @@ describe('Events API', () => {
   // ── Rounds ────────────────────────────────────────────────────────────────
   // BACKEND BUG: /events/:id/rounds returns 500 for both GET and POST.
   // Unskip these once the backend rounds endpoints are fixed.
-  it.skip('GET /events/:id/rounds — returns an array', async () => {
-    if (!createdId) return
-    const res = await getRounds(createdId)
-    expect(res.data.status).toBe('success')
-    expect(Array.isArray(res.data.data)).toBe(true)
-  })
+  describe.skip('Rounds', () => {
+    let createdRoundId = null
 
-  it.skip('POST /events/:id/rounds — adds a round', async () => {
-    if (!createdId) return
-    const res = await createRound(createdId, {
-      name: 'Aptitude Test',
-      roundType: 'WRITTEN',
-      sequence: 1,
+    // ── GET rounds (empty) ──────────────────────────────────────────────────
+    it('GET /events/:id/rounds — returns success with an array', async () => {
+      if (!createdId) return
+      const res = await getRounds(createdId)
+      expect(res.data.status).toBe('success')
+      expect(Array.isArray(res.data.data)).toBe(true)
     })
-    expect(res.data.status).toBe('success')
-    expect(res.data.data.name).toBe('Aptitude Test')
+
+    // ── POST round ──────────────────────────────────────────────────────────
+    it('POST /events/:id/rounds — creates a round and returns its fields', async () => {
+      if (!createdId) return
+      const res = await createRound(createdId, {
+        name: 'Aptitude Test',
+        roundType: 'WRITTEN',
+        sequence: 1,
+      })
+      expect(res.data.status).toBe('success')
+      const round = res.data.data
+      expect(round.name).toBe('Aptitude Test')
+      expect(round.roundType).toBe('WRITTEN')
+      expect(round.sequence).toBe(1)
+      expect(typeof round.id).toBe('number')
+      createdRoundId = round.id
+    })
+
+    // ── GET rounds (after create) ───────────────────────────────────────────
+    it('GET /events/:id/rounds — newly created round appears in the list', async () => {
+      if (!createdId || !createdRoundId) return
+      const res = await getRounds(createdId)
+      expect(res.data.status).toBe('success')
+      const ids = res.data.data.map((r) => r.id)
+      expect(ids).toContain(createdRoundId)
+    })
+
+    // ── Valid roundType values ──────────────────────────────────────────────
+    const roundTypes = ['TECHNICAL', 'HR', 'GROUP_DISCUSSION', 'CODING']
+    roundTypes.forEach((type, idx) => {
+      it(`POST /events/:id/rounds — accepts roundType "${type}"`, async () => {
+        if (!createdId) return
+        const res = await createRound(createdId, {
+          name: `${type} Round`,
+          roundType: type,
+          sequence: idx + 2, // sequence 2, 3, 4, 5
+        })
+        expect(res.data.status).toBe('success')
+        expect(res.data.data.roundType).toBe(type)
+      })
+    })
+
+    // ── Sequence ordering ───────────────────────────────────────────────────
+    it('GET /events/:id/rounds — rounds are returned in sequence order', async () => {
+      if (!createdId) return
+      const res = await getRounds(createdId)
+      expect(res.data.status).toBe('success')
+      const sequences = res.data.data.map((r) => r.sequence)
+      const sorted = [...sequences].sort((a, b) => a - b)
+      expect(sequences).toEqual(sorted)
+    })
+
+    // ── 404 for unknown event ───────────────────────────────────────────────
+    it('GET /events/999999/rounds — returns 404 for unknown event', async () => {
+      await expect(getRounds(999999)).rejects.toMatchObject({
+        response: { status: 404 },
+      })
+    })
+
+    it('POST /events/999999/rounds — returns 404 for unknown event', async () => {
+      await expect(
+        createRound(999999, { name: 'Ghost Round', roundType: 'HR', sequence: 1 })
+      ).rejects.toMatchObject({
+        response: { status: 404 },
+      })
+    })
   })
 
   // ── 404 ───────────────────────────────────────────────────────────────────
