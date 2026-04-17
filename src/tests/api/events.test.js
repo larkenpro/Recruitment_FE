@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeAll } from 'vitest'
-import { getEvents, getEvent, createEvent, updateEventStatus, getRounds, createRound } from '../../api/events'
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { getEvents, getEvent, createEvent, updateEventStatus, getRounds, createRound, getEventPositions } from '../../api/events'
 import { getColleges } from '../../api/colleges'
+import { createPosition, deletePosition } from '../../api/positions'
 
 describe('Events API', () => {
   let createdId = null
@@ -129,6 +130,117 @@ describe('Events API', () => {
       await expect(
         createRound(999999, { name: 'Ghost Round', roundType: 'HR', sequence: 1 })
       ).rejects.toMatchObject({
+        response: { status: 404 },
+      })
+    })
+  })
+
+  // ── Event Positions ───────────────────────────────────────────────────────
+  describe('Event Positions', () => {
+    let positionId = null
+    let linkedEventId = null
+
+    // Create a scratch position to link; clean it up after the suite
+    beforeAll(async () => {
+      try {
+        const res = await createPosition({
+          title: '_Test Position (events suite)',
+          department: 'Engineering',
+          type: 'Full-Time',
+        })
+        positionId = res.data.data.id
+      } catch {
+        // backend not reachable — tests that need a position will be skipped
+      }
+    })
+
+    afterAll(async () => {
+      if (positionId) {
+        try { await deletePosition(positionId) } catch { /* best-effort cleanup */ }
+      }
+    })
+
+    // ── POST with positionIds ─────────────────────────────────────────────
+    it('POST /events — creates event with positionIds and returns positions array', async () => {
+      if (!collegeId || !positionId) return
+      const res = await createEvent({
+        collegeId,
+        recruitmentYear: 2097,
+        startDate: '2097-01-01',
+        status: 'UPCOMING',
+        positionIds: [positionId],
+      })
+      expect(res.data.status).toBe('success')
+      const event = res.data.data
+      expect(Array.isArray(event.positions)).toBe(true)
+      expect(event.positions.length).toBe(1)
+      expect(event.positions[0].id).toBe(positionId)
+      linkedEventId = event.id
+    })
+
+    // ── POST with empty positionIds ───────────────────────────────────────
+    it('POST /events — response includes empty positions array when positionIds omitted', async () => {
+      if (!collegeId) return
+      const res = await createEvent({
+        collegeId,
+        recruitmentYear: 2096,
+        startDate: '2096-01-01',
+        status: 'UPCOMING',
+      })
+      expect(res.data.status).toBe('success')
+      expect(Array.isArray(res.data.data.positions)).toBe(true)
+      expect(res.data.data.positions.length).toBe(0)
+    })
+
+    // ── GET /events always includes positions ─────────────────────────────
+    it('GET /events — every event item includes a positions array', async () => {
+      const res = await getEvents()
+      expect(res.data.status).toBe('success')
+      res.data.data.forEach(event => {
+        expect(Array.isArray(event.positions)).toBe(true)
+      })
+    })
+
+    // ── GET /events/:id includes positions ────────────────────────────────
+    it('GET /events/:id — response includes positions array', async () => {
+      if (!linkedEventId) return
+      const res = await getEvent(linkedEventId)
+      expect(res.data.status).toBe('success')
+      expect(Array.isArray(res.data.data.positions)).toBe(true)
+    })
+
+    // ── GET /events/:id/positions — linked position appears ───────────────
+    it('GET /events/:id/positions — returns the linked position', async () => {
+      if (!linkedEventId || !positionId) return
+      const res = await getEventPositions(linkedEventId)
+      expect(res.data.status).toBe('success')
+      expect(Array.isArray(res.data.data)).toBe(true)
+      const ids = res.data.data.map(p => p.id)
+      expect(ids).toContain(positionId)
+    })
+
+    // ── GET /events/:id/positions — position object shape ─────────────────
+    it('GET /events/:id/positions — each position has expected fields', async () => {
+      if (!linkedEventId) return
+      const res = await getEventPositions(linkedEventId)
+      expect(res.data.status).toBe('success')
+      res.data.data.forEach(p => {
+        expect(typeof p.id).toBe('number')
+        expect(typeof p.title).toBe('string')
+      })
+    })
+
+    // ── GET /events/:id/positions — event with no positions is empty ───────
+    it('GET /events/:id/positions — returns empty array for event with no positions', async () => {
+      if (!createdId) return // createdId was created without positionIds
+      const res = await getEventPositions(createdId)
+      expect(res.data.status).toBe('success')
+      expect(res.data.data.length).toBe(0)
+    })
+
+    // ── 404 ───────────────────────────────────────────────────────────────
+    it('GET /events/999999/positions — returns 404 for unknown event', async () => {
+      await expect(getEventPositions(999999)).rejects.toMatchObject({
         response: { status: 404 },
       })
     })

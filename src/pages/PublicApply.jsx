@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import { Form, Input, Select, Button, Card, Row, Col, Typography, Divider, Upload, Alert, Steps, Result, DatePicker } from 'antd'
 import { UploadOutlined, UserOutlined, BookOutlined, AimOutlined } from '@ant-design/icons'
 import { getApplyForm, submitApplication, uploadResume } from '../api/candidates'
-import { getPublicPositions } from '../api/positions'
+import { getEventPositions } from '../api/events'
 
 const { Title, Text } = Typography
 
@@ -20,8 +20,13 @@ export default function PublicApply() {
   const [step, setStep] = useState(0)
 
   useEffect(() => {
-    getApplyForm(token).then(r => setEventInfo(r.data)).catch(() => setError('Invalid or expired link'))
-    getPublicPositions().then(r => setPositions(r.data.data))
+    getApplyForm(token)
+      .then(r => {
+        setEventInfo(r.data)
+        return getEventPositions(r.data.data.event.id)
+      })
+      .then(r => setPositions(r.data.data))
+      .catch(() => setError('Invalid or expired link'))
   }, [token])
 
   useEffect(() => {
