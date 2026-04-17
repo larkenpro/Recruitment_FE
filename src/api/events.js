@@ -8,3 +8,4 @@ export const generateLink = (eventId) => api.post(`/links/generate`, {eventId : 
 export const getRounds = (eventId) => api.get(`/events/${eventId}/rounds`)
 export const createRound = (eventId, data) => api.post(`/events/${eventId}/rounds`, data)
 export const getCandidatesByEvent = (eventId) => api.get(`/events/${eventId}/candidates`)
+export const getEventPositions = (eventId) => api.get(`/events/${eventId}/positions`)
