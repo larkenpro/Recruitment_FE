@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Card, Table, Button, Modal, Form, Input, Select, Tag, message, Space, Divider, InputNumber, List } from 'antd'
-import { PlusOutlined, LinkOutlined, CopyOutlined, UnorderedListOutlined } from '@ant-design/icons'
+import { PlusOutlined, LinkOutlined, CopyOutlined, UnorderedListOutlined, AppstoreOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getEvents, createEvent, generateLink, updateEventStatus, getRounds, createRound } from '../api/events'
+import { getEvents, createEvent, generateLink, updateEventStatus, getRounds, createRound, getEventPositions } from '../api/events'
 import { getColleges } from '../api/colleges'
+import { getPositions } from '../api/positions'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
 
@@ -17,6 +18,7 @@ export default function Events() {
   const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
   const [roundsModal, setRoundsModal] = useState(null) // holds selected event
+  const [positionsModal, setPositionsModal] = useState(null) // holds selected event (read-only)
   const [links, setLinks] = useState({})
   const [form] = Form.useForm()
   const [roundForm] = Form.useForm()
@@ -29,6 +31,17 @@ export default function Events() {
     queryKey: ['rounds', roundsModal?.id],
     queryFn: () => getRounds(roundsModal.id).then(r => r.data.data),
     enabled: !!roundsModal
+  })
+
+  const { data: positions } = useQuery({
+    queryKey: ['positions'],
+    queryFn: () => getPositions().then(r => r.data.data)
+  })
+
+  const { data: eventPositions } = useQuery({
+    queryKey: ['eventPositions', positionsModal?.id],
+    queryFn: () => getEventPositions(positionsModal.id).then(r => r.data.data),
+    enabled: !!positionsModal
   })
 
   const createMutation = useMutation({
@@ -86,6 +99,9 @@ export default function Events() {
           <Button size="small" icon={<UnorderedListOutlined />} onClick={() => setRoundsModal(r)}>
             Rounds
           </Button>
+          <Button size="small" icon={<AppstoreOutlined />} onClick={() => setPositionsModal(r)}>
+            Positions
+          </Button>
         </Space>
       )
     },
@@ -127,6 +143,13 @@ export default function Events() {
           <Form.Item name="status" label="Status" initialValue="UPCOMING">
             <Select options={['UPCOMING', 'ACTIVE', 'COMPLETED', 'CANCELLED'].map(s => ({ value: s }))} />
           </Form.Item>
+          <Form.Item name="positionIds" label="Positions">
+            <Select
+              mode="multiple"
+              placeholder="Select positions for this event"
+              options={positions?.map(p => ({ value: p.id, label: p.title })) ?? []}
+            />
+          </Form.Item>
         </Form>
       </Modal>
 
@@ -164,6 +187,27 @@ export default function Events() {
           </Form.Item>
           <Button type="primary" htmlType="submit" block loading={roundMutation.isLoading}>Add Round</Button>
         </Form>
+      </Modal>
+      {/* Positions Modal (read-only) */}
+      <Modal
+        title={`Positions — ${positionsModal?.college?.name} (${positionsModal?.recruitmentYear})`}
+        open={!!positionsModal}
+        onCancel={() => setPositionsModal(null)}
+        footer={null}
+        width={480}
+      >
+        <List
+          dataSource={eventPositions ?? []}
+          locale={{ emptyText: 'No positions linked to this event' }}
+          renderItem={p => (
+            <List.Item>
+              <List.Item.Meta
+                title={p.title}
+                description={[p.department, p.type].filter(Boolean).join(' · ')}
+              />
+            </List.Item>
+          )}
+        />
       </Modal>
     </>
   )
