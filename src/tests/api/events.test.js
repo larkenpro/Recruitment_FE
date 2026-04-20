@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { getEvents, getEvent, createEvent, updateEventStatus, getRounds, createRound, getEventPositions } from '../../api/events'
+import { getEvents, getEvent, createEvent, updateEventStatus, getRounds, createRound, getEventPositions, getCandidatesByEvent } from '../../api/events'
 import { getColleges } from '../../api/colleges'
 import { createPosition, deletePosition } from '../../api/positions'
 
@@ -243,6 +243,48 @@ describe('Events API', () => {
       await expect(getEventPositions(999999)).rejects.toMatchObject({
         response: { status: 404 },
       })
+    })
+  })
+
+  // ── Event Candidates ──────────────────────────────────────────────────────
+  describe('Event Candidates', () => {
+
+    // ── GET /events/:id/candidates — returns array ────────────────────────
+    it('GET /events/:id/candidates — returns success with an array', async () => {
+      if (!createdId) return
+      const res = await getCandidatesByEvent(createdId)
+      expect(res.data.status).toBe('success')
+      expect(Array.isArray(res.data.data)).toBe(true)
+    })
+
+    // ── No applications on a fresh event ─────────────────────────────────
+    it('GET /events/:id/candidates — empty array for event with no applications', async () => {
+      if (!createdId) return
+      const res = await getCandidatesByEvent(createdId)
+      expect(res.data.status).toBe('success')
+      expect(res.data.data.length).toBe(0)
+    })
+
+    // ── Candidate object shape (when candidates exist) ────────────────────
+    it('GET /events/:id/candidates — each candidate has expected fields', async () => {
+      if (!createdId) return
+      const res = await getCandidatesByEvent(createdId)
+      expect(res.data.status).toBe('success')
+      res.data.data.forEach(c => {
+        expect(typeof c.id).toBe('number')
+        expect(typeof c.name).toBe('string')
+        expect(typeof c.email).toBe('string')
+      })
+    })
+
+    // ── unknown event — backend returns 200 with empty array ─────────────
+    // NOTE: backend does not 404 on unknown eventId for this endpoint;
+    // it returns success with an empty candidates array instead.
+    it('GET /events/999999/candidates — returns success with empty array for unknown event', async () => {
+      const res = await getCandidatesByEvent(999999)
+      expect(res.data.status).toBe('success')
+      expect(Array.isArray(res.data.data)).toBe(true)
+      expect(res.data.data.length).toBe(0)
     })
   })
 
