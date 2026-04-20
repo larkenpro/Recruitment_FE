@@ -10,6 +10,8 @@ import Events from './pages/Events'
 import Positions from './pages/Positions'
 import CandidateDetail from './pages/CandidateDetail'
 import PublicApply from './pages/PublicApply'
+import Analytics from './pages/Analytics'
+import Candidates from './pages/Candidates'
 
 const queryClient = new QueryClient()
 
@@ -36,7 +38,9 @@ export default function App() {
               <Route path="/colleges" element={<P><Colleges /></P>} />
               <Route path="/events" element={<P><Events/></P>} />
               <Route path="/positions" element={<P><Positions /></P>} />
+              <Route path="/candidates" element={<P><Candidates /></P>} />
               <Route path="/candidates/:id" element={<P><CandidateDetail /></P>} />
+              <Route path="/analytics" element={<P><Analytics /></P>} />
             </Routes>
           </BrowserRouter>
         </AuthProvider>
