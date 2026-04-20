@@ -1,7 +1,7 @@
 import { Layout, Menu, Avatar, Badge, Input } from 'antd'
 import {
   DashboardOutlined, BankOutlined, CalendarOutlined,
-  UserOutlined, BarChartOutlined, GiftOutlined, LogoutOutlined, BellOutlined, AuditOutlined, CheckCircleOutlined
+  UserOutlined, BarChartOutlined, GiftOutlined, LogoutOutlined, BellOutlined, AuditOutlined, CheckCircleOutlined, TeamOutlined
 } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
@@ -12,6 +12,8 @@ const menuItems = [
   { key: '/colleges', icon: <BankOutlined />, label: 'Colleges' },
   { key: '/events', icon: <CalendarOutlined />, label: 'Events' },
   { key: '/positions', icon: <AuditOutlined />, label: 'Positions' },
+  { key: '/candidates', icon: <TeamOutlined />, label: 'Candidates' },
+  { key: '/analytics', icon: <BarChartOutlined />, label: 'Analytics' },
 ]
 
 export default function AppLayout({ children }) {

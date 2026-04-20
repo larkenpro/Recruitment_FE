@@ -1,9 +1,18 @@
 import api from './axios'
 import axios from 'axios'
 
-export const getCandidates = () => api.get('/candidates')
-export const getCandidate = (id) => api.get(`/candidates/${id}`)
-export const createCandidate = (data) => api.post('/candidates', data)
+const C = (path = '') => `${import.meta.env.VITE_PUBLIC_API_URL}/api/candidate${path}`
+
+export const getCandidates = () => api.get(C())
+export const getCandidate = (id) => api.get(C(`/${id}`))
+export const createCandidate = (data) => api.post(C(), data)
+export const updateCandidate = (id, data) => api.put(C(`/${id}`), data)
+export const deleteCandidate = (id) => api.delete(C(`/${id}`))
+
+export const getCandidateResume = (id) => api.get(C(`/${id}/resume`))
+export const getCandidateScores = (id) => api.get(C(`/${id}/scores`))
+export const getCandidateStageHistory = (id) => api.get(C(`/${id}/stage-history`))
+
 export const uploadResume = (candidateId, file) => {
   const form = new FormData()
   form.append('file', file)
