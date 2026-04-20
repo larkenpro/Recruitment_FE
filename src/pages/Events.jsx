@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Card, Table, Button, Modal, Form, Input, Select, Tag, message, Space, Divider, InputNumber, List } from 'antd'
-import { PlusOutlined, LinkOutlined, CopyOutlined, UnorderedListOutlined, AppstoreOutlined } from '@ant-design/icons'
+import { PlusOutlined, LinkOutlined, CopyOutlined, UnorderedListOutlined, AppstoreOutlined, TeamOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getEvents, createEvent, generateLink, updateEventStatus, getRounds, createRound, getEventPositions } from '../api/events'
+import { useNavigate } from 'react-router-dom'
+import { getEvents, createEvent, generateLink, updateEventStatus, getRounds, createRound, getEventPositions, getCandidatesByEvent } from '../api/events'
 import { getColleges } from '../api/colleges'
 import { getPositions } from '../api/positions'
 import { useColumnFilter } from '../hooks/useColumnFilter'
@@ -16,9 +17,11 @@ const FILTER_KEYS = [
 
 export default function Events() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [roundsModal, setRoundsModal] = useState(null) // holds selected event
   const [positionsModal, setPositionsModal] = useState(null) // holds selected event (read-only)
+  const [candidatesModal, setCandidatesModal] = useState(null) // holds selected event
   const [links, setLinks] = useState({})
   const [form] = Form.useForm()
   const [roundForm] = Form.useForm()
@@ -42,6 +45,12 @@ export default function Events() {
     queryKey: ['eventPositions', positionsModal?.id],
     queryFn: () => getEventPositions(positionsModal.id).then(r => r.data.data),
     enabled: !!positionsModal
+  })
+
+  const { data: eventCandidates, isLoading: candidatesLoading } = useQuery({
+    queryKey: ['eventCandidates', candidatesModal?.id],
+    queryFn: () => getCandidatesByEvent(candidatesModal.id).then(r => r.data.data),
+    enabled: !!candidatesModal
   })
 
   const createMutation = useMutation({
@@ -101,6 +110,9 @@ export default function Events() {
           </Button>
           <Button size="small" icon={<AppstoreOutlined />} onClick={() => setPositionsModal(r)}>
             Positions
+          </Button>
+          <Button size="small" icon={<TeamOutlined />} onClick={() => setCandidatesModal(r)}>
+            Candidates
           </Button>
         </Space>
       )
@@ -188,6 +200,40 @@ export default function Events() {
           <Button type="primary" htmlType="submit" block loading={roundMutation.isLoading}>Add Round</Button>
         </Form>
       </Modal>
+      {/* Candidates Modal */}
+      <Modal
+        title={`Candidates — ${candidatesModal?.college?.name} (${candidatesModal?.recruitmentYear})`}
+        open={!!candidatesModal}
+        onCancel={() => setCandidatesModal(null)}
+        footer={null}
+        width={860}
+      >
+        <Table
+          dataSource={eventCandidates ?? []}
+          loading={candidatesLoading}
+          rowKey="id"
+          size="small"
+          pagination={{ pageSize: 10 }}
+          locale={{ emptyText: 'No candidates have applied yet' }}
+          columns={[
+            {
+              title: 'Name', dataIndex: 'name',
+              render: (t, r) => <a onClick={() => { setCandidatesModal(null); navigate(`/candidates/${r.id}`) }}><strong>{t}</strong></a>
+            },
+            { title: 'Email', dataIndex: 'email' },
+            { title: 'Phone', dataIndex: 'phone', render: v => v || '—' },
+            { title: 'Branch', dataIndex: 'branch', render: v => v || '—' },
+            { title: 'UG CGPA', dataIndex: 'ugCgpa', render: v => v ?? '—' },
+            { title: 'Pref. Role 1', render: (_, r) => r.preferredPosition1?.title ?? '—' },
+            { title: 'Pref. Role 2', render: (_, r) => r.preferredPosition2?.title ?? '—' },
+            {
+              title: 'Backlogs', dataIndex: 'backlogs',
+              render: v => <Tag color={(v ?? 0) === 0 ? 'green' : 'red'}>{v ?? 0}</Tag>
+            },
+          ]}
+        />
+      </Modal>
+
       {/* Positions Modal (read-only) */}
       <Modal
         title={`Positions — ${positionsModal?.college?.name} (${positionsModal?.recruitmentYear})`}
