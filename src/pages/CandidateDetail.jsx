@@ -2,8 +2,7 @@ import { Card, Row, Col, Descriptions, Tag, Typography, Tabs, Empty, Button, Tab
 import { DownloadOutlined, FileTextOutlined } from '@ant-design/icons'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { getCandidate } from '../api/candidates'
-import api from '../api/axios'
+import { getCandidate, getCandidateResume, getCandidateScores, getCandidateStageHistory } from '../api/candidates'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
 
@@ -24,15 +23,15 @@ export default function CandidateDetail() {
   })
   const { data: resumeData } = useQuery({
     queryKey: ['resume', id],
-    queryFn: () => api.get(`/candidates/${id}/resume`).then(r => r.data.data)
+    queryFn: () => getCandidateResume(id).then(r => r.data.data)
   })
   const { data: scores } = useQuery({
     queryKey: ['scores', id],
-    queryFn: () => api.get(`/candidates/${id}/scores`).then(r => r.data.data)
+    queryFn: () => getCandidateScores(id).then(r => r.data.data)
   })
   const { data: stageHistory } = useQuery({
     queryKey: ['stage-history', id],
-    queryFn: () => api.get(`/candidates/${id}/stage-history`).then(r => r.data.data)
+    queryFn: () => getCandidateStageHistory(id).then(r => r.data.data)
   })
 
   const { filteredData: filteredScores, filters: scoreFilters, setFilter: setScoreFilter, removeFilter: removeScoreFilter, optionMap: scoreOptionMap } = useColumnFilter(scores, SCORE_FILTER_KEYS)
