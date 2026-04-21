@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { Form, Input, Select, Button, Card, Row, Col, Typography, Divider, Upload, Alert, Steps, Result, DatePicker } from 'antd'
 import { UploadOutlined, UserOutlined, BookOutlined, AimOutlined } from '@ant-design/icons'
-import { getApplyForm, submitApplication, uploadResume } from '../api/candidates'
+import { getApplyForm, submitApplication } from '../api/candidates'
 import { getEventPositions } from '../api/events'
 
 const { Title, Text } = Typography
@@ -42,7 +42,7 @@ export default function PublicApply() {
         ? `${start.format('MMMM-YYYY')} to ${end.format('MMMM-YYYY')}`
         : null
 
-      const res = await submitApplication(token, {
+      await submitApplication(token, {
         ...values,
         internshipAvailability,
         ugCgpa: values.ugCgpa ? Number(values.ugCgpa) : null,
@@ -54,9 +54,7 @@ export default function PublicApply() {
         backlogs: values.backlogs ? Number(values.backlogs) : 0,
         preferredPositionId1: values.preferredPositionId1 ? Number(values.preferredPositionId1) : null,
         preferredPositionId2: values.preferredPositionId2 ? Number(values.preferredPositionId2) : null,
-      })
-      const candidateId = res.data.data.candidateId
-      if (resumeFile && candidateId) await uploadResume(candidateId, resumeFile)
+      }, resumeFile)
       setSubmitted(true)
     } catch (err) {
       setError(err.response?.data?.message || 'Submission failed. Please try again.')
