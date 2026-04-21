@@ -1,8 +1,10 @@
-import { Card, Row, Col, Descriptions, Tag, Typography, Tabs, Empty, Button, Table, Timeline } from 'antd'
-import { DownloadOutlined, FileTextOutlined } from '@ant-design/icons'
+import { useState } from 'react'
+import { Card, Row, Col, Descriptions, Tag, Typography, Tabs, Empty, Button, Table, Timeline, Select, Space, message } from 'antd'
+import { DownloadOutlined, FileTextOutlined, EditOutlined } from '@ant-design/icons'
 import { useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { getCandidate, getCandidateResume, getCandidateScores, getCandidateStageHistory } from '../api/candidates'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { getCandidate, getCandidateResume, getCandidateScores, getCandidateStageHistory, updateCandidate } from '../api/candidates'
+import { getPositions } from '../api/positions'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
 
@@ -16,6 +18,10 @@ const { Title, Text } = Typography
 
 export default function CandidateDetail() {
   const { id } = useParams()
+  const queryClient = useQueryClient()
+  const [editingPrefs, setEditingPrefs] = useState(false)
+  const [pref1Id, setPref1Id] = useState(null)
+  const [pref2Id, setPref2Id] = useState(null)
 
   const { data: candidate, isLoading } = useQuery({
     queryKey: ['candidate', id],
@@ -33,6 +39,38 @@ export default function CandidateDetail() {
     queryKey: ['stage-history', id],
     queryFn: () => getCandidateStageHistory(id).then(r => r.data.data)
   })
+
+  const { data: positions = [] } = useQuery({
+    queryKey: ['positions'],
+    queryFn: () => getPositions().then(r => r.data.data),
+  })
+
+  const prefMutation = useMutation({
+    mutationFn: (data) => updateCandidate(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['candidate', id])
+      setEditingPrefs(false)
+      message.success('Preferences updated!')
+    },
+    onError: () => message.error('Failed to update preferences'),
+  })
+
+  const openEditPrefs = () => {
+    setPref1Id(candidate.preferredPosition1?.id ?? null)
+    setPref2Id(candidate.preferredPosition2?.id ?? null)
+    setEditingPrefs(true)
+  }
+
+  const savePrefs = () => {
+    prefMutation.mutate({
+      username: candidate.username,
+      name: candidate.name,
+      email: candidate.email,
+      collegeId: candidate.college?.id,
+      preferredPosition1Id: pref1Id ?? null,
+      preferredPosition2Id: pref2Id ?? null,
+    })
+  }
 
   const { filteredData: filteredScores, filters: scoreFilters, setFilter: setScoreFilter, removeFilter: removeScoreFilter, optionMap: scoreOptionMap } = useColumnFilter(scores, SCORE_FILTER_KEYS)
 
@@ -87,8 +125,35 @@ export default function CandidateDetail() {
     },
     {
       key: 'preferences', label: 'Preferences',
-      children: (
-        <Descriptions column={1} bordered size="small">
+      children: editingPrefs ? (
+        <div style={{ maxWidth: 400 }}>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ marginBottom: 4, fontWeight: 500 }}>Preferred Role 1</div>
+            <Select
+              showSearch optionFilterProp="label" allowClear style={{ width: '100%' }}
+              value={pref1Id}
+              onChange={v => { setPref1Id(v ?? null); if (v === pref2Id) setPref2Id(null) }}
+              options={positions.map(p => ({ value: p.id, label: p.type ? `${p.title} — ${p.type}` : p.title }))}
+            />
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ marginBottom: 4, fontWeight: 500 }}>Preferred Role 2</div>
+            <Select
+              showSearch optionFilterProp="label" allowClear style={{ width: '100%' }}
+              value={pref2Id}
+              onChange={v => setPref2Id(v ?? null)}
+              options={positions.filter(p => p.id !== pref1Id).map(p => ({ value: p.id, label: p.type ? `${p.title} — ${p.type}` : p.title }))}
+            />
+          </div>
+          <Space>
+            <Button type="primary" onClick={savePrefs} loading={prefMutation.isPending}>Save</Button>
+            <Button onClick={() => setEditingPrefs(false)}>Cancel</Button>
+          </Space>
+        </div>
+      ) : (
+        <Descriptions column={1} bordered size="small"
+          extra={<Button size="small" icon={<EditOutlined />} onClick={openEditPrefs}>Edit</Button>}
+        >
           <Descriptions.Item label="Preferred Role 1">{candidate.preferredPosition1?.title ?? '-'}</Descriptions.Item>
           <Descriptions.Item label="Preferred Role 2">{candidate.preferredPosition2?.title ?? '-'}</Descriptions.Item>
         </Descriptions>
