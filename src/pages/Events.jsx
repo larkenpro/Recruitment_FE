@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Card, Table, Button, Modal, Form, Input, Select, Tag, message, Space, Divider, InputNumber, List } from 'antd'
-import { PlusOutlined, LinkOutlined, CopyOutlined, UnorderedListOutlined, AppstoreOutlined, TeamOutlined } from '@ant-design/icons'
+import { Card, Table, Button, Modal, Form, Input, Select, Tag, message, Space, Divider, InputNumber, List, Popconfirm } from 'antd'
+import { PlusOutlined, LinkOutlined, CopyOutlined, UnorderedListOutlined, AppstoreOutlined, TeamOutlined, DeleteOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { getEvents, createEvent, generateLink, updateEventStatus, getRounds, createRound, getEventPositions, getCandidatesByEvent } from '../api/events'
+import { getEvents, createEvent, generateLink, updateEventStatus, getRounds, createRound, getEventPositions, addEventPositions, removeEventPosition, getCandidatesByEvent } from '../api/events'
 import { getColleges } from '../api/colleges'
 import { getPositions } from '../api/positions'
 import { useColumnFilter } from '../hooks/useColumnFilter'
@@ -25,6 +25,7 @@ export default function Events() {
   const [links, setLinks] = useState({})
   const [form] = Form.useForm()
   const [roundForm] = Form.useForm()
+  const [positionForm] = Form.useForm()
 
   const { data: events, isLoading } = useQuery({ queryKey: ['events'], queryFn: () => getEvents().then(r => r.data.data) })
 
@@ -69,6 +70,23 @@ export default function Events() {
       queryClient.invalidateQueries(['rounds', roundsModal?.id])
       roundForm.resetFields()
       message.success('Round added!')
+    }
+  })
+
+  const addPositionsMutation = useMutation({
+    mutationFn: ({ eventId, positionIds }) => addEventPositions(eventId, positionIds),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['eventPositions', positionsModal?.id])
+      positionForm.resetFields()
+      message.success('Position(s) added!')
+    }
+  })
+
+  const removePositionMutation = useMutation({
+    mutationFn: ({ eventId, positionId }) => removeEventPosition(eventId, positionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['eventPositions', positionsModal?.id])
+      message.success('Position removed!')
     }
   })
 
@@ -159,7 +177,7 @@ export default function Events() {
             <Select
               mode="multiple"
               placeholder="Select positions for this event"
-              options={positions?.map(p => ({ value: p.id, label: p.title })) ?? []}
+              options={positions?.map(p => ({ value: p.id, label: p.type ? `${p.title} — ${p.type}` : p.title })) ?? []}
             />
           </Form.Item>
         </Form>
@@ -234,11 +252,11 @@ export default function Events() {
         />
       </Modal>
 
-      {/* Positions Modal (read-only) */}
+      {/* Positions Modal */}
       <Modal
         title={`Positions — ${positionsModal?.college?.name} (${positionsModal?.recruitmentYear})`}
         open={!!positionsModal}
-        onCancel={() => setPositionsModal(null)}
+        onCancel={() => { setPositionsModal(null); positionForm.resetFields() }}
         footer={null}
         width={480}
       >
@@ -246,7 +264,17 @@ export default function Events() {
           dataSource={eventPositions ?? []}
           locale={{ emptyText: 'No positions linked to this event' }}
           renderItem={p => (
-            <List.Item>
+            <List.Item
+              actions={[
+                <Popconfirm
+                  title="Remove this position?"
+                  onConfirm={() => removePositionMutation.mutate({ eventId: positionsModal.id, positionId: p.id })}
+                  okText="Yes" cancelText="No" okButtonProps={{ danger: true }}
+                >
+                  <Button size="small" danger icon={<DeleteOutlined />} loading={removePositionMutation.isPending} />
+                </Popconfirm>
+              ]}
+            >
               <List.Item.Meta
                 title={p.title}
                 description={[p.department, p.type].filter(Boolean).join(' · ')}
@@ -254,6 +282,29 @@ export default function Events() {
             </List.Item>
           )}
         />
+        <Divider>Add Positions</Divider>
+        <Form
+          form={positionForm}
+          layout="vertical"
+          onFinish={v => addPositionsMutation.mutate({ eventId: positionsModal.id, positionIds: v.positionIds })}
+        >
+          <Form.Item name="positionIds" rules={[{ required: true, message: 'Select at least one position' }]}>
+            <Select
+              mode="multiple"
+              placeholder="Select positions to add"
+              optionFilterProp="label"
+              showSearch
+              options={
+                (positions ?? [])
+                  .filter(p => !(eventPositions ?? []).some(ep => ep.id === p.id))
+                  .map(p => ({ value: p.id, label: p.type ? `${p.title} — ${p.type}` : p.title }))
+              }
+            />
+          </Form.Item>
+          <Button type="primary" htmlType="submit" block loading={addPositionsMutation.isPending}>
+            Add
+          </Button>
+        </Form>
       </Modal>
     </>
   )
