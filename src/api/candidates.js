@@ -9,7 +9,7 @@ export const createCandidate = (data) => api.post(C(), data)
 export const updateCandidate = (id, data) => api.put(C(`/${id}`), data)
 export const deleteCandidate = (id) => api.delete(C(`/${id}`))
 
-export const getCandidateResume = (id) => api.get(C(`/${id}/resume`))
+export const getCandidateResume = (id) => api.get(`/candidates/${id}/resume`)
 export const getCandidateScores = (id) => api.get(C(`/${id}/scores`))
 export const getCandidateStageHistory = (id) => api.get(C(`/${id}/stage-history`))
 
@@ -26,5 +26,11 @@ export const uploadResume = (candidateId, file) => {
 export const getApplyForm = (token) =>
   axios.get(`${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/links/validate/${token}`)
 
-export const submitApplication = (token, data) =>
-  axios.post(`${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/public-apply/${token}`, data)
+export const submitApplication = (token, data, file) => {
+  const form = new FormData()
+  Object.entries(data).forEach(([k, v]) => {
+    if (v != null) form.append(k, v)
+  })
+  if (file) form.append('resume', file)
+  return axios.post(`${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/apply/${token}`, form)
+}
