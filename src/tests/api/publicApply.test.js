@@ -18,49 +18,29 @@ const expectHttpOrConnectionError = async (promise, httpStatus) => {
   }
 }
 import { getApplyForm, submitApplication, uploadResume } from '../../api/candidates'
-import { getPublicPositions } from '../../api/positions'
-import { getEvents, generateLink } from '../../api/events'
+import { getEvents, generateLink, getEventPositions } from '../../api/events'
 
-describe('Public Apply Flow', () => {
+describe('Apply Flow', () => {
   let applyToken = null
   let positionId = null
   let candidateId = null
 
-  // ── Setup: obtain a real apply token and a real position ID ───────────────
+  // ── Setup: obtain a real apply token and an event-linked position ID ──────
   beforeAll(async () => {
     try {
-      // get a real event to generate a link from
       const eventsRes = await getEvents()
-      const eventId = eventsRes.data.data[0]?.id ?? null
-      if (eventId) {
-        const linkRes = await generateLink(eventId)
+      const event = eventsRes.data.data.find(e => e.positions?.length > 0) ?? eventsRes.data.data[0] ?? null
+      if (event) {
+        const linkRes = await generateLink(event.id)
         applyToken = linkRes.data.data?.token ?? null
+
+        // prefer a position already linked to this event
+        const posRes = await getEventPositions(event.id)
+        positionId = posRes.data.data[0]?.id ?? null
       }
     } catch {
       // backend not reachable — flow tests will be skipped via guard
     }
-
-    try {
-      const posRes = await getPublicPositions()
-      positionId = posRes.data.data[0]?.id ?? null
-    } catch {
-      // positions not reachable
-    }
-  })
-
-  // ── GET /positions (public) ───────────────────────────────────────────────
-  it('getPublicPositions — returns success with an array of positions', async () => {
-    const res = await getPublicPositions()
-    expect(res.data.status).toBe('success')
-    expect(Array.isArray(res.data.data)).toBe(true)
-  })
-
-  it('getPublicPositions — each position has an id and title', async () => {
-    const res = await getPublicPositions()
-    res.data.data.forEach(p => {
-      expect(typeof p.id).toBe('number')
-      expect(typeof p.title).toBe('string')
-    })
   })
 
   // ── GET /links/validate/:token ────────────────────────────────────────────
@@ -76,7 +56,7 @@ describe('Public Apply Flow', () => {
     await expectHttpOrConnectionError(getApplyForm('invalid-token-xyz'), 404)
   })
 
-  // ── POST /public-apply/:token ─────────────────────────────────────────────
+  // ── POST /apply/:token ────────────────────────────────────────────────────
   it('submitApplication — valid payload returns success with candidateId', async () => {
     if (!applyToken || !positionId) return
     const res = await submitApplication(applyToken, {
@@ -179,6 +159,8 @@ describe('Public Apply Flow', () => {
     ).rejects.toMatchObject({ response: { status: 404 } })
   })
 
+  // ── Resume uploaded as part of /apply/:token (multipart) ─────────────────
+  // uploadResume tests below verify the standalone endpoint still works
   // ── POST /candidates/:id/resume ───────────────────────────────────────────
   it('uploadResume — valid PDF returns success with downloadUrl', async () => {
     if (!candidateId) return
