@@ -7,6 +7,7 @@ export const getCandidates = () => api.get(C())
 export const getCandidate = (id) => api.get(C(`/${id}`))
 export const createCandidate = (data) => api.post(C(), data)
 export const updateCandidate = (id, data) => api.put(C(`/${id}`), data)
+export const patchCandidate = (id, data) => api.patch(C(`/${id}`), data)
 export const deleteCandidate = (id) => api.delete(C(`/${id}`))
 
 export const getCandidateResume = (id) => api.get(`/candidates/${id}/resume`)
