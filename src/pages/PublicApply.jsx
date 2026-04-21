@@ -52,8 +52,8 @@ export default function PublicApply() {
         pgCgpa: values.pgCgpa ? Number(values.pgCgpa) : null,
         keamRank: values.keamRank ? Number(values.keamRank) : null,
         backlogs: values.backlogs ? Number(values.backlogs) : 0,
-        preferredPositionId1: values.preferredPositionId1 ? Number(values.preferredPositionId1) : null,
-        preferredPositionId2: values.preferredPositionId2 ? Number(values.preferredPositionId2) : null,
+        preferredPosition1Id: values.preferredPositionId1 ? Number(values.preferredPositionId1) : null,
+        preferredPosition2Id: values.preferredPositionId2 ? Number(values.preferredPositionId2) : null,
       }, resumeFile)
       setSubmitted(true)
     } catch (err) {
@@ -136,31 +136,32 @@ export default function PublicApply() {
                     label="Branch"
                     rules={[{ required: true, message: 'Please select your branch!' }]}
                   >
-                    <Select 
+                    <Select
                       showSearch
-                      size="large" 
+                      size="large"
                       placeholder="Select your branch"
-                    >
-                      <Option value="Computer Science & Engineering">Computer Science & Engineering</Option>
-                      <Option value="Electronics & Communication Engineering">Electronics & Communication Engineering</Option>
-                      <Option value="Electrical Engineering">Electrical Engineering</Option>
-                      <Option value="Mechanical Engineering">Mechanical Engineering</Option>
-                      <Option value="Chemical Engineering">Chemical Engineering</Option>
-                      <Option value="Civil Engineering">Civil Engineering</Option>
-                      <Option value="Information Technology">Information Technology</Option>
-                      <Option value="Production Engineering">Production Engineering</Option>
-                      <Option value="Biomedical Engineering">Biomedical Engineering</Option>
-                      <Option value="Biotechnology">Biotechnology</Option>
-                      <Option value="Instrumentation Engineering">Instrumentation Engineering</Option>
-                      <Option value="Metallurgical Engineering">Metallurgical Engineering</Option>
-                      <Option value="Others">Others</Option>
-                    </Select>
+                      options={[
+                        'Computer Science & Engineering',
+                        'Electronics & Communication Engineering',
+                        'Electrical Engineering',
+                        'Mechanical Engineering',
+                        'Chemical Engineering',
+                        'Civil Engineering',
+                        'Information Technology',
+                        'Production Engineering',
+                        'Biomedical Engineering',
+                        'Biotechnology',
+                        'Instrumentation Engineering',
+                        'Metallurgical Engineering',
+                        'Others',
+                      ].map(v => ({ value: v, label: v }))}
+                    />
                   </Form.Item>
                 </Col>
                 
               </Row>
               <Button type="primary" size="large" block onClick={() => {
-                form.validateFields(['name', 'email']).then(() => setStep(1))
+                form.validateFields(['name', 'email', 'branch']).then(() => setStep(1))
               }}>Next →</Button>
             </div>
 

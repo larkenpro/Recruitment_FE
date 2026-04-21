@@ -62,14 +62,15 @@ export default function CandidateDetail() {
   }
 
   const savePrefs = () => {
-    prefMutation.mutate({
+    const payload = {
       username: candidate.username,
       name: candidate.name,
       email: candidate.email,
       collegeId: candidate.college?.id,
-      preferredPosition1Id: pref1Id ?? null,
-      preferredPosition2Id: pref2Id ?? null,
-    })
+    }
+    if (pref1Id != null) payload.preferredPosition1Id = pref1Id
+    if (pref2Id != null) payload.preferredPosition2Id = pref2Id
+    prefMutation.mutate(payload)
   }
 
   const { filteredData: filteredScores, filters: scoreFilters, setFilter: setScoreFilter, removeFilter: removeScoreFilter, optionMap: scoreOptionMap } = useColumnFilter(scores, SCORE_FILTER_KEYS)
