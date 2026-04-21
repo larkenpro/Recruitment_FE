@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Card, Table, Button, Modal, Form, Input, Select, Tag } from 'antd'
-import { PlusOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getColleges, createCollege } from '../api/colleges'
+import { getColleges, createCollege, updateCollege } from '../api/colleges'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
 
@@ -15,15 +15,32 @@ const FILTER_KEYS = [
 export default function Colleges() {
   const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
+  const [editingCollege, setEditingCollege] = useState(null)
   const [form] = Form.useForm()
 
   const { data: colleges, isLoading } = useQuery({ queryKey: ['colleges'], queryFn: () => getColleges().then(r => r.data.data) })
 
   const { filteredData, filters, setFilter, removeFilter, optionMap } = useColumnFilter(colleges, FILTER_KEYS)
 
-  const mutation = useMutation({
+  const createMutation = useMutation({
     mutationFn: createCollege,
-    onSuccess: () => { queryClient.invalidateQueries(['colleges']); setOpen(false); form.resetFields() }
+    onSuccess: () => { queryClient.invalidateQueries(['colleges']); closeModal() }
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }) => updateCollege(id, data),
+    onSuccess: () => { queryClient.invalidateQueries(['colleges']); closeModal() }
+  })
+
+  const openAdd = () => { setEditingCollege(null); form.resetFields(); setOpen(true) }
+
+  const openEdit = (record) => { setEditingCollege(record); form.setFieldsValue(record); setOpen(true) }
+
+  const closeModal = () => { setOpen(false); setEditingCollege(null); form.resetFields() }
+
+  const handleOk = () => form.validateFields().then(values => {
+    if (editingCollege) updateMutation.mutate({ id: editingCollege.id, data: values })
+    else createMutation.mutate(values)
   })
 
   const columns = [
@@ -32,12 +49,17 @@ export default function Colleges() {
     { title: 'City', dataIndex: 'city' },
     { title: 'State', dataIndex: 'state' },
     { title: 'Tier', dataIndex: 'tier', render: t => <Tag color={t === 'Tier 1' ? 'blue' : t === 'Tier 2' ? 'green' : 'default'}>{t}</Tag> },
+    {
+      title: 'Actions', width: 80, render: (_, record) => (
+        <Button icon={<EditOutlined />} size="small" onClick={() => openEdit(record)} />
+      )
+    },
   ]
 
   return (
     <Card
       title="Colleges"
-      extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>Add College</Button>}
+      extra={<Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>Add College</Button>}
       bordered={false} style={{ borderRadius: 12 }}
     >
       <FilterBar
@@ -49,8 +71,14 @@ export default function Colleges() {
       />
       <Table dataSource={filteredData} columns={columns} rowKey="id" loading={isLoading} />
 
-      <Modal title="Add College" open={open} onCancel={() => setOpen(false)}
-        onOk={() => form.validateFields().then(v => mutation.mutate(v))} okText="Save">
+      <Modal
+        title={editingCollege ? 'Edit College' : 'Add College'}
+        open={open}
+        onCancel={closeModal}
+        onOk={handleOk}
+        okText="Save"
+        confirmLoading={createMutation.isPending || updateMutation.isPending}
+      >
         <Form form={form} layout="vertical">
           <Form.Item name="name" label="College Name" rules={[{ required: true }]}>
             <Input />
