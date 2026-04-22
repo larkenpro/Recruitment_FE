@@ -1,4 +1,4 @@
-import { Layout, Menu, Avatar, Badge, Input } from 'antd'
+import { Layout, Menu, Avatar, Badge } from 'antd'
 import {
   DashboardOutlined, BankOutlined, CalendarOutlined,
   UserOutlined, BarChartOutlined, GiftOutlined, LogoutOutlined, BellOutlined, AuditOutlined, CheckCircleOutlined, TeamOutlined
@@ -26,9 +26,19 @@ export default function AppLayout({ children }) {
   return (
     <Layout style={{ minHeight: '100vh' }}>
       <Sider width={220} style={{ background: '#fff', borderRight: '1px solid #f0f0f0' }}>
-        <div style={{ padding: '20px 24px', fontSize: 20, fontWeight: 700, color: '#4f46e5', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <img src="/logo.png" alt="J&J Logo" width="32" height="32" style={{ borderRadius: '6px' }} />
-          Recruit
+        <div style={{ padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid #f0f0f0', marginBottom: 4 }}>
+          <div style={{
+            width: 34, height: 34, borderRadius: 8,
+            background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0,
+          }}>
+            <span style={{ color: '#fff', fontWeight: 800, fontSize: 15, letterSpacing: '-0.5px' }}>JJ</span>
+          </div>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#1e1b4b', lineHeight: 1.2 }}>Recruit</div>
+            <div style={{ fontSize: 10, color: '#a5b4fc', fontWeight: 500, letterSpacing: '0.04em', lineHeight: 1 }}>J&amp;J SOURCING</div>
+          </div>
         </div>
         <Menu
           mode="inline"
@@ -46,8 +56,7 @@ export default function AppLayout({ children }) {
       </Sider>
 
       <Layout>
-        <Header style={{ background: '#fff', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f0f0f0' }}>
-          <Input.Search placeholder="Search..." style={{ width: 300 }} />
+        <Header style={{ background: '#fff', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', borderBottom: '1px solid #f0f0f0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
             <Badge count={0}><BellOutlined style={{ fontSize: 18 }} /></Badge>
             <Avatar icon={<UserOutlined />} style={{ background: '#4f46e5' }} />
