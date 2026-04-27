@@ -34,7 +34,8 @@ export function computeAnalytics(candidates) {
   if (!candidates.length) return null
 
   const total = candidates.length
-  const zeroBacklogs = candidates.filter(c => (c.backlogs ?? 0) === 0).length
+  const withActiveBacklogs = candidates.filter(c => (c.arrears ?? 0) > 0).length
+  const withTotalBacklogs = candidates.filter(c => (c.backlogs ?? 0) > 0).length
   const avgCgpa = avg(candidates, c => c.ugCgpa)
   const avg10th = avg(candidates, c => c.tenthMark)
   const avg12th = avg(candidates, c => c.twelfthMark)
@@ -54,5 +55,5 @@ export function computeAnalytics(candidates) {
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value)
 
-  return { total, zeroBacklogs, avgCgpa, avg10th, avg12th, byBranch, byCollege, byLocation, byPosition }
+  return { total, withActiveBacklogs, withTotalBacklogs, avgCgpa, avg10th, avg12th, byBranch, byCollege, byLocation, byPosition }
 }

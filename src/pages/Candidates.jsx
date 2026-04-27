@@ -91,7 +91,7 @@ export default function Candidates() {
     { title: 'Branch', dataIndex: 'branch', render: v => v || '—' },
     { title: 'UG CGPA', dataIndex: 'ugCgpa', render: v => v ?? '—' },
     {
-      title: 'Backlogs', dataIndex: 'backlogs',
+      title: 'Total Backlogs', dataIndex: 'backlogs',
       render: v => <Tag color={(v ?? 0) === 0 ? 'green' : 'red'}>{v ?? 0}</Tag>,
     },
     {
@@ -249,12 +249,12 @@ export default function Candidates() {
               </Form.Item>
             </Col>
             <Col span={4}>
-              <Form.Item name="backlogs" label="Backlogs">
+              <Form.Item name="backlogs" label="Total Backlogs">
                 <InputNumber style={{ width: '100%' }} min={0} />
               </Form.Item>
             </Col>
             <Col span={4}>
-              <Form.Item name="arrears" label="Arrears">
+              <Form.Item name="arrears" label="Active Backlogs">
                 <InputNumber style={{ width: '100%' }} min={0} />
               </Form.Item>
             </Col>

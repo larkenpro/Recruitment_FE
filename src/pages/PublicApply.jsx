@@ -51,6 +51,7 @@ export default function PublicApply() {
         diplomaMark: values.diplomaMark ? Number(values.diplomaMark) : null,
         pgCgpa: values.pgCgpa ? Number(values.pgCgpa) : null,
         keamRank: values.keamRank ? Number(values.keamRank) : null,
+        arrears: values.arrears ? Number(values.arrears) : 0,
         backlogs: values.backlogs ? Number(values.backlogs) : 0,
         preferredPosition1Id: values.preferredPositionId1 ? Number(values.preferredPositionId1) : null,
         preferredPosition2Id: values.preferredPositionId2 ? Number(values.preferredPositionId2) : null,
@@ -210,7 +211,12 @@ export default function PublicApply() {
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12}>
-                  <Form.Item name="backlogs" label="No. of Current Backlogs">
+                  <Form.Item name="arrears" label="Active Backlogs">
+                    <Input type="number" placeholder="0" size="large" />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12}>
+                  <Form.Item name="backlogs" label="Total Backlogs">
                     <Input type="number" placeholder="0" size="large" />
                   </Form.Item>
                 </Col>
