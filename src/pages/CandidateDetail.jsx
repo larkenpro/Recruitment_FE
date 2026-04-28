@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { Card, Row, Col, Descriptions, Tag, Typography, Tabs, Empty, Button, Table, Timeline, Select, Space, message } from 'antd'
-import { DownloadOutlined, FileTextOutlined, EditOutlined } from '@ant-design/icons'
+import { Card, Row, Col, Descriptions, Tag, Typography, Tabs, Empty, Button, Table, Timeline, Space, message } from 'antd'
+import { DownloadOutlined, FileTextOutlined, EditOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getCandidate, getCandidateResume, getCandidateScores, getCandidateStageHistory, updateCandidate } from '../api/candidates'
-import { getPositions } from '../api/positions'
+import { getCandidate, getCandidateEvent, getCandidateResume, getCandidateScores, getCandidateStageHistory, updateCandidate } from '../api/candidates'
+import { getEventPositions } from '../api/events'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
 
@@ -20,8 +20,15 @@ export default function CandidateDetail() {
   const { id } = useParams()
   const queryClient = useQueryClient()
   const [editingPrefs, setEditingPrefs] = useState(false)
-  const [pref1Id, setPref1Id] = useState(null)
-  const [pref2Id, setPref2Id] = useState(null)
+  const [rankedPositions, setRankedPositions] = useState([])
+
+  const movePosition = (index, dir) => {
+    const next = index + dir
+    if (next < 0 || next >= rankedPositions.length) return
+    const updated = [...rankedPositions]
+    ;[updated[index], updated[next]] = [updated[next], updated[index]]
+    setRankedPositions(updated)
+  }
 
   const { data: candidate, isLoading } = useQuery({
     queryKey: ['candidate', id],
@@ -40,37 +47,35 @@ export default function CandidateDetail() {
     queryFn: () => getCandidateStageHistory(id).then(r => r.data.data)
   })
 
-  const { data: positions = [] } = useQuery({
-    queryKey: ['positions'],
-    queryFn: () => getPositions().then(r => r.data.data),
-  })
-
   const prefMutation = useMutation({
     mutationFn: (data) => updateCandidate(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries(['candidate', id])
+      queryClient.invalidateQueries({ queryKey: ['candidate', id] })
       setEditingPrefs(false)
       message.success('Preferences updated!')
     },
     onError: () => message.error('Failed to update preferences'),
   })
 
-  const openEditPrefs = () => {
-    setPref1Id(candidate.preferredPosition1?.id ?? null)
-    setPref2Id(candidate.preferredPosition2?.id ?? null)
+  const openEditPrefs = async () => {
+    const eventId = await getCandidateEvent(candidate.id).then(r => r.data.data?.id).catch(() => null)
+    const eventPositions = eventId
+      ? await getEventPositions(eventId).then(r => r.data.data)
+      : []
+    const preferred = candidate.preferredPositions ?? []
+    const preferredIds = new Set(preferred.map(p => p.id))
+    setRankedPositions([...preferred, ...eventPositions.filter(p => !preferredIds.has(p.id))])
     setEditingPrefs(true)
   }
 
   const savePrefs = () => {
-    const payload = {
+    prefMutation.mutate({
       username: candidate.username,
       name: candidate.name,
       email: candidate.email,
       collegeId: candidate.college?.id,
-    }
-    if (pref1Id != null) payload.preferredPosition1Id = pref1Id
-    if (pref2Id != null) payload.preferredPosition2Id = pref2Id
-    prefMutation.mutate(payload)
+      preferredPositionIds: rankedPositions.map(p => p.id),
+    })
   }
 
   const { filteredData: filteredScores, filters: scoreFilters, setFilter: setScoreFilter, removeFilter: removeScoreFilter, optionMap: scoreOptionMap } = useColumnFilter(scores, SCORE_FILTER_KEYS)
@@ -127,38 +132,56 @@ export default function CandidateDetail() {
     {
       key: 'preferences', label: 'Preferences',
       children: editingPrefs ? (
-        <div style={{ maxWidth: 400 }}>
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ marginBottom: 4, fontWeight: 500 }}>Preferred Role 1</div>
-            <Select
-              showSearch optionFilterProp="label" allowClear style={{ width: '100%' }}
-              value={pref1Id}
-              onChange={v => { setPref1Id(v ?? null); if (v === pref2Id) setPref2Id(null) }}
-              options={positions.map(p => ({ value: p.id, label: p.type ? `${p.title} — ${p.type}` : p.title }))}
-            />
-          </div>
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ marginBottom: 4, fontWeight: 500 }}>Preferred Role 2</div>
-            <Select
-              showSearch optionFilterProp="label" allowClear style={{ width: '100%' }}
-              value={pref2Id}
-              onChange={v => setPref2Id(v ?? null)}
-              options={positions.filter(p => p.id !== pref1Id).map(p => ({ value: p.id, label: p.type ? `${p.title} — ${p.type}` : p.title }))}
-            />
+        <div style={{ maxWidth: 480 }}>
+          <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>Use arrows to reorder — top position is most preferred.</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+            {rankedPositions.map((pos, index) => (
+              <div
+                key={pos.id}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', border: '1.5px solid #e5e7eb', borderRadius: 8, background: '#fff' }}
+              >
+                <Tag style={{ fontWeight: 600, minWidth: 28, textAlign: 'center', flexShrink: 0 }}>{index + 1}</Tag>
+                <span style={{ fontSize: 13, fontWeight: 500, color: '#1e1b4b', flex: 1 }}>
+                  {pos.title}
+                  {pos.type && <span style={{ fontWeight: 400, color: '#6b7280', marginLeft: 6 }}>— {pos.type}</span>}
+                </span>
+                <Space size={4}>
+                  <Button size="small" icon={<ArrowUpOutlined />} disabled={index === 0} onClick={() => movePosition(index, -1)} />
+                  <Button size="small" icon={<ArrowDownOutlined />} disabled={index === rankedPositions.length - 1} onClick={() => movePosition(index, 1)} />
+                </Space>
+              </div>
+            ))}
           </div>
           <Space>
             <Button type="primary" onClick={savePrefs} loading={prefMutation.isPending}>Save</Button>
             <Button onClick={() => setEditingPrefs(false)}>Cancel</Button>
           </Space>
         </div>
-      ) : (
-        <Descriptions column={1} bordered size="small"
-          extra={<Button size="small" icon={<EditOutlined />} onClick={openEditPrefs}>Edit</Button>}
-        >
-          <Descriptions.Item label="Preferred Role 1">{candidate.preferredPosition1?.title ?? '-'}</Descriptions.Item>
-          <Descriptions.Item label="Preferred Role 2">{candidate.preferredPosition2?.title ?? '-'}</Descriptions.Item>
-        </Descriptions>
-      )
+      ) : (() => {
+        const preferred = candidate.preferredPositions ?? [candidate.preferredPosition1, candidate.preferredPosition2].filter(Boolean)
+        return preferred.length > 0 ? (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+              <Button size="small" icon={<EditOutlined />} onClick={openEditPrefs}>Edit</Button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {preferred.map((pos, index) => (
+                <div key={pos.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fafafa' }}>
+                  <Tag style={{ fontWeight: 600, minWidth: 28, textAlign: 'center', flexShrink: 0 }}>{index + 1}</Tag>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: '#1e1b4b' }}>
+                    {pos.title}
+                    {pos.type && <span style={{ fontWeight: 400, color: '#6b7280', marginLeft: 6 }}>— {pos.type}</span>}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+            <Button size="small" icon={<EditOutlined />} onClick={openEditPrefs}>Edit</Button>
+          </div>
+        )
+      })()
     },
     {
       key: 'scores', label: `Scores (${scores?.length ?? 0})`,
