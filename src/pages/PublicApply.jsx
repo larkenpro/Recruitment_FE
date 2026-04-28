@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
-import { Form, Input, Select, Button, Card, Row, Col, Typography, Divider, Upload, Alert, Steps, Result, DatePicker } from 'antd'
-import { UploadOutlined, UserOutlined, BookOutlined, AimOutlined } from '@ant-design/icons'
+import { Form, Input, Select, Button, Card, Row, Col, Typography, Divider, Upload, Alert, Steps, Result, DatePicker, Tag, Space } from 'antd'
+import { UploadOutlined, UserOutlined, BookOutlined, AimOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons'
 import { getApplyForm, submitApplication } from '../api/candidates'
 import { getEventPositions } from '../api/events'
 
@@ -10,9 +10,16 @@ const { Title, Text } = Typography
 export default function PublicApply() {
   const { token } = useParams()
   const [form] = Form.useForm()
-  const pref1 = Form.useWatch('preferredPositionId1', form)
   const [eventInfo, setEventInfo] = useState(null)
-  const [positions, setPositions] = useState([])
+  const [rankedPositions, setRankedPositions] = useState([])
+
+  const movePosition = (index, dir) => {
+    const next = index + dir
+    if (next < 0 || next >= rankedPositions.length) return
+    const updated = [...rankedPositions]
+    ;[updated[index], updated[next]] = [updated[next], updated[index]]
+    setRankedPositions(updated)
+  }
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -25,7 +32,7 @@ export default function PublicApply() {
         setEventInfo(r.data)
         return getEventPositions(r.data.data.event.id)
       })
-      .then(r => setPositions(r.data.data))
+      .then(r => setRankedPositions(r.data.data))
       .catch(() => setError('Invalid or expired link'))
   }, [token])
 
@@ -52,8 +59,7 @@ export default function PublicApply() {
         pgCgpa: values.pgCgpa ? Number(values.pgCgpa) : null,
         keamRank: values.keamRank ? Number(values.keamRank) : null,
         backlogs: values.backlogs ? Number(values.backlogs) : 0,
-        preferredPosition1Id: values.preferredPositionId1 ? Number(values.preferredPositionId1) : null,
-        preferredPosition2Id: values.preferredPositionId2 ? Number(values.preferredPositionId2) : null,
+        preferredPositionIds: rankedPositions.map(p => p.id),
       }, resumeFile)
       setSubmitted(true)
     } catch (err) {
@@ -225,15 +231,33 @@ export default function PublicApply() {
             <div style={{ display: step === 2 ? 'block' : 'none' }}>
               <Divider orientation="left">Role Preferences</Divider>
               <Row gutter={16}>
-                <Col xs={24} sm={12}>
-                  <Form.Item name="preferredPositionId1" label="Interested Role - Preference 1" rules={[{ required: true, message: 'Select at least one role' }]}>
-                    <Select size="large" placeholder="Select role" options={positions.map(p => ({ value: p.id, label: p.title }))} />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} sm={12}>
-                  <Form.Item name="preferredPositionId2" label="Interested Role - Preference 2">
-                    <Select size="large" placeholder="Select role" options={positions.filter(p => p.id !== pref1).map(p => ({ value: p.id, label: p.title }))} allowClear />
-                  </Form.Item>
+                <Col xs={24}>
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 6, color: '#1e1b4b' }}>
+                      Rank Positions by Preference
+                    </div>
+                    <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 12 }}>
+                      Use arrows to reorder — your top choice goes first.
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {rankedPositions.map((pos, index) => (
+                        <div
+                          key={pos.id}
+                          style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', border: '1.5px solid #e5e7eb', borderRadius: 10, background: '#fff' }}
+                        >
+                          <Tag style={{ fontWeight: 600, minWidth: 36, textAlign: 'center', flexShrink: 0 }}>{index + 1}</Tag>
+                          <span style={{ fontWeight: 500, color: '#1e1b4b', fontSize: 14, flex: 1 }}>
+                            {pos.title}
+                            {pos.type && <span style={{ fontWeight: 400, color: '#6b7280', marginLeft: 6 }}>— {pos.type}</span>}
+                          </span>
+                          <Space size={4}>
+                            <Button size="small" icon={<ArrowUpOutlined />} disabled={index === 0} onClick={() => movePosition(index, -1)} />
+                            <Button size="small" icon={<ArrowDownOutlined />} disabled={index === rankedPositions.length - 1} onClick={() => movePosition(index, 1)} />
+                          </Space>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </Col>
                 <Col xs={24} sm={12}>
                   <Form.Item name="jobLocation" label="Preferred Job Location">

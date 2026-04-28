@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { Card, Table, Button, Modal, Form, Input, InputNumber, Select, DatePicker, Tag, message, Space, Popconfirm, Row, Col } from 'antd'
+import { Card, Table, Button, Modal, Form, Input, InputNumber, Select, DatePicker, Tag, message, Space, Popconfirm, Row, Col, Divider } from 'antd'
 import dayjs from 'dayjs'
-import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons'
+import { EditOutlined, DeleteOutlined, EyeOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { getCandidates, updateCandidate, deleteCandidate } from '../api/candidates'
+import { getCandidates, getCandidate, getCandidateEvent, updateCandidate, deleteCandidate } from '../api/candidates'
 import { getColleges } from '../api/colleges'
-import { getPositions } from '../api/positions'
+import { getEventPositions } from '../api/events'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
 
@@ -20,6 +20,15 @@ export default function Candidates() {
   const navigate = useNavigate()
   const [editing, setEditing] = useState(null)
   const [form] = Form.useForm()
+  const [rankedPositions, setRankedPositions] = useState([])
+
+  const movePosition = (index, dir) => {
+    const next = index + dir
+    if (next < 0 || next >= rankedPositions.length) return
+    const updated = [...rankedPositions]
+    ;[updated[index], updated[next]] = [updated[next], updated[index]]
+    setRankedPositions(updated)
+  }
 
   const { data: candidates, isLoading } = useQuery({
     queryKey: ['candidates'],
@@ -31,38 +40,41 @@ export default function Candidates() {
     queryFn: () => getColleges().then(r => r.data.data),
   })
 
-  const { data: positions = [] } = useQuery({
-    queryKey: ['positions'],
-    queryFn: () => getPositions().then(r => r.data.data),
-  })
-
   const { filteredData, filters, setFilter, removeFilter, optionMap } = useColumnFilter(candidates, FILTER_KEYS)
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => updateCandidate(id, data),
-    onSuccess: () => { queryClient.invalidateQueries(['candidates']); closeModal(); message.success('Candidate updated!') },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['candidates'] }); closeModal(); message.success('Candidate updated!') },
+    onError: (err) => message.error(err.response?.data?.message || 'Failed to update candidate'),
   })
 
   const deleteMutation = useMutation({
     mutationFn: deleteCandidate,
-    onSuccess: () => { queryClient.invalidateQueries(['candidates']); message.success('Candidate deleted!') },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['candidates'] }); message.success('Candidate deleted!') },
+    onError: (err) => message.error(err.response?.data?.message || 'Failed to delete candidate'),
   })
 
-  const openEdit = (record) => {
+  const openEdit = async (record) => {
     setEditing(record)
+    const full = await getCandidate(record.id).then(r => r.data.data)
     form.setFieldsValue({
-      ...record,
-      collegeId: record.college?.id,
-      preferredPosition1Id: record.preferredPosition1?.id ?? null,
-      preferredPosition2Id: record.preferredPosition2?.id ?? null,
+      ...full,
+      collegeId: full.college?.id,
       internshipAvailability: (() => {
-        if (!record.internshipAvailability) return null
-        const parts = record.internshipAvailability.split(' to ')
+        if (!full.internshipAvailability) return null
+        const parts = full.internshipAvailability.split(' to ')
         return parts.length === 2
           ? [dayjs(parts[0], 'MMMM-YYYY'), dayjs(parts[1], 'MMMM-YYYY')]
           : null
       })(),
     })
+    const eventId = await getCandidateEvent(full.id).then(r => r.data.data?.id).catch(() => null)
+    const eventPositions = eventId
+      ? await getEventPositions(eventId).then(r => r.data.data)
+      : []
+    const preferred = full.preferredPositions ?? []
+    const preferredIds = new Set(preferred.map(p => p.id))
+    setRankedPositions([...preferred, ...eventPositions.filter(p => !preferredIds.has(p.id))])
   }
 
   const closeModal = () => { setEditing(null); form.resetFields() }
@@ -76,6 +88,7 @@ export default function Candidates() {
           ? `${start.format('MMMM-YYYY')} to ${end.format('MMMM-YYYY')}`
           : null
       })(),
+      preferredPositionIds: rankedPositions.map(p => p.id),
     }
     updateMutation.mutate({ id: editing.id, data: payload })
   }
@@ -95,6 +108,23 @@ export default function Candidates() {
       render: v => <Tag color={(v ?? 0) === 0 ? 'green' : 'red'}>{v ?? 0}</Tag>,
     },
     {
+      title: 'Preferred Positions',
+      render: (_, r) => {
+        const preferred = r.preferredPositions ?? [r.preferredPosition1, r.preferredPosition2].filter(Boolean)
+        if (!preferred.length) return <span style={{ color: '#9ca3af' }}>—</span>
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {preferred.map((p, i) => (
+              <span key={p.id} style={{ fontSize: 12 }}>
+                <Tag style={{ fontWeight: 600, minWidth: 22, textAlign: 'center', marginRight: 4 }}>{i + 1}</Tag>
+                {p.title}{p.type ? ` — ${p.type}` : ''}
+              </span>
+            ))}
+          </div>
+        )
+      },
+    },
+    {
       title: 'Actions',
       render: (_, r) => (
         <Space>
@@ -104,9 +134,9 @@ export default function Candidates() {
             title="Delete this candidate?"
             description="This action cannot be undone."
             onConfirm={() => deleteMutation.mutate(r.id)}
-            okText="Yes" cancelText="No" okButtonProps={{ danger: true }}
+            okText="Yes" cancelText="No" okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
           >
-            <Button size="small" danger icon={<DeleteOutlined />}>Delete</Button>
+            <Button size="small" danger icon={<DeleteOutlined />} loading={deleteMutation.isPending && deleteMutation.variables === r.id}>Delete</Button>
           </Popconfirm>
         </Space>
       ),
@@ -261,24 +291,26 @@ export default function Candidates() {
           </Row>
 
           {/* ── Preferences ── */}
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name="preferredPosition1Id" label="Preferred Role 1">
-                <Select
-                  showSearch optionFilterProp="label" allowClear
-                  options={positions.map(p => ({ value: p.id, label: p.title }))}
-                />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="preferredPosition2Id" label="Preferred Role 2">
-                <Select
-                  showSearch optionFilterProp="label" allowClear
-                  options={positions.map(p => ({ value: p.id, label: p.title }))}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
+          <Divider orientation="left" style={{ fontSize: 13 }}>Role Preferences</Divider>
+          <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>Use arrows to reorder — top position is most preferred.</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+            {rankedPositions.map((pos, index) => (
+              <div
+                key={pos.id}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', border: '1.5px solid #e5e7eb', borderRadius: 8, background: '#fff' }}
+              >
+                <Tag style={{ fontWeight: 600, minWidth: 28, textAlign: 'center', flexShrink: 0 }}>{index + 1}</Tag>
+                <span style={{ fontSize: 13, fontWeight: 500, color: '#1e1b4b', flex: 1 }}>
+                  {pos.title}
+                  {pos.type && <span style={{ fontWeight: 400, color: '#6b7280', marginLeft: 6 }}>— {pos.type}</span>}
+                </span>
+                <Space size={4}>
+                  <Button size="small" icon={<ArrowUpOutlined />} disabled={index === 0} onClick={() => movePosition(index, -1)} />
+                  <Button size="small" icon={<ArrowDownOutlined />} disabled={index === rankedPositions.length - 1} onClick={() => movePosition(index, 1)} />
+                </Space>
+              </div>
+            ))}
+          </div>
 
         </Form>
       </Modal>

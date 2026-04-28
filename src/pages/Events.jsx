@@ -56,18 +56,18 @@ export default function Events() {
 
   const createMutation = useMutation({
     mutationFn: createEvent,
-    onSuccess: () => { queryClient.invalidateQueries(['events']); setOpen(false); form.resetFields() }
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['events'] }); setOpen(false); form.resetFields() }
   })
 
   const statusMutation = useMutation({
     mutationFn: ({ id, status }) => updateEventStatus(id, status),
-    onSuccess: () => { queryClient.invalidateQueries(['events']); message.success('Status updated!') }
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['events'] }); message.success('Status updated!') }
   })
 
   const roundMutation = useMutation({
     mutationFn: ({ eventId, data }) => createRound(eventId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries(['rounds', roundsModal?.id])
+      queryClient.invalidateQueries({ queryKey: ['rounds', roundsModal?.id] })
       roundForm.resetFields()
       message.success('Round added!')
     }
@@ -76,7 +76,7 @@ export default function Events() {
   const addPositionsMutation = useMutation({
     mutationFn: ({ eventId, positionIds }) => addEventPositions(eventId, positionIds),
     onSuccess: () => {
-      queryClient.invalidateQueries(['eventPositions', positionsModal?.id])
+      queryClient.invalidateQueries({ queryKey: ['eventPositions', positionsModal?.id] })
       positionForm.resetFields()
       message.success('Position(s) added!')
     }
@@ -85,7 +85,7 @@ export default function Events() {
   const removePositionMutation = useMutation({
     mutationFn: ({ eventId, positionId }) => removeEventPosition(eventId, positionId),
     onSuccess: () => {
-      queryClient.invalidateQueries(['eventPositions', positionsModal?.id])
+      queryClient.invalidateQueries({ queryKey: ['eventPositions', positionsModal?.id] })
       message.success('Position removed!')
     }
   })

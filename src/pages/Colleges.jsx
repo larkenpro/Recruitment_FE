@@ -24,12 +24,12 @@ export default function Colleges() {
 
   const createMutation = useMutation({
     mutationFn: createCollege,
-    onSuccess: () => { queryClient.invalidateQueries(['colleges']); closeModal() }
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['colleges'] }); closeModal() }
   })
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => updateCollege(id, data),
-    onSuccess: () => { queryClient.invalidateQueries(['colleges']); closeModal() }
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['colleges'] }); closeModal() }
   })
 
   const openAdd = () => { setEditingCollege(null); form.resetFields(); setOpen(true) }
