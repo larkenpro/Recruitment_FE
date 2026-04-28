@@ -29,17 +29,17 @@ export default function Positions() {
 
   const createMutation = useMutation({
     mutationFn: createPosition,
-    onSuccess: () => { queryClient.invalidateQueries(['positions']); closeModal(); message.success('Position created!') }
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['positions'] }); closeModal(); message.success('Position created!') }
   })
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => updatePosition(id, data),
-    onSuccess: () => { queryClient.invalidateQueries(['positions']); closeModal(); message.success('Position updated!') }
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['positions'] }); closeModal(); message.success('Position updated!') }
   })
 
   const deleteMutation = useMutation({
     mutationFn: deletePosition,
-    onSuccess: () => { queryClient.invalidateQueries(['positions']); message.success('Position deleted!') }
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['positions'] }); message.success('Position deleted!') }
   })
 
   const openCreate = () => { setEditing(null); form.resetFields(); setOpen(true) }
