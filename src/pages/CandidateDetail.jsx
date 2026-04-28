@@ -119,8 +119,8 @@ export default function CandidateDetail() {
           <Descriptions.Item label="UG CGPA">{candidate.ugCgpa}</Descriptions.Item>
           <Descriptions.Item label="PG Degree">{candidate.pgDegree ?? '-'}</Descriptions.Item>
           <Descriptions.Item label="PG CGPA">{candidate.pgCgpa ?? '-'}</Descriptions.Item>
-          <Descriptions.Item label="Backlogs"><Tag color={candidate.backlogs === 0 ? 'green' : 'red'}>{candidate.backlogs}</Tag></Descriptions.Item>
-          <Descriptions.Item label="Arrears"><Tag color={candidate.arrears === 0 ? 'green' : 'red'}>{candidate.arrears}</Tag></Descriptions.Item>
+          <Descriptions.Item label="Total Backlogs"><Tag color={candidate.backlogs === 0 ? 'green' : 'red'}>{candidate.backlogs}</Tag></Descriptions.Item>
+          <Descriptions.Item label="Active Backlogs"><Tag color={candidate.arrears === 0 ? 'green' : 'red'}>{candidate.arrears}</Tag></Descriptions.Item>
         </Descriptions>
       )
     },
