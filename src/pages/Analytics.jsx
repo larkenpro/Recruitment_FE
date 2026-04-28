@@ -31,7 +31,8 @@ export default function Analytics() {
           { title: 'Total Candidates', value: stats.total, icon: <UserOutlined />, color: '#4f46e5' },
           { title: 'Avg UG CGPA', value: stats.avgCgpa, icon: <BookOutlined />, color: '#7c3aed' },
           { title: 'Avg 10th Mark %', value: stats.avg10th, icon: <BookOutlined />, color: '#2563eb' },
-          { title: 'Zero Backlogs', value: `${stats.zeroBacklogs} / ${stats.total}`, icon: <TrophyOutlined />, color: '#059669' },
+          { title: 'Active Backlogs', value: `${stats.withActiveBacklogs} / ${stats.total}`, icon: <TrophyOutlined />, color: '#d97706' },
+          { title: 'Total Backlogs', value: `${stats.withTotalBacklogs} / ${stats.total}`, icon: <TrophyOutlined />, color: '#dc2626' },
         ].map(({ title, value, icon, color }) => (
           <Col xs={24} sm={12} lg={6} key={title}>
             <Card bordered={false} style={{ borderRadius: 12 }}>

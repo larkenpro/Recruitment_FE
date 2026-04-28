@@ -133,16 +133,23 @@ describe('computeAnalytics', () => {
     expect(result.total).toBe(2)
   })
 
-  it('counts zero-backlog candidates correctly', () => {
+  it('counts candidates with total backlogs correctly', () => {
     const withBacklog = { ...base, backlogs: 2 }
     const result = computeAnalytics([base, base, withBacklog])
-    expect(result.zeroBacklogs).toBe(2)
+    expect(result.withTotalBacklogs).toBe(1)
   })
 
-  it('treats missing backlogs field as zero', () => {
-    const noBacklogField = { ...base, backlogs: undefined }
-    const result = computeAnalytics([noBacklogField])
-    expect(result.zeroBacklogs).toBe(1)
+  it('counts candidates with active backlogs correctly', () => {
+    const withArrears = { ...base, arrears: 1 }
+    const result = computeAnalytics([base, base, withArrears])
+    expect(result.withActiveBacklogs).toBe(1)
+  })
+
+  it('treats missing backlogs/arrears fields as zero', () => {
+    const noFields = { ...base, backlogs: undefined, arrears: undefined }
+    const result = computeAnalytics([noFields])
+    expect(result.withTotalBacklogs).toBe(0)
+    expect(result.withActiveBacklogs).toBe(0)
   })
 
   it('computes avgCgpa correctly', () => {
@@ -204,7 +211,8 @@ describe('computeAnalytics', () => {
     const result = computeAnalytics([base])
     expect(result).toMatchObject({
       total: expect.any(Number),
-      zeroBacklogs: expect.any(Number),
+      withActiveBacklogs: expect.any(Number),
+      withTotalBacklogs: expect.any(Number),
       avgCgpa: expect.any(String),
       avg10th: expect.any(String),
       avg12th: expect.any(String),
