@@ -1,12 +1,10 @@
 import { useState, useMemo } from 'react'
 
 /**
- * Drives column-based filtering for a table.
- *
- * @param {Array}  data        - raw array of rows (may be undefined while loading)
- * @param {Array<{ key: string, label: string, getVal: (row) => any }>} filterKeys
- *   - defined as a module-level constant in each consuming component so the
- *     reference is stable and omitting it from the useMemo dep array is safe.
+ * filterKeys entry shapes:
+ *   { key, label, getVal }               — dropdown (exact string match)
+ *   { key, label, type: 'min', getVal }  — single value, row >= value
+ *   { key, label, type: 'max', getVal }  — single value, row <= value
  */
 export function useColumnFilter(data, filterKeys) {
   const [filters, setFilters] = useState({})
@@ -30,14 +28,16 @@ export function useColumnFilter(data, filterKeys) {
     })
   }
 
-  // filterKeys is a stable module-level constant in every caller — safe to omit
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const filteredData = useMemo(() => {
     if (!data) return []
     return data.filter(row =>
-      filterKeys.every(({ key, getVal }) =>
-        filters[key] == null || String(getVal(row) ?? '') === filters[key]
-      )
+      filterKeys.every(({ key, type, getVal }) => {
+        const val = getVal(row)
+        if (type === 'min') return filters[key] == null || (val != null && val >= filters[key])
+        if (type === 'max') return filters[key] == null || (val != null && val <= filters[key])
+        return filters[key] == null || String(val ?? '') === filters[key]
+      })
     )
   }, [data, filters])
 
@@ -45,12 +45,14 @@ export function useColumnFilter(data, filterKeys) {
   const optionMap = useMemo(() => {
     if (!data) return {}
     return Object.fromEntries(
-      filterKeys.map(({ key, getVal }) => [
-        key,
-        [...new Set(data.map(row => getVal(row)).filter(v => v != null && v !== ''))]
-          .sort((a, b) => String(a).localeCompare(String(b)))
-          .map(v => ({ value: String(v), label: String(v) }))
-      ])
+      filterKeys
+        .filter(({ type }) => !type)
+        .map(({ key, getVal }) => [
+          key,
+          [...new Set(data.map(row => getVal(row)).filter(v => v != null && v !== ''))]
+            .sort((a, b) => String(a).localeCompare(String(b)))
+            .map(v => ({ value: String(v), label: String(v) }))
+        ])
     )
   }, [data])
 

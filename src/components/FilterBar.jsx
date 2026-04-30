@@ -1,41 +1,50 @@
-import { Select, Tag, Space } from 'antd'
+import { Select, Tag, Space, InputNumber } from 'antd'
 import { FilterOutlined } from '@ant-design/icons'
 
-/**
- * A row of column-filter dropdowns + removable bubble-tag chips for active filters.
- *
- * Props
- * ─────
- * filterKeys  Array<{ key, label }>           column descriptors
- * optionMap   { [key]: [{ value, label }] }   unique values per column
- * filters     { [key]: string }               currently active filters
- * setFilter   (key, value | null) => void
- * removeFilter (key) => void
- */
 export default function FilterBar({ filterKeys, optionMap, filters, setFilter, removeFilter }) {
   const activeTags = Object.entries(filters)
 
   return (
     <div style={{ marginBottom: 16 }}>
       <Space wrap>
-        {filterKeys.map(({ key, label }) => (
-          <Select
-            key={key}
-            placeholder={`Filter by ${label}`}
-            style={{ minWidth: 160 }}
-            allowClear
-            value={filters[key] ?? null}
-            options={optionMap[key] ?? []}
-            onChange={val => setFilter(key, val ?? null)}
-            suffixIcon={<FilterOutlined style={{ pointerEvents: 'none' }} />}
-          />
-        ))}
+        {filterKeys.map(({ key, label, type }) => {
+          if (type === 'min' || type === 'max') {
+            const prefix = type === 'min' ? '≥' : '≤'
+            return (
+              <Space key={key} size={4}>
+                <span style={{ fontSize: 12, color: '#6b7280' }}>{label} {prefix}</span>
+                <InputNumber
+                  placeholder={label}
+                  size="small"
+                  style={{ width: 90 }}
+                  value={filters[key] ?? null}
+                  onChange={val => setFilter(key, val ?? null)}
+                />
+              </Space>
+            )
+          }
+
+          return (
+            <Select
+              key={key}
+              placeholder={`Filter by ${label}`}
+              style={{ minWidth: 160 }}
+              allowClear
+              value={filters[key] ?? null}
+              options={optionMap[key] ?? []}
+              onChange={val => setFilter(key, val ?? null)}
+              suffixIcon={<FilterOutlined style={{ pointerEvents: 'none' }} />}
+            />
+          )
+        })}
       </Space>
 
       {activeTags.length > 0 && (
         <Space wrap style={{ marginTop: 8 }}>
           {activeTags.map(([key, value]) => {
-            const label = filterKeys.find(f => f.key === key)?.label ?? key
+            const filterDef = filterKeys.find(f => f.key === key)
+            const label = filterDef?.label ?? key
+            const prefix = filterDef?.type === 'min' ? '≥' : filterDef?.type === 'max' ? '≤' : null
             return (
               <Tag
                 key={key}
@@ -44,7 +53,7 @@ export default function FilterBar({ filterKeys, optionMap, filters, setFilter, r
                 color="blue"
                 style={{ borderRadius: 999, padding: '2px 12px', fontSize: 13 }}
               >
-                {label}: {value}
+                {label}: {prefix ? `${prefix} ${value}` : value}
               </Tag>
             )
           })}
