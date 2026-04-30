@@ -23,6 +23,11 @@ export const uploadResume = (candidateId, file) => {
   })
 }
 
+export const getExitRecord = (candidateId) => api.get(C(`/${candidateId}/exit`))
+export const createExitRecord = (candidateId, data) => api.post(C(`/${candidateId}/exit`), data)
+export const updateExitRecord = (candidateId, data) => api.put(C(`/${candidateId}/exit`), data)
+export const deleteExitRecord = (candidateId) => api.delete(C(`/${candidateId}/exit`))
+
 // Public apply — no auth
 // validates token in backend
 export const getApplyForm = (token) =>

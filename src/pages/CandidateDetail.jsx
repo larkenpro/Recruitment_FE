@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Card, Row, Col, Descriptions, Tag, Typography, Tabs, Empty, Button, Table, Timeline, Space, message } from 'antd'
-import { DownloadOutlined, FileTextOutlined, EditOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons'
+import { Card, Row, Col, Descriptions, Tag, Typography, Tabs, Empty, Button, Table, Timeline, Space, message, Form, DatePicker, Input, Popconfirm } from 'antd'
+import { DownloadOutlined, FileTextOutlined, EditOutlined, ArrowUpOutlined, ArrowDownOutlined, LogoutOutlined } from '@ant-design/icons'
+import dayjs from 'dayjs'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getCandidate, getCandidateEvent, getCandidateResume, getCandidateScores, getCandidateStageHistory, updateCandidate } from '../api/candidates'
+import { getCandidate, getCandidateEvent, getCandidateResume, getCandidateScores, getCandidateStageHistory, updateCandidate, getExitRecord, createExitRecord, updateExitRecord, deleteExitRecord } from '../api/candidates'
 import { getEventPositions } from '../api/events'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
@@ -45,6 +46,35 @@ export default function CandidateDetail() {
   const { data: stageHistory } = useQuery({
     queryKey: ['stage-history', id],
     queryFn: () => getCandidateStageHistory(id).then(r => r.data.data)
+  })
+
+  const { data: exitRecord, isLoading: exitLoading } = useQuery({
+    queryKey: ['exit', id],
+    queryFn: () => getExitRecord(id).then(r => r.data.data).catch(e => e.response?.status === 404 ? null : Promise.reject(e))
+  })
+
+  const [exitForm] = Form.useForm()
+  const [editingExit, setEditingExit] = useState(false)
+
+  const exitMutation = useMutation({
+    mutationFn: (data) => exitRecord
+      ? updateExitRecord(id, data)
+      : createExitRecord(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['exit', id] })
+      setEditingExit(false)
+      message.success(exitRecord ? 'Exit record updated!' : 'Exit record saved!')
+    },
+    onError: () => message.error('Failed to save exit record'),
+  })
+
+  const deleteExitMutation = useMutation({
+    mutationFn: () => deleteExitRecord(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['exit', id] })
+      message.success('Exit record removed')
+    },
+    onError: () => message.error('Failed to remove exit record'),
   })
 
   const prefMutation = useMutation({
@@ -211,6 +241,47 @@ export default function CandidateDetail() {
           )
         }))} />
       ) : <Empty description="No stage history yet" />
+    },
+    {
+      key: 'exit', label: <span style={{ color: exitRecord ? '#ef4444' : undefined }}><LogoutOutlined /> Exit</span>,
+      children: exitLoading ? null : editingExit || !exitRecord ? (
+        <div style={{ maxWidth: 480 }}>
+          <Form
+            form={exitForm}
+            layout="vertical"
+            initialValues={exitRecord ? { exitDate: dayjs(exitRecord.exitDate), reason: exitRecord.reason } : {}}
+            onFinish={(values) => exitMutation.mutate({ exitDate: values.exitDate.format('YYYY-MM-DD'), reason: values.reason })}
+          >
+            <Form.Item name="exitDate" label="Exit Date" rules={[{ required: true, message: 'Exit date is required' }]}>
+              <DatePicker style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item name="reason" label="Reason for Leaving">
+              <Input.TextArea rows={4} placeholder="Resignation, contract end, termination…" />
+            </Form.Item>
+            <Space>
+              <Button type="primary" danger htmlType="submit" loading={exitMutation.isPending}>
+                {exitRecord ? 'Update' : 'Record Exit'}
+              </Button>
+              {exitRecord && <Button onClick={() => setEditingExit(false)}>Cancel</Button>}
+            </Space>
+          </Form>
+        </div>
+      ) : (
+        <div>
+          <Descriptions column={{ xs: 1, sm: 2 }} bordered size="small" style={{ marginBottom: 16 }}>
+            <Descriptions.Item label="Exit Date">
+              <Tag color="red">{new Date(exitRecord.exitDate).toLocaleDateString()}</Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label="Reason" span={2}>{exitRecord.reason || '—'}</Descriptions.Item>
+          </Descriptions>
+          <Space>
+            <Button icon={<EditOutlined />} onClick={() => { exitForm.setFieldsValue({ exitDate: dayjs(exitRecord.exitDate), reason: exitRecord.reason }); setEditingExit(true) }}>Edit</Button>
+            <Popconfirm title="Remove exit record?" onConfirm={() => deleteExitMutation.mutate()} okText="Yes" cancelText="No">
+              <Button danger loading={deleteExitMutation.isPending}>Remove</Button>
+            </Popconfirm>
+          </Space>
+        </div>
+      )
     },
     {
       key: 'resume', label: 'Resume',
