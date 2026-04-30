@@ -1,18 +1,11 @@
 import { useState } from 'react'
-import { Card, Row, Col, Descriptions, Tag, Typography, Tabs, Empty, Button, Table, Timeline, Space, message } from 'antd'
+import { Card, Row, Col, Descriptions, Tag, Typography, Tabs, Empty, Button, Table, Timeline, Space, message, Collapse, Form, InputNumber, Input, Select, Divider, Modal } from 'antd'
 import { DownloadOutlined, FileTextOutlined, EditOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getCandidate, getCandidateEvent, getCandidateResume, getCandidateScores, getCandidateStageHistory, updateCandidate } from '../api/candidates'
+import { getCandidate, getCandidateEvent, getCandidateResume, getCandidateRoundResults, getCandidateStageHistory, updateRoundResult, addStageEntry, updateCandidate } from '../api/candidates'
 import { getEventPositions } from '../api/events'
-import { useColumnFilter } from '../hooks/useColumnFilter'
-import FilterBar from '../components/FilterBar'
-
-const SCORE_FILTER_KEYS = [
-  { key: 'round',  label: 'Round',  getVal: r => r.round?.name },
-  { key: 'type',   label: 'Type',   getVal: r => r.round?.roundType },
-  { key: 'result', label: 'Result', getVal: r => r.result },
-]
+import { getStages } from '../api/stages'
 
 const { Title, Text } = Typography
 
@@ -21,6 +14,9 @@ export default function CandidateDetail() {
   const queryClient = useQueryClient()
   const [editingPrefs, setEditingPrefs] = useState(false)
   const [rankedPositions, setRankedPositions] = useState([])
+  const [editingRound, setEditingRound] = useState(null)
+  const [scoreForm] = Form.useForm()
+  const [stageSelections, setStageSelections] = useState({})
 
   const movePosition = (index, dir) => {
     const next = index + dir
@@ -38,13 +34,17 @@ export default function CandidateDetail() {
     queryKey: ['resume', id],
     queryFn: () => getCandidateResume(id).then(r => r.data.data)
   })
-  const { data: scores } = useQuery({
-    queryKey: ['scores', id],
-    queryFn: () => getCandidateScores(id).then(r => r.data.data)
+  const { data: roundResults } = useQuery({
+    queryKey: ['round-results', id],
+    queryFn: () => getCandidateRoundResults(id).then(r => r.data)
   })
   const { data: stageHistory } = useQuery({
     queryKey: ['stage-history', id],
-    queryFn: () => getCandidateStageHistory(id).then(r => r.data.data)
+    queryFn: () => getCandidateStageHistory(id).then(r => r.data)
+  })
+  const { data: stages } = useQuery({
+    queryKey: ['stages'],
+    queryFn: () => getStages().then(r => r.data)
   })
 
   const prefMutation = useMutation({
@@ -55,6 +55,27 @@ export default function CandidateDetail() {
       message.success('Preferences updated!')
     },
     onError: () => message.error('Failed to update preferences'),
+  })
+
+  const roundMutation = useMutation({
+    mutationFn: ({ eventId, roundId, ...data }) => updateRoundResult(id, eventId, roundId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['round-results', id] })
+      setEditingRound(null)
+      scoreForm.resetFields()
+      message.success('Score saved!')
+    },
+    onError: () => message.error('Failed to save score'),
+  })
+
+  const stageMutation = useMutation({
+    mutationFn: ({ eventId, stageId }) => addStageEntry(id, eventId, { stageId }),
+    onSuccess: (_, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: ['stage-history', id] })
+      setStageSelections(prev => { const next = { ...prev }; delete next[eventId]; return next })
+      message.success('Stage added!')
+    },
+    onError: () => message.error('Failed to add stage'),
   })
 
   const openEditPrefs = async () => {
@@ -78,19 +99,36 @@ export default function CandidateDetail() {
     })
   }
 
-  const { filteredData: filteredScores, filters: scoreFilters, setFilter: setScoreFilter, removeFilter: removeScoreFilter, optionMap: scoreOptionMap } = useColumnFilter(scores, SCORE_FILTER_KEYS)
+  const openEditRound = (eventId, round) => {
+    setEditingRound({ eventId, roundId: round.roundId, roundName: round.roundName })
+    scoreForm.setFieldsValue({
+      score: round.score,
+      result: round.result,
+      interviewer: round.interviewer,
+      comments: round.comments,
+    })
+  }
 
   if (isLoading) return <Card loading style={{ borderRadius: 12 }} />
   if (!candidate) return <Empty />
 
-  const scoreColumns = [
-    { title: 'Round', render: (_, r) => r.round?.name ?? '-' },
-    { title: 'Type', render: (_, r) => r.round?.roundType ?? '-' },
-    { title: 'Score', dataIndex: 'score', render: v => v ?? '-' },
-    { title: 'Result', dataIndex: 'result', render: v => v ? <Tag color={v === 'PASS' ? 'green' : v === 'FAIL' ? 'red' : 'orange'}>{v}</Tag> : '-' },
-    { title: 'Interviewer', dataIndex: 'interviewer' },
-    { title: 'Comments', dataIndex: 'comments' },
-    { title: 'Date', dataIndex: 'evaluatedAt', render: v => v ? new Date(v).toLocaleDateString() : '-' },
+  const roundColumns = (eventId) => [
+    { title: '#', dataIndex: 'sequence', width: 40 },
+    { title: 'Round', dataIndex: 'roundName' },
+    { title: 'Type', dataIndex: 'roundType' },
+    { title: 'Score', dataIndex: 'score', render: v => v ?? '—' },
+    { title: 'Result', dataIndex: 'result', render: v => v ? <Tag color={v === 'PASS' ? 'green' : v === 'FAIL' ? 'red' : 'orange'}>{v}</Tag> : '—' },
+    { title: 'Interviewer', dataIndex: 'interviewer', render: v => v ?? '—' },
+    { title: 'Comments', dataIndex: 'comments', render: v => v ?? '—' },
+    { title: 'Date', dataIndex: 'evaluatedAt', render: v => v ? new Date(v).toLocaleDateString() : '—' },
+    {
+      title: '',
+      render: (_, round) => (
+        <Button size="small" icon={<EditOutlined />} onClick={() => openEditRound(eventId, round)}>
+          {round.score == null ? 'Enter' : 'Edit'}
+        </Button>
+      )
+    }
   ]
 
   const tabs = [
@@ -104,9 +142,9 @@ export default function CandidateDetail() {
           <Descriptions.Item label="Phone">{candidate.phone}</Descriptions.Item>
           <Descriptions.Item label="Roll No">{candidate.rollNo}</Descriptions.Item>
           <Descriptions.Item label="Branch">{candidate.branch}</Descriptions.Item>
-          <Descriptions.Item label="College">{candidate.college?.name ?? '-'}</Descriptions.Item>
+          <Descriptions.Item label="College">{candidate.college?.name ?? '—'}</Descriptions.Item>
           <Descriptions.Item label="Job Location">{candidate.jobLocation}</Descriptions.Item>
-          <Descriptions.Item label="GitHub">{candidate.githubLink ? <a href={candidate.githubLink} target="_blank" rel="noreferrer">{candidate.githubLink}</a> : '-'}</Descriptions.Item>
+          <Descriptions.Item label="GitHub">{candidate.githubLink ? <a href={candidate.githubLink} target="_blank" rel="noreferrer">{candidate.githubLink}</a> : '—'}</Descriptions.Item>
           <Descriptions.Item label="Internship Availability">{candidate.internshipAvailability}</Descriptions.Item>
           <Descriptions.Item label="Leadership Positions" span={2}>{candidate.leadershipPositions}</Descriptions.Item>
         </Descriptions>
@@ -118,12 +156,12 @@ export default function CandidateDetail() {
         <Descriptions column={{ xs: 1, sm: 2 }} bordered size="small">
           <Descriptions.Item label="10th Mark %">{candidate.tenthMark}</Descriptions.Item>
           <Descriptions.Item label="12th Mark %">{candidate.twelfthMark}</Descriptions.Item>
-          <Descriptions.Item label="Diploma Mark %">{candidate.diplomaMark ?? '-'}</Descriptions.Item>
-          <Descriptions.Item label="KEAM Rank">{candidate.keamRank ?? '-'}</Descriptions.Item>
+          <Descriptions.Item label="Diploma Mark %">{candidate.diplomaMark ?? '—'}</Descriptions.Item>
+          <Descriptions.Item label="KEAM Rank">{candidate.keamRank ?? '—'}</Descriptions.Item>
           <Descriptions.Item label="UG Degree">{candidate.ugDegree}</Descriptions.Item>
           <Descriptions.Item label="UG CGPA">{candidate.ugCgpa}</Descriptions.Item>
-          <Descriptions.Item label="PG Degree">{candidate.pgDegree ?? '-'}</Descriptions.Item>
-          <Descriptions.Item label="PG CGPA">{candidate.pgCgpa ?? '-'}</Descriptions.Item>
+          <Descriptions.Item label="PG Degree">{candidate.pgDegree ?? '—'}</Descriptions.Item>
+          <Descriptions.Item label="PG CGPA">{candidate.pgCgpa ?? '—'}</Descriptions.Item>
           <Descriptions.Item label="Backlogs"><Tag color={candidate.backlogs === 0 ? 'green' : 'red'}>{candidate.backlogs}</Tag></Descriptions.Item>
           <Descriptions.Item label="Arrears"><Tag color={candidate.arrears === 0 ? 'green' : 'red'}>{candidate.arrears}</Tag></Descriptions.Item>
         </Descriptions>
@@ -158,7 +196,7 @@ export default function CandidateDetail() {
           </Space>
         </div>
       ) : (() => {
-        const preferred = candidate.preferredPositions ?? [candidate.preferredPosition1, candidate.preferredPosition2].filter(Boolean)
+        const preferred = candidate.preferredPositions ?? []
         return preferred.length > 0 ? (
           <div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
@@ -184,32 +222,80 @@ export default function CandidateDetail() {
       })()
     },
     {
-      key: 'scores', label: `Scores (${scores?.length ?? 0})`,
-      children: scores?.length > 0
-        ? <>
-            <FilterBar
-              filterKeys={SCORE_FILTER_KEYS}
-              optionMap={scoreOptionMap}
-              filters={scoreFilters}
-              setFilter={setScoreFilter}
-              removeFilter={removeScoreFilter}
-            />
-            <Table dataSource={filteredScores} columns={scoreColumns} rowKey={(r) => `${r.id?.roundId}`} pagination={false} size="small" />
-          </>
-        : <Empty description="No scores recorded yet" />
+      key: 'scores', label: 'Scores',
+      children: roundResults?.length > 0 ? (
+        <Collapse
+          accordion
+          defaultActiveKey={[String(roundResults[0]?.eventId)]}
+          items={roundResults.map(event => ({
+            key: String(event.eventId),
+            label: `${event.collegeName} — ${event.recruitmentYear}`,
+            children: (
+              <Table
+                dataSource={event.rounds}
+                rowKey="roundId"
+                columns={roundColumns(event.eventId)}
+                pagination={false}
+                size="small"
+                scroll={{ x: 700 }}
+              />
+            )
+          }))}
+        />
+      ) : <Empty description="No round data yet" />
     },
     {
       key: 'stage-history', label: 'Stage History',
       children: stageHistory?.length > 0 ? (
-        <Timeline mode="left" items={stageHistory.map(s => ({
-          label: s.stageTimestamp ? new Date(s.stageTimestamp).toLocaleString() : '-',
-          children: (
-            <div>
-              <Tag color="blue">{s.stage?.name}</Tag>
-              {s.changedBy && <Text type="secondary"> by {s.changedBy}</Text>}
-            </div>
-          )
-        }))} />
+        <Collapse
+          accordion
+          defaultActiveKey={[String(stageHistory[0]?.eventId)]}
+          items={stageHistory.map(event => ({
+            key: String(event.eventId),
+            label: (
+              <span>
+                {event.collegeName} — {event.recruitmentYear}
+                {event.currentStage && (
+                  <Tag color="blue" style={{ marginLeft: 10 }}>{event.currentStage.stageName}</Tag>
+                )}
+              </span>
+            ),
+            children: (
+              <div>
+                {event.history.length > 0 ? (
+                  <Timeline mode="left" style={{ marginTop: 8 }} items={event.history.map(h => ({
+                    label: h.changedAt ? new Date(h.changedAt).toLocaleString() : '—',
+                    children: (
+                      <div>
+                        <Tag color="blue">{h.stageName}</Tag>
+                        {h.changedBy && <Text type="secondary"> by {h.changedBy}</Text>}
+                      </div>
+                    )
+                  }))} />
+                ) : <Empty description="No stage entries yet" style={{ marginBottom: 16 }} />}
+                <Divider style={{ margin: '12px 0' }} />
+                <Space>
+                  <Select
+                    placeholder="Select next stage"
+                    style={{ width: 200 }}
+                    options={stages?.map(s => ({ value: s.id, label: s.name })) ?? []}
+                    value={stageSelections[event.eventId] ?? null}
+                    onChange={val => setStageSelections(prev => ({ ...prev, [event.eventId]: val }))}
+                  />
+                  <Button
+                    type="primary"
+                    size="small"
+                    loading={stageMutation.isPending}
+                    disabled={!stageSelections[event.eventId]}
+                    onClick={() => stageMutation.mutate({ eventId: event.eventId, stageId: stageSelections[event.eventId] })}
+                  >
+                    Add Stage
+                  </Button>
+                </Space>
+              </div>
+            )
+          }))}
+        />
       ) : <Empty description="No stage history yet" />
     },
     {
@@ -219,7 +305,7 @@ export default function CandidateDetail() {
           <FileTextOutlined style={{ fontSize: 48, color: '#4f46e5', marginBottom: 16 }} />
           <div style={{ marginBottom: 8 }}><strong>{resumeData.fileName}</strong></div>
           <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
-            Uploaded: {resumeData.uploadedAt ? new Date(resumeData.uploadedAt).toLocaleDateString() : '-'}
+            Uploaded: {resumeData.uploadedAt ? new Date(resumeData.uploadedAt).toLocaleDateString() : '—'}
           </Text>
           <Button type="primary" icon={<DownloadOutlined />} size="large"
             href={`${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/candidates/${id}/resume/download`} target="_blank">
@@ -250,6 +336,30 @@ export default function CandidateDetail() {
       <Card bordered={false} style={{ borderRadius: 12 }}>
         <Tabs items={tabs} />
       </Card>
+
+      <Modal
+        title={editingRound ? `${editingRound.roundName} — Score` : ''}
+        open={!!editingRound}
+        onCancel={() => { setEditingRound(null); scoreForm.resetFields() }}
+        onOk={() => scoreForm.validateFields().then(values => roundMutation.mutate({ ...editingRound, ...values }))}
+        confirmLoading={roundMutation.isPending}
+        okText="Save"
+      >
+        <Form form={scoreForm} layout="vertical" style={{ marginTop: 8 }}>
+          <Form.Item name="score" label="Score">
+            <InputNumber style={{ width: '100%' }} min={0} max={100} step={0.5} />
+          </Form.Item>
+          <Form.Item name="result" label="Result">
+            <Select options={['PASS', 'FAIL', 'ON_HOLD'].map(v => ({ value: v }))} allowClear />
+          </Form.Item>
+          <Form.Item name="interviewer" label="Interviewer">
+            <Input />
+          </Form.Item>
+          <Form.Item name="comments" label="Comments">
+            <Input.TextArea rows={3} />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   )
 }

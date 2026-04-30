@@ -12,8 +12,13 @@ export const deleteCandidate = (id) => api.delete(C(`/${id}`))
 
 export const getCandidateEvent = (id) => api.get(C(`/${id}/event`))
 export const getCandidateResume = (id) => api.get(`${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/candidates/${id}/resume`)
-export const getCandidateScores = (id) => api.get(C(`/${id}/scores`))
-export const getCandidateStageHistory = (id) => api.get(C(`/${id}/stage-history`))
+
+const V1 = (path = '') => `${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/candidates${path}`
+
+export const getCandidateRoundResults = (id) => api.get(V1(`/${id}/round-results`))
+export const updateRoundResult = (candidateId, eventId, roundId, data) => api.put(V1(`/${candidateId}/events/${eventId}/rounds/${roundId}`), data)
+export const getCandidateStageHistory = (id) => api.get(V1(`/${id}/stage-history`))
+export const addStageEntry = (candidateId, eventId, data) => api.post(V1(`/${candidateId}/events/${eventId}/stages`), data)
 
 export const uploadResume = (candidateId, file) => {
   const form = new FormData()
