@@ -11,8 +11,10 @@ import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
 
 const FILTER_KEYS = [
-  { key: 'college', label: 'College', getVal: r => r.college?.name },
-  { key: 'branch',  label: 'Branch',  getVal: r => r.branch },
+  { key: 'college',  label: 'College',  getVal: r => r.college?.name },
+  { key: 'branch',   label: 'Branch',   getVal: r => r.branch },
+  { key: 'ugCgpa',   label: 'UG CGPA',  getVal: r => r.ugCgpa,   type: 'min' },
+  { key: 'backlogs', label: 'Backlogs', getVal: r => r.backlogs, type: 'max' },
 ]
 
 export default function Candidates() {
@@ -106,23 +108,6 @@ export default function Candidates() {
     {
       title: 'Total Backlogs', dataIndex: 'backlogs',
       render: v => <Tag color={(v ?? 0) === 0 ? 'green' : 'red'}>{v ?? 0}</Tag>,
-    },
-    {
-      title: 'Preferred Positions',
-      render: (_, r) => {
-        const preferred = r.preferredPositions ?? [r.preferredPosition1, r.preferredPosition2].filter(Boolean)
-        if (!preferred.length) return <span style={{ color: '#9ca3af' }}>—</span>
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {preferred.map((p, i) => (
-              <span key={p.id} style={{ fontSize: 12 }}>
-                <Tag style={{ fontWeight: 600, minWidth: 22, textAlign: 'center', marginRight: 4 }}>{i + 1}</Tag>
-                {p.title}{p.type ? ` — ${p.type}` : ''}
-              </span>
-            ))}
-          </div>
-        )
-      },
     },
     {
       title: 'Actions',

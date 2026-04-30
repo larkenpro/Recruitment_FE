@@ -242,8 +242,6 @@ export default function Events() {
             { title: 'Phone', dataIndex: 'phone', render: v => v || '—' },
             { title: 'Branch', dataIndex: 'branch', render: v => v || '—' },
             { title: 'UG CGPA', dataIndex: 'ugCgpa', render: v => v ?? '—' },
-            { title: 'Pref. Role 1', render: (_, r) => r.preferredPosition1?.title ?? '—' },
-            { title: 'Pref. Role 2', render: (_, r) => r.preferredPosition2?.title ?? '—' },
             {
               title: 'Backlogs', dataIndex: 'backlogs',
               render: v => <Tag color={(v ?? 0) === 0 ? 'green' : 'red'}>{v ?? 0}</Tag>
