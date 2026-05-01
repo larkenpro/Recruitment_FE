@@ -1,11 +1,12 @@
 import { ArrowDownOutlined, ArrowUpOutlined, DownloadOutlined, EditOutlined, FileTextOutlined, LogoutOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Button, Card, Col, DatePicker, Descriptions, Empty, Form, Input, Popconfirm, Row, Space, Table, Tabs, Tag, Timeline, Typography, message } from 'antd'
+import { Button, Card, Col, Collapse, DatePicker, Descriptions, Divider, Empty, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Table, Tabs, Tag, Timeline, Typography, message } from 'antd'
 import dayjs from 'dayjs'
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { createExitRecord, deleteExitRecord, getCandidate, getCandidateEvent, getCandidateResume, getCandidateStageHistory, getExitRecord, updateCandidate, updateExitRecord } from '../api/candidates'
+import { addStageEntry, createExitRecord, deleteExitRecord, getCandidate, getCandidateEvent, getCandidateResume, getCandidateRoundResults, getCandidateStageHistory, getExitRecord, updateCandidate, updateExitRecord, updateRoundResult } from '../api/candidates'
 import { getEventPositions } from '../api/events'
+import { getStages } from '../api/stages'
 
 const { Title, Text } = Typography
 
@@ -40,7 +41,11 @@ export default function CandidateDetail() {
   })
   const { data: stageHistory } = useQuery({
     queryKey: ['stage-history', id],
-    queryFn: () => getCandidateStageHistory(id).then(r => r.data.data)
+    queryFn: () => getCandidateStageHistory(id).then(r => r.data)
+  })
+  const { data: stages } = useQuery({
+    queryKey: ['stages'],
+    queryFn: () => getStages().then(r => r.data)
   })
 
   const { data: exitRecord, isLoading: exitLoading } = useQuery({
