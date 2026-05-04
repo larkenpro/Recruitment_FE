@@ -1,14 +1,15 @@
-import { ArrowDownOutlined, ArrowUpOutlined, DownloadOutlined, EditOutlined, FileTextOutlined, LogoutOutlined } from '@ant-design/icons'
+import { ArrowDownOutlined, ArrowRightOutlined, ArrowUpOutlined, DownloadOutlined, EditOutlined, FileTextOutlined, LogoutOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Button, Card, Col, Collapse, DatePicker, Descriptions, Divider, Empty, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Table, Tabs, Tag, Timeline, Typography, message } from 'antd'
+import { Button, Card, Col, Collapse, DatePicker, Descriptions, Divider, Empty, Form, Input, InputNumber, Modal, Popconfirm, Radio, Row, Select, Space, Steps, Table, Tabs, Tag, Timeline, Typography, message } from 'antd'
 import dayjs from 'dayjs'
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { addStageEntry, createExitRecord, deleteExitRecord, getCandidate, getCandidateEvent, getCandidateResume, getCandidateRoundResults, getCandidateStageHistory, getExitRecord, updateCandidate, updateExitRecord, updateRoundResult } from '../api/candidates'
+import { addStageEntry, createExitRecord, deleteExitRecord, getCandidate, getCandidateEvent, getCandidateResume, getCandidateRoundResults, getCandidateStageHistory, getExitRecord, updateCandidate, updateExitRecord, updateRoundResult, updateStageStatus } from '../api/candidates'
 import { getEventPositions } from '../api/events'
-import { getStages } from '../api/stages'
 
 const { Title, Text } = Typography
+
+const PIPELINE_STAGES = ['Resume', 'Tests', 'Offer', 'Joining', '6 Month Review', '12 Month Retained', 'Exit']
 
 export default function CandidateDetail() {
   const { id } = useParams()
@@ -43,11 +44,6 @@ export default function CandidateDetail() {
     queryKey: ['stage-history', id],
     queryFn: () => getCandidateStageHistory(id).then(r => r.data)
   })
-  const { data: stages } = useQuery({
-    queryKey: ['stages'],
-    queryFn: () => getStages().then(r => r.data)
-  })
-
   const { data: exitRecord, isLoading: exitLoading } = useQuery({
     queryKey: ['exit', id],
     queryFn: () => getExitRecord(id).then(r => r.data.data).catch(e => e.response?.status === 404 ? null : Promise.reject(e))
@@ -99,13 +95,19 @@ export default function CandidateDetail() {
   })
 
   const stageMutation = useMutation({
-    mutationFn: ({ eventId, stageId }) => addStageEntry(id, eventId, { stageId }),
+    mutationFn: ({ eventId, stageName }) => addStageEntry(id, eventId, { stageName }),
     onSuccess: (_, { eventId }) => {
       queryClient.invalidateQueries({ queryKey: ['stage-history', id] })
       setStageSelections(prev => { const next = { ...prev }; delete next[eventId]; return next })
-      message.success('Stage added!')
+      message.success('Stage updated!')
     },
-    onError: () => message.error('Failed to add stage'),
+    onError: () => message.error('Failed to update stage'),
+  })
+
+  const statusMutation = useMutation({
+    mutationFn: ({ eventId, status }) => updateStageStatus(id, eventId, { status }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['stage-history', id] }),
+    onError: () => message.error('Failed to update status'),
   })
 
   const openEditPrefs = async () => {
@@ -280,51 +282,122 @@ export default function CandidateDetail() {
         <Collapse
           accordion
           defaultActiveKey={[String(stageHistory[0]?.eventId)]}
-          items={stageHistory.map(event => ({
-            key: String(event.eventId),
-            label: (
-              <span>
-                {event.collegeName} — {event.recruitmentYear}
-                {event.currentStage && (
-                  <Tag color="blue" style={{ marginLeft: 10 }}>{event.currentStage.stageName}</Tag>
-                )}
-              </span>
-            ),
-            children: (
-              <div>
-                {event.history.length > 0 ? (
-                  <Timeline mode="left" style={{ marginTop: 8 }} items={event.history.map(h => ({
-                    label: h.changedAt ? new Date(h.changedAt).toLocaleString() : '—',
-                    children: (
-                      <div>
-                        <Tag color="blue">{h.stageName}</Tag>
-                        {h.changedBy && <Text type="secondary"> by {h.changedBy}</Text>}
-                      </div>
-                    )
-                  }))} />
-                ) : <Empty description="No stage entries yet" style={{ marginBottom: 16 }} />}
-                <Divider style={{ margin: '12px 0' }} />
-                <Space>
-                  <Select
-                    placeholder="Select next stage"
-                    style={{ width: 200 }}
-                    options={stages?.map(s => ({ value: s.id, label: s.name })) ?? []}
-                    value={stageSelections[event.eventId] ?? null}
-                    onChange={val => setStageSelections(prev => ({ ...prev, [event.eventId]: val }))}
-                  />
-                  <Button
-                    type="primary"
+          items={stageHistory.map(event => {
+            const currentIdx = event.currentStage
+              ? PIPELINE_STAGES.indexOf(event.currentStage.stageName)
+              : -1
+            const currentStatus = event.currentStage?.status ?? null
+            const isShortlisted = currentStatus === 'SHORTLISTED'
+            const statusColor = { SHORTLISTED: 'green', HOLD: 'orange', REJECTED: 'red' }
+
+            return {
+              key: String(event.eventId),
+              label: (
+                <span>
+                  {event.collegeName} — {event.recruitmentYear}
+                  {event.currentStage && (
+                    <>
+                      <Tag color="blue" style={{ marginLeft: 10 }}>{event.currentStage.stageName}</Tag>
+                      {currentStatus && <Tag color={statusColor[currentStatus]}>{currentStatus}</Tag>}
+                    </>
+                  )}
+                </span>
+              ),
+              children: (
+                <div>
+                  <Steps
                     size="small"
-                    loading={stageMutation.isPending}
-                    disabled={!stageSelections[event.eventId]}
-                    onClick={() => stageMutation.mutate({ eventId: event.eventId, stageId: stageSelections[event.eventId] })}
-                  >
-                    Add Stage
-                  </Button>
-                </Space>
-              </div>
-            )
-          }))}
+                    style={{ marginBottom: 20 }}
+                    items={PIPELINE_STAGES.map((name, i) => ({
+                      title: name,
+                      status: currentIdx < 0 ? 'wait'
+                        : i < currentIdx ? 'finish'
+                        : i === currentIdx ? 'process'
+                        : 'wait'
+                    }))}
+                  />
+
+                  {currentIdx < 0 ? (
+                    <Button
+                      type="primary" size="small" style={{ marginBottom: 16 }}
+                      loading={stageMutation.isPending}
+                      onClick={() => stageMutation.mutate({ eventId: event.eventId, stageName: PIPELINE_STAGES[0] })}
+                    >
+                      Start with {PIPELINE_STAGES[0]}
+                    </Button>
+                  ) : (
+                    <div style={{ marginBottom: 16 }}>
+                      <Space wrap>
+                        <Text style={{ fontSize: 13 }}><strong>{event.currentStage.stageName}</strong>:</Text>
+                        <Radio.Group
+                          value={currentStatus}
+                          buttonStyle="solid"
+                          size="small"
+                          onChange={e => statusMutation.mutate({ eventId: event.eventId, status: e.target.value })}
+                        >
+                          <Radio.Button value="SHORTLISTED">Shortlisted</Radio.Button>
+                          <Radio.Button value="HOLD">Hold</Radio.Button>
+                          <Radio.Button value="REJECTED">Rejected</Radio.Button>
+                        </Radio.Group>
+                      </Space>
+                    </div>
+                  )}
+
+                  <Space wrap style={{ marginBottom: 20 }}>
+                    {isShortlisted && currentIdx < PIPELINE_STAGES.length - 1 && (
+                      <Button
+                        type="primary" size="small" icon={<ArrowRightOutlined />}
+                        loading={stageMutation.isPending}
+                        onClick={() => stageMutation.mutate({ eventId: event.eventId, stageName: PIPELINE_STAGES[currentIdx + 1] })}
+                      >
+                        Advance to {PIPELINE_STAGES[currentIdx + 1]}
+                      </Button>
+                    )}
+                    {currentIdx > 0 && (
+                      <>
+                        <Select
+                          placeholder="Revert to stage"
+                          size="small"
+                          style={{ width: 180 }}
+                          options={PIPELINE_STAGES.slice(0, currentIdx).map(name => ({ value: name, label: name }))}
+                          value={stageSelections[event.eventId] ?? null}
+                          onChange={val => setStageSelections(prev => ({ ...prev, [event.eventId]: val }))}
+                        />
+                        <Button
+                          size="small" danger
+                          disabled={!stageSelections[event.eventId]}
+                          loading={stageMutation.isPending}
+                          onClick={() => stageMutation.mutate({ eventId: event.eventId, stageName: stageSelections[event.eventId] })}
+                        >
+                          Revert
+                        </Button>
+                      </>
+                    )}
+                  </Space>
+
+                  {event.history.length > 0 && (
+                    <>
+                      <Divider orientation="left" style={{ fontSize: 12 }}>History</Divider>
+                      <Timeline mode="left" items={event.history.map(h => ({
+                        label: h.changedAt ? new Date(h.changedAt).toLocaleString() : '—',
+                        color: h.status === 'SHORTLISTED' ? 'green' : h.status === 'REJECTED' ? 'red' : h.status === 'HOLD' ? 'orange' : 'blue',
+                        children: (
+                          <Space size={4}>
+                            <Tag color="blue">{h.stageName}</Tag>
+                            {h.status && <Tag color={statusColor[h.status]}>{h.status}</Tag>}
+                            {h.changedBy && <Text type="secondary">by {h.changedBy}</Text>}
+                          </Space>
+                        )
+                      }))} />
+                    </>
+                  )}
+                  {event.history.length === 0 && currentIdx >= 0 && (
+                    <Empty description="No history yet" />
+                  )}
+                </div>
+              )
+            }
+          })}
         />
       ) : <Empty description="No stage history yet" />
     },
