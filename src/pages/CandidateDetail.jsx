@@ -1,6 +1,6 @@
 import { ArrowDownOutlined, ArrowUpOutlined, DownloadOutlined, EditOutlined, FileTextOutlined, LogoutOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Button, Card, Col, DatePicker, Descriptions, Empty, Form, Input, InputNumber, Modal, Popconfirm, Radio, Row, Select, Space, Steps, Table, Tabs, Tag, Timeline, Typography, message } from 'antd'
+import { Button, Card, Col, DatePicker, Descriptions, Empty, Form, Input, InputNumber, Modal, Popconfirm, Radio, Row, Select, Space, Steps, Tabs, Tag, Timeline, Typography, message } from 'antd'
 import dayjs from 'dayjs'
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
@@ -9,7 +9,7 @@ import { getEventPositions } from '../api/events'
 
 const { Title, Text } = Typography
 
-const PIPELINE_STAGES = ['Resume', 'Tests', 'Offer', 'Joining', '6 Month Review', '12 Month Retained', 'Exit']
+const PIPELINE_STAGES = ['Resume', 'Rounds', 'Offer', 'Joining', '6 Month Review', '12 Month Retained', 'Exit']
 const STATUS_COLOR = { SHORTLISTED: 'green', HOLD: 'orange', REJECTED: 'red' }
 
 export default function CandidateDetail() {
@@ -143,22 +143,26 @@ export default function CandidateDetail() {
   // Derived from selected event
   const selectedEvent = stageHistory?.find(e => e.eventId === selectedEventId) ?? stageHistory?.[0]
   const selectedEventRounds = roundResults?.find(e => e.eventId === selectedEvent?.eventId)
+
+  // Backend may still send "Tests"; normalise to the display name "Rounds"
+  const normalizeStageName = (name) => name === 'Tests' ? 'Rounds' : name
+
   const currentStageIdx = selectedEvent?.currentStage
-    ? PIPELINE_STAGES.indexOf(selectedEvent.currentStage.stageName)
+    ? PIPELINE_STAGES.indexOf(normalizeStageName(selectedEvent.currentStage.stageName))
     : -1
 
   const getStageStatus = (stageName) => {
     if (!selectedEvent) return null
-    if (selectedEvent.currentStage?.stageName === stageName) return selectedEvent.currentStage.status
-    return selectedEvent.history?.find(h => h.stageName === stageName)?.status ?? null
+    if (normalizeStageName(selectedEvent.currentStage?.stageName) === stageName) return selectedEvent.currentStage.status
+    return selectedEvent.history?.find(h => normalizeStageName(h.stageName) === stageName)?.status ?? null
   }
 
-  const isCurrentStage = (stageName) => selectedEvent?.currentStage?.stageName === stageName
+  const isCurrentStage = (stageName) => normalizeStageName(selectedEvent?.currentStage?.stageName) === stageName
 
   const isUnlocked = (stageIndex) => {
     if (stageIndex === 0) return true
     const prev = PIPELINE_STAGES[stageIndex - 1]
-    return selectedEvent?.history?.some(h => h.stageName === prev && h.status === 'SHORTLISTED') ?? false
+    return selectedEvent?.history?.some(h => normalizeStageName(h.stageName) === prev && h.status === 'SHORTLISTED') ?? false
   }
 
   const renderStageAction = (stageName, stageIndex) => {
@@ -200,24 +204,6 @@ export default function CandidateDetail() {
       </div>
     )
   }
-
-  const roundColumns = (eventId) => [
-    { title: '#', dataIndex: 'sequence', width: 40 },
-    { title: 'Round', dataIndex: 'roundName' },
-    { title: 'Type', dataIndex: 'roundType' },
-    { title: 'Score', dataIndex: 'score', render: v => v ?? '—' },
-    { title: 'Result', dataIndex: 'result', render: v => v ? <Tag color={v === 'PASS' ? 'green' : v === 'FAIL' ? 'red' : 'orange'}>{v}</Tag> : '—' },
-    { title: 'Interviewer', dataIndex: 'interviewer', render: v => v ?? '—' },
-    { title: 'Comments', dataIndex: 'comments', render: v => v ?? '—' },
-    { title: 'Date', dataIndex: 'evaluatedAt', render: v => v ? new Date(v).toLocaleDateString() : '—' },
-    {
-      title: '', render: (_, round) => (
-        <Button size="small" icon={<EditOutlined />} onClick={() => openEditRound(eventId, round)}>
-          {round.score == null ? 'Enter' : 'Edit'}
-        </Button>
-      )
-    }
-  ]
 
   // ── Static tabs ──
   const staticTabs = [
@@ -383,16 +369,72 @@ export default function CandidateDetail() {
           </Button>
         </div>
       ) : <Empty description="No resume uploaded" />
-    } else if (stageName === 'Tests') {
-      stageContent = selectedEventRounds?.rounds?.length > 0 ? (
-        <Table
-          dataSource={selectedEventRounds.rounds}
-          rowKey="roundId"
-          columns={roundColumns(selectedEvent?.eventId)}
-          pagination={false}
-          size="small"
-          scroll={{ x: 700 }}
-        />
+    } else if (stageName === 'Rounds') {
+      const rounds = selectedEventRounds?.rounds ?? []
+      const sortedRounds = [...rounds].sort((a, b) => a.sequence - b.sequence)
+
+      const isRoundVisible = (idx) => {
+        if (idx === 0) return true
+        const prev = sortedRounds[idx - 1]
+        return prev?.result === 'PASS'
+      }
+
+      stageContent = sortedRounds.length > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {sortedRounds.map((round, idx) => {
+            if (!isRoundVisible(idx)) return null
+            const resultColor = round.result === 'PASS' ? 'green' : round.result === 'FAIL' ? 'red' : 'orange'
+            const isPending = round.score == null && round.result == null
+            return (
+              <Card
+                key={round.roundId}
+                size="small"
+                style={{
+                  borderRadius: 10,
+                  border: `1.5px solid ${isPending ? '#e5e7eb' : round.result === 'PASS' ? '#bbf7d0' : round.result === 'FAIL' ? '#fecaca' : '#fed7aa'}`,
+                  background: isPending ? '#fff' : round.result === 'PASS' ? '#f0fdf4' : round.result === 'FAIL' ? '#fff1f2' : '#fff7ed',
+                }}
+                title={
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Tag style={{ fontWeight: 700, minWidth: 28, textAlign: 'center' }}>#{round.sequence}</Tag>
+                    <span style={{ fontWeight: 600, fontSize: 14 }}>{round.roundName}</span>
+                    {round.roundType && <Tag color="blue">{round.roundType}</Tag>}
+                    {round.result
+                      ? <Tag color={resultColor}>{round.result}</Tag>
+                      : <Tag color="default">Pending</Tag>
+                    }
+                  </div>
+                }
+                extra={
+                  <Button size="small" icon={<EditOutlined />} onClick={() => openEditRound(selectedEvent?.eventId, round)}>
+                    {round.score == null ? 'Enter Score' : 'Edit'}
+                  </Button>
+                }
+              >
+                <Row gutter={[16, 8]}>
+                  <Col xs={12} sm={6}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>Score</Text>
+                    <div style={{ fontWeight: 600, fontSize: 15 }}>{round.score ?? '—'}</div>
+                  </Col>
+                  <Col xs={12} sm={6}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>Interviewer</Text>
+                    <div style={{ fontWeight: 500 }}>{round.interviewer ?? '—'}</div>
+                  </Col>
+                  <Col xs={12} sm={6}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>Date</Text>
+                    <div>{round.evaluatedAt ? new Date(round.evaluatedAt).toLocaleDateString() : '—'}</div>
+                  </Col>
+                  {round.comments && (
+                    <Col xs={24}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>Comments</Text>
+                      <div style={{ fontSize: 13, color: '#374151' }}>{round.comments}</div>
+                    </Col>
+                  )}
+                </Row>
+              </Card>
+            )
+          })}
+        </div>
       ) : <Empty description="No round data yet" />
     } else {
       stageContent = <Empty description={`No specific data for ${stageName} yet`} />
@@ -424,7 +466,7 @@ export default function CandidateDetail() {
         children: (
           <Space size={4} wrap>
             <Text style={{ fontSize: 12, color: '#6b7280' }}>{h.collegeName} {h.recruitmentYear}</Text>
-            <Tag color="blue">{h.stageName}</Tag>
+            <Tag color="blue">{normalizeStageName(h.stageName)}</Tag>
             {h.status && <Tag color={STATUS_COLOR[h.status]}>{h.status}</Tag>}
             {h.changedBy && <Text type="secondary">by {h.changedBy}</Text>}
           </Space>
