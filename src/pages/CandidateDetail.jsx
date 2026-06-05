@@ -162,7 +162,11 @@ export default function CandidateDetail() {
   const isUnlocked = (stageIndex) => {
     if (stageIndex === 0) return true
     const prev = PIPELINE_STAGES[stageIndex - 1]
-    return selectedEvent?.history?.some(h => normalizeStageName(h.stageName) === prev && h.status === 'SHORTLISTED') ?? false
+    const currentIsShortlisted =
+      normalizeStageName(selectedEvent?.currentStage?.stageName) === prev &&
+      selectedEvent?.currentStage?.status === 'SHORTLISTED'
+    return currentIsShortlisted ||
+      (selectedEvent?.history?.some(h => normalizeStageName(h.stageName) === prev && h.status === 'SHORTLISTED') ?? false)
   }
 
   const renderStageAction = (stageName, stageIndex) => {
@@ -382,9 +386,28 @@ export default function CandidateDetail() {
       stageContent = sortedRounds.length > 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {sortedRounds.map((round, idx) => {
-            if (!isRoundVisible(idx)) return null
+            const visible = isRoundVisible(idx)
             const resultColor = round.result === 'PASS' ? 'green' : round.result === 'FAIL' ? 'red' : 'orange'
-            const isPending = round.score == null && round.result == null
+            const isPending = round.result == null
+
+            if (!visible) {
+              return (
+                <Card
+                  key={round.roundId}
+                  size="small"
+                  style={{ borderRadius: 10, border: '1.5px solid #e5e7eb', background: '#f9fafb', opacity: 0.5 }}
+                  title={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <Tag style={{ fontWeight: 700, minWidth: 28, textAlign: 'center' }}>#{round.sequence}</Tag>
+                      <span style={{ fontWeight: 600, fontSize: 14, color: '#9ca3af' }}>{round.roundName}</span>
+                      {round.roundType && <Tag>{round.roundType}</Tag>}
+                      <Tag color="default">Locked</Tag>
+                    </div>
+                  }
+                />
+              )
+            }
+
             return (
               <Card
                 key={round.roundId}
@@ -407,7 +430,7 @@ export default function CandidateDetail() {
                 }
                 extra={
                   <Button size="small" icon={<EditOutlined />} onClick={() => openEditRound(selectedEvent?.eventId, round)}>
-                    {round.score == null ? 'Enter Score' : 'Edit'}
+                    {round.score == null && round.result == null ? 'Enter Score' : 'Edit'}
                   </Button>
                 }
               >
@@ -453,9 +476,13 @@ export default function CandidateDetail() {
   }).filter(Boolean)
 
   // ── Stage history tab ──
-  const allHistory = stageHistory?.flatMap(event =>
-    event.history.map(h => ({ ...h, collegeName: event.collegeName, recruitmentYear: event.recruitmentYear }))
-  ) ?? []
+  const allHistory = stageHistory?.flatMap(event => {
+    const history = event.history.map(h => ({ ...h, collegeName: event.collegeName, recruitmentYear: event.recruitmentYear }))
+    if (event.currentStage) {
+      history.push({ ...event.currentStage, collegeName: event.collegeName, recruitmentYear: event.recruitmentYear })
+    }
+    return history
+  }) ?? []
 
   const stageHistoryTab = {
     key: 'stage-history', label: 'Stage History',
@@ -533,8 +560,8 @@ export default function CandidateDetail() {
           <Form.Item name="score" label="Score">
             <InputNumber style={{ width: '100%' }} min={0} max={100} step={0.5} />
           </Form.Item>
-          <Form.Item name="result" label="Result">
-            <Select options={['PASS', 'FAIL', 'ON_HOLD'].map(v => ({ value: v }))} allowClear />
+          <Form.Item name="result" label="Result" rules={[{ required: true, message: 'Select a result' }]}>
+            <Select options={['PASS', 'FAIL', 'ON_HOLD'].map(v => ({ value: v }))} />
           </Form.Item>
           <Form.Item name="interviewer" label="Interviewer">
             <Input />
