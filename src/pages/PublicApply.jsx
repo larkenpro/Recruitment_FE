@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { Form, Input, Select, Button, Card, Row, Col, Typography, Divider, Upload, Alert, Steps, Result, DatePicker, Tag, Space } from 'antd'
-import { UploadOutlined, UserOutlined, BookOutlined, AimOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons'
+import { UploadOutlined, UserOutlined, BookOutlined, AimOutlined, ArrowUpOutlined, ArrowDownOutlined, ExperimentOutlined } from '@ant-design/icons'
+import dayjs from 'dayjs'
 import { getApplyForm, submitApplication } from '../api/candidates'
 import { getEventPositions } from '../api/events'
 
@@ -39,6 +40,32 @@ export default function PublicApply() {
   useEffect(() => {
     console.log(eventInfo)
   }, [eventInfo]);
+
+  const fillTestData = () => {
+    const firstNames = ['Arjun', 'Priya', 'Rahul', 'Anjali', 'Vikram', 'Sneha', 'Arun', 'Divya']
+    const lastNames = ['Kumar', 'Sharma', 'Nair', 'Menon', 'Pillai', 'Verma', 'Singh', 'Das']
+    const name = `${firstNames[Math.floor(Math.random() * firstNames.length)]} ${lastNames[Math.floor(Math.random() * lastNames.length)]}`
+    const rollNum = Math.floor(1000 + Math.random() * 9000)
+
+    form.setFieldsValue({
+      name,
+      email: `${name.split(' ')[0].toLowerCase()}.test${rollNum}@college.edu`,
+      phone: `${Math.floor(6000000000 + Math.random() * 3999999999)}`,
+      rollNo: `CS2022${rollNum}`,
+      branch: 'Computer Science & Engineering',
+      tenthMark: (85 + Math.random() * 14).toFixed(2),
+      twelfthMark: (80 + Math.random() * 18).toFixed(2),
+      keamRank: String(Math.floor(100 + Math.random() * 5000)),
+      ugDegree: 'B.Tech Computer Science & Engineering',
+      ugCgpa: (7.5 + Math.random() * 2.4).toFixed(2),
+      arrears: '0',
+      backlogs: '0',
+      jobLocation: 'Gurugram NCR',
+      githubLink: `https://github.com/${name.split(' ')[0].toLowerCase()}${rollNum}`,
+      leadershipPositions: 'Class Representative (2022–2023), Coding Club Core Member',
+      internshipAvailability: [dayjs('2025-06-01'), dayjs('2025-08-01')],
+    })
+  }
 
   const handleSubmit = async (values) => {
     setLoading(true)
@@ -107,6 +134,9 @@ export default function PublicApply() {
         </div>
 
         <Card bordered={false} style={{ borderRadius: 16, boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+            <Button icon={<ExperimentOutlined />} size="small" onClick={fillTestData}>Fill Test Data</Button>
+          </div>
           <Steps current={step} items={steps} style={{ marginBottom: 32 }} />
 
           {error && <Alert message={error} type="error" showIcon style={{ marginBottom: 16 }} closable onClose={() => setError('')} />}
