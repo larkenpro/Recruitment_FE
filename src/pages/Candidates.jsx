@@ -47,7 +47,13 @@ export default function Candidates() {
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => updateCandidate(id, data),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['candidates'] }); closeModal(); message.success('Candidate updated!') },
-    onError: (err) => message.error(err.response?.data?.message || 'Failed to update candidate'),
+    onError: (err) => {
+      if (err.response?.status === 409) {
+        form.setFields([{ name: 'rollNo', errors: [err.response.data.message || 'A candidate with this roll number already exists in the college'] }])
+      } else {
+        message.error(err.response?.data?.message || 'Failed to update candidate')
+      }
+    },
   })
 
   const deleteMutation = useMutation({
@@ -214,8 +220,13 @@ export default function Candidates() {
                 <Input />
               </Form.Item>
             </Col>
-            <Col span={24}>
+            <Col span={12}>
               <Form.Item name="githubLink" label="GitHub Link">
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="linkedinLink" label="LinkedIn Profile URL">
                 <Input />
               </Form.Item>
             </Col>

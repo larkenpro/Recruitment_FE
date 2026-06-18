@@ -49,6 +49,9 @@ export default function Colleges() {
     { title: 'City', dataIndex: 'city' },
     { title: 'State', dataIndex: 'state' },
     { title: 'Tier', dataIndex: 'tier', render: t => <Tag color={t === 'Tier 1' ? 'blue' : t === 'Tier 2' ? 'green' : 'default'}>{t}</Tag> },
+    { title: 'Contact Person', dataIndex: 'contactPersonName', render: v => v || '—' },
+    { title: 'Email', dataIndex: 'emailId', render: v => v || '—' },
+    { title: 'Phone', dataIndex: 'phoneNumber', render: v => v || '—' },
     {
       title: 'Actions', width: 80, render: (_, record) => (
         <Button icon={<EditOutlined />} size="small" onClick={() => openEdit(record)} />
@@ -88,6 +91,9 @@ export default function Colleges() {
           <Form.Item name="tier" label="Tier">
             <Select options={[{ value: 'Tier 1' }, { value: 'Tier 2' }, { value: 'Tier 3' }]} />
           </Form.Item>
+          <Form.Item name="contactPersonName" label="Contact Person Name"><Input /></Form.Item>
+          <Form.Item name="emailId" label="Email ID"><Input /></Form.Item>
+          <Form.Item name="phoneNumber" label="Phone Number"><Input /></Form.Item>
         </Form>
       </Modal>
     </Card>

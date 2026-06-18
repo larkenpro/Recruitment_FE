@@ -64,7 +64,12 @@ export default function PublicApply() {
       }, resumeFile)
       setSubmitted(true)
     } catch (err) {
-      setError(err.response?.data?.message || 'Submission failed. Please try again.')
+      if (err.response?.status === 409) {
+        form.setFields([{ name: 'rollNo', errors: [err.response.data.message || 'A candidate with this roll number already exists in the college'] }])
+        setStep(0)
+      } else {
+        setError(err.response?.data?.message || 'Submission failed. Please try again.')
+      }
     } finally {
       setLoading(false)
     }
@@ -277,6 +282,11 @@ export default function PublicApply() {
                 <Col xs={24} sm={12}>
                   <Form.Item name="githubLink" label="GitHub Link (for Technical BA)">
                     <Input placeholder="https://github.com/username" size="large" />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12}>
+                  <Form.Item name="linkedinLink" label="LinkedIn Profile URL">
+                    <Input placeholder="https://linkedin.com/in/username" size="large" />
                   </Form.Item>
                 </Col>
                 <Col xs={24}>
