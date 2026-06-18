@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Card, Table, Button, Modal, Form, Input, Select, Tag, message, Space, Popconfirm } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, DeleteOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getPositions, createPosition, updatePosition, deletePosition } from '../api/positions'
 import { useColumnFilter } from '../hooks/useColumnFilter'
@@ -102,6 +102,17 @@ export default function Positions() {
         confirmLoading={createMutation.isPending || updateMutation.isPending}
       >
         <Form form={form} layout="vertical">
+          {!editing && (
+            <div style={{ textAlign: 'right', marginBottom: 12 }}>
+              <Button
+                size="small"
+                icon={<ThunderboltOutlined />}
+                onClick={() => form.setFieldsValue({ title: 'Software Engineer', department: 'Engineering', type: 'Full-Time' })}
+              >
+                Fill Test Data
+              </Button>
+            </div>
+          )}
           <Form.Item name="title" label="Title" rules={[{ required: true }]}>
             <Input placeholder="Software Engineer" />
           </Form.Item>
