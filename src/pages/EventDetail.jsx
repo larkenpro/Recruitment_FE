@@ -1,8 +1,10 @@
 import {
   AppstoreOutlined,
   CalendarOutlined,
+  CheckCircleOutlined,
   CopyOutlined,
   DeleteOutlined,
+  FileTextOutlined,
   LinkOutlined,
   TeamOutlined,
   UnorderedListOutlined,
@@ -19,7 +21,9 @@ import {
   Input,
   InputNumber,
   List,
+  Modal,
   Popconfirm,
+  Radio,
   Row,
   Select,
   Space,
@@ -44,7 +48,9 @@ import {
   updateEventStatus,
 } from '../api/events'
 import { getPositions } from '../api/positions'
+import { getCandidateResume } from '../api/candidates'
 import { getErrorMessage } from '../utils/errorUtils'
+import { useStageDecision } from '../hooks/useStageDecision'
 
 const { Title, Text } = Typography
 
@@ -59,6 +65,9 @@ export default function EventDetail() {
   const [link, setLink] = useState(null)
   const [roundForm] = Form.useForm()
   const [positionForm] = Form.useForm()
+  const [shortlistForm] = Form.useForm()
+  const [resumeModal, setResumeModal] = useState({ open: false, candidateId: null, fileName: null })
+  const [shortlistModal, setShortlistModal] = useState({ open: false, candidateId: null, candidateName: null })
 
   const { data: event, isLoading } = useQuery({
     queryKey: ['event', id],
@@ -123,6 +132,24 @@ export default function EventDetail() {
     },
     onError: (err) => message.error(getErrorMessage(err)),
   })
+
+  const shortlistMutation = useStageDecision({
+    onSuccess: () => {
+      setShortlistModal({ open: false, candidateId: null, candidateName: null })
+      shortlistForm.resetFields()
+      message.success('Candidate status updated!')
+    },
+    onError: (err) => message.error(getErrorMessage(err)),
+  })
+
+  const handleViewResume = async (candidateId) => {
+    try {
+      const res = await getCandidateResume(candidateId)
+      setResumeModal({ open: true, candidateId, fileName: res.data.data?.fileName ?? null })
+    } catch {
+      message.error('No resume found for this candidate')
+    }
+  }
 
   const handleGenerateLink = async () => {
     try {
@@ -317,6 +344,28 @@ export default function EventDetail() {
               dataIndex: 'backlogs',
               render: (v) => <Tag color={(v ?? 0) === 0 ? 'green' : 'red'}>{v ?? 0}</Tag>,
             },
+            {
+              title: 'Resume',
+              render: (_, r) => (
+                <Button size="small" icon={<FileTextOutlined />} onClick={() => handleViewResume(r.id)}>
+                  View
+                </Button>
+              ),
+            },
+            {
+              title: 'Shortlist',
+              render: (_, r) => (
+                <Button
+                  size="small"
+                  type="primary"
+                  ghost
+                  icon={<CheckCircleOutlined />}
+                  onClick={() => setShortlistModal({ open: true, candidateId: r.id, candidateName: r.name })}
+                >
+                  Shortlist
+                </Button>
+              ),
+            },
           ]}
         />
       ),
@@ -460,6 +509,76 @@ export default function EventDetail() {
       >
         <Tabs items={tabItems} />
       </Card>
+
+      {/* Resume viewer modal */}
+      <Modal
+        open={resumeModal.open}
+        title={
+          <Space>
+            <FileTextOutlined style={{ color: '#4f46e5' }} />
+            <span>{resumeModal.fileName ?? 'Resume'}</span>
+          </Space>
+        }
+        onCancel={() => setResumeModal({ open: false, candidateId: null, fileName: null })}
+        footer={[
+          <Button
+            key="download"
+            href={`${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/candidates/${resumeModal.candidateId}/resume/download`}
+            target="_blank"
+          >
+            Download
+          </Button>,
+          <Button key="close" type="primary" onClick={() => setResumeModal({ open: false, candidateId: null, fileName: null })}>
+            Close
+          </Button>,
+        ]}
+        width={900}
+        styles={{ body: { padding: 0 } }}
+      >
+        {resumeModal.candidateId && resumeModal.fileName?.toLowerCase().endsWith('.pdf') ? (
+          <iframe
+            src={`${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/candidates/${resumeModal.candidateId}/resume/view`}
+            style={{ width: '100%', height: 620, border: 'none' }}
+            title={resumeModal.fileName}
+          />
+        ) : (
+          <div style={{ textAlign: 'center', padding: 48 }}>
+            <FileTextOutlined style={{ fontSize: 40, color: '#9ca3af', marginBottom: 12 }} />
+            <div style={{ color: '#6b7280', marginBottom: 16 }}>
+              Preview not available for this file type.
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Shortlist modal */}
+      <Modal
+        open={shortlistModal.open}
+        title={
+          <Space>
+            <CheckCircleOutlined style={{ color: '#4f46e5' }} />
+            <span>Update Status — {shortlistModal.candidateName}</span>
+          </Space>
+        }
+        onCancel={() => { setShortlistModal({ open: false, candidateId: null, candidateName: null }); shortlistForm.resetFields() }}
+        onOk={() =>
+          shortlistForm.validateFields().then((v) =>
+            shortlistMutation.mutate({ candidateId: shortlistModal.candidateId, eventId: Number(id), stageName: 'Resume', status: v.status, ensureStarted: true })
+          )
+        }
+        okText="Confirm"
+        confirmLoading={shortlistMutation.isPending}
+      >
+        <Form form={shortlistForm} layout="vertical" style={{ marginTop: 16 }}>
+          <Form.Item name="status" label="Decision" rules={[{ required: true, message: 'Select a status' }]}>
+            <Radio.Group>
+              <Radio.Button value="SHORTLISTED" style={{ color: '#16a34a' }}>Shortlisted</Radio.Button>
+              <Radio.Button value="HOLD" style={{ color: '#d97706' }}>Hold</Radio.Button>
+              <Radio.Button value="REJECTED" style={{ color: '#dc2626' }}>Rejected</Radio.Button>
+            </Radio.Group>
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   )
 }

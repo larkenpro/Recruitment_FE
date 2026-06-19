@@ -52,14 +52,12 @@ import {
   updateCandidate,
   updateExitRecord,
   updateRoundResult,
-  updateStageStatus,
 } from '../api/candidates'
 import { getEventPositions } from '../api/events'
 import { getErrorMessage } from '../utils/errorUtils'
+import { PIPELINE_STAGES, useStageDecision } from '../hooks/useStageDecision'
 
 const { Title, Text } = Typography
-
-const PIPELINE_STAGES = ['Resume', 'Rounds', 'Offer', 'Joining', '6 Month Review', '12 Month Retained', 'Exit']
 const STATUS_COLOR = { SHORTLISTED: 'green', HOLD: 'orange', REJECTED: 'red' }
 
 export default function CandidateDetail() {
@@ -133,14 +131,7 @@ export default function CandidateDetail() {
     onError: (err) => message.error(getErrorMessage(err)),
   })
 
-  const statusMutation = useMutation({
-    mutationFn: async ({ eventId, stageName, status }) => {
-      await updateStageStatus(id, eventId, { status })
-      if (status === 'SHORTLISTED') {
-        const next = PIPELINE_STAGES[PIPELINE_STAGES.indexOf(stageName) + 1]
-        if (next) await addStageEntry(id, eventId, { stageName: next })
-      }
-    },
+  const statusMutation = useStageDecision({
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['stage-history', id] }),
     onError: (err) => message.error(getErrorMessage(err)),
   })
@@ -275,7 +266,7 @@ export default function CandidateDetail() {
               buttonStyle="solid"
               size="small"
               onChange={(e) =>
-                statusMutation.mutate({ eventId: selectedEvent.eventId, stageName, status: e.target.value })
+                statusMutation.mutate({ candidateId: id, eventId: selectedEvent.eventId, stageName, status: e.target.value })
               }
             >
               <Radio.Button value="SHORTLISTED">Shortlisted</Radio.Button>
