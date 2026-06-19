@@ -32,7 +32,7 @@ import {
   Typography,
   message,
 } from 'antd'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   addEventPositions,
@@ -50,8 +50,22 @@ import { getPositions } from '../api/positions'
 import { getCandidateResume } from '../api/candidates'
 import { getErrorMessage } from '../utils/errorUtils'
 import { useStageDecision } from '../hooks/useStageDecision'
+import { useColumnFilter } from '../hooks/useColumnFilter'
+import FilterBar from '../components/FilterBar'
 
 const { Title, Text } = Typography
+
+const CANDIDATE_FILTER_KEYS = [
+  { key: 'ugCgpa', label: 'CGPA', type: 'min', getVal: (r) => r.ugCgpa },
+  { key: 'backlogs', label: 'Backlogs', type: 'max', getVal: (r) => r.backlogs ?? 0 },
+  { key: 'resumeStatus', label: 'Resume Result', getVal: (r) => r.resumeStatus },
+]
+
+const RESUME_STATUS_OPTIONS = [
+  { value: 'SHORTLISTED', label: 'Shortlisted' },
+  { value: 'HOLD', label: 'Hold' },
+  { value: 'REJECTED', label: 'Rejected' },
+]
 
 const STATUS_COLOR = { UPCOMING: 'blue', ACTIVE: 'green', COMPLETED: 'default', CANCELLED: 'red' }
 const ROUND_TYPE_COLOR = { WRITTEN: 'purple', TECHNICAL: 'blue', HR: 'green', GROUP_DISCUSSION: 'orange', CODING: 'cyan' }
@@ -96,6 +110,26 @@ export default function EventDetail() {
     queryKey: ['eventStageSummary', id],
     queryFn: () => getEventStageSummary(id).then((r) => r.data.data),
   })
+
+  const stageSummaryMap = useMemo(
+    () => Object.fromEntries((stageSummaryList ?? []).map((s) => [s.candidateId, s])),
+    [stageSummaryList]
+  )
+
+  const candidatesWithStatus = useMemo(
+    () => (candidates ?? []).map((c) => ({ ...c, resumeStatus: stageSummaryMap[c.id]?.status ?? null })),
+    [candidates, stageSummaryMap]
+  )
+
+  const {
+    filteredData: filteredCandidates,
+    filters: candidateFilters,
+    setFilter: setCandidateFilter,
+    removeFilter: removeCandidateFilter,
+    optionMap: rawCandidateOptionMap,
+  } = useColumnFilter(candidatesWithStatus, CANDIDATE_FILTER_KEYS)
+
+  const candidateOptionMap = { ...rawCandidateOptionMap, resumeStatus: RESUME_STATUS_OPTIONS }
 
   const statusMutation = useMutation({
     mutationFn: (status) => updateEventStatus(id, status),
@@ -173,9 +207,6 @@ export default function EventDetail() {
   const sortedRounds = [...(rounds ?? [])].sort((a, b) => a.sequence - b.sequence)
   const availablePositions = (allPositions ?? []).filter(
     (p) => !(eventPositions ?? []).some((ep) => ep.id === p.id)
-  )
-  const stageSummaryMap = Object.fromEntries(
-    (stageSummaryList ?? []).map((s) => [s.candidateId, s])
   )
 
   const tabItems = [
@@ -327,13 +358,21 @@ export default function EventDetail() {
         </span>
       ),
       children: (
-        <Table
-          dataSource={candidates ?? []}
-          loading={candidatesLoading}
-          rowKey="id"
-          size="small"
-          pagination={{ pageSize: 10 }}
-          locale={{ emptyText: 'No candidates have applied yet' }}
+        <>
+          <FilterBar
+            filterKeys={CANDIDATE_FILTER_KEYS}
+            optionMap={candidateOptionMap}
+            filters={candidateFilters}
+            setFilter={setCandidateFilter}
+            removeFilter={removeCandidateFilter}
+          />
+          <Table
+            dataSource={filteredCandidates}
+            loading={candidatesLoading}
+            rowKey="id"
+            size="small"
+            pagination={{ pageSize: 10 }}
+            locale={{ emptyText: 'No candidates have applied yet' }}
           columns={[
             {
               title: 'Name',
@@ -363,31 +402,25 @@ export default function EventDetail() {
             },
             {
               title: 'Resume Result',
-              render: (_, r) => {
-                const current = stageSummaryMap[r.id]
-                return (
-                  <Select
-                    size="small"
-                    style={{ width: 140 }}
-                    value={current?.status ?? null}
-                    placeholder="Set decision"
-                    loading={pendingCandidateId === r.id && shortlistMutation.isPending}
-                    disabled={shortlistMutation.isPending && pendingCandidateId !== r.id}
-                    onChange={(status) => {
-                      setPendingCandidateId(r.id)
-                      shortlistMutation.mutate({ candidateId: r.id, eventId: Number(id), stageName: 'Resume', status, ensureStarted: true })
-                    }}
-                    options={[
-                      { value: 'SHORTLISTED', label: 'Shortlisted' },
-                      { value: 'HOLD', label: 'Hold' },
-                      { value: 'REJECTED', label: 'Rejected' },
-                    ]}
-                  />
-                )
-              },
+              render: (_, r) => (
+                <Select
+                  size="small"
+                  style={{ width: 140 }}
+                  value={r.resumeStatus ?? null}
+                  placeholder="Set decision"
+                  loading={pendingCandidateId === r.id && shortlistMutation.isPending}
+                  disabled={shortlistMutation.isPending && pendingCandidateId !== r.id}
+                  onChange={(status) => {
+                    setPendingCandidateId(r.id)
+                    shortlistMutation.mutate({ candidateId: r.id, eventId: Number(id), stageName: 'Resume', status, ensureStarted: true })
+                  }}
+                  options={RESUME_STATUS_OPTIONS}
+                />
+              ),
             },
           ]}
         />
+        </>
       ),
     },
   ]
