@@ -33,15 +33,17 @@ export default function Colleges() {
   })
 
   const fillTestData = () => {
-    const names = ['IIT Madras', 'NIT Calicut', 'CUSAT', 'BITS Pilani', 'VIT Vellore', 'PSG Tech', 'CEG Anna University', 'RIT Kottayam']
-    const cities = ['Chennai', 'Calicut', 'Kochi', 'Pilani', 'Vellore', 'Coimbatore', 'Chennai', 'Kottayam']
-    const states = ['Tamil Nadu', 'Kerala', 'Kerala', 'Rajasthan', 'Tamil Nadu', 'Tamil Nadu', 'Tamil Nadu', 'Kerala']
+    const colleges = [
+      { name: 'IIT Madras', city: 'Chennai', state: 'Tamil Nadu', contactPerson: 'Dr. Ramesh Kumar', collegeEmail: 'placement@iitm.ac.in', phoneNumber: '9876543210' },
+      { name: 'NIT Calicut', city: 'Calicut', state: 'Kerala', contactPerson: 'Prof. Anil Nair', collegeEmail: 'tpo@nitc.ac.in', phoneNumber: '9876543211' },
+      { name: 'CUSAT', city: 'Kochi', state: 'Kerala', contactPerson: 'Dr. Priya Menon', collegeEmail: 'placements@cusat.ac.in', phoneNumber: '9876543212' },
+      { name: 'BITS Pilani', city: 'Pilani', state: 'Rajasthan', contactPerson: 'Prof. Suresh Sharma', collegeEmail: 'cd@bits-pilani.ac.in', phoneNumber: '9876543213' },
+      { name: 'VIT Vellore', city: 'Vellore', state: 'Tamil Nadu', contactPerson: 'Ms. Lakshmi Devi', collegeEmail: 'placements@vit.ac.in', phoneNumber: '9876543214' },
+    ]
     const tiers = ['Tier 1', 'Tier 2', 'Tier 3']
-    const idx = Math.floor(Math.random() * names.length)
+    const idx = Math.floor(Math.random() * colleges.length)
     form.setFieldsValue({
-      name: names[idx],
-      city: cities[idx],
-      state: states[idx],
+      ...colleges[idx],
       tier: tiers[Math.floor(Math.random() * tiers.length)],
     })
   }
@@ -63,6 +65,9 @@ export default function Colleges() {
     { title: 'City', dataIndex: 'city' },
     { title: 'State', dataIndex: 'state' },
     { title: 'Tier', dataIndex: 'tier', render: t => <Tag color={t === 'Tier 1' ? 'blue' : t === 'Tier 2' ? 'green' : 'default'}>{t}</Tag> },
+    { title: 'Contact Person', dataIndex: 'contactPerson' },
+    { title: 'Email', dataIndex: 'collegeEmail' },
+    { title: 'Phone', dataIndex: 'phoneNumber' },
     {
       title: 'Actions', width: 80, render: (_, record) => (
         <Button icon={<EditOutlined />} size="small" onClick={() => openEdit(record)} />
@@ -105,6 +110,11 @@ export default function Colleges() {
           <Form.Item name="tier" label="Tier">
             <Select options={[{ value: 'Tier 1' }, { value: 'Tier 2' }, { value: 'Tier 3' }]} />
           </Form.Item>
+          <Form.Item name="contactPerson" label="Contact Person"><Input /></Form.Item>
+          <Form.Item name="collegeEmail" label="College Email" rules={[{ type: 'email', message: 'Enter a valid email' }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="phoneNumber" label="Phone Number"><Input /></Form.Item>
         </Form>
       </Modal>
     </Card>
