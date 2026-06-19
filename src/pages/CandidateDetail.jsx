@@ -562,26 +562,43 @@ export default function CandidateDetail() {
     label: tabLabel('Resume'),
     children: (
       <div>
-        {resumeData ? (
-          <div style={{ textAlign: 'center', padding: 32 }}>
-            <FileTextOutlined style={{ fontSize: 48, color: '#4f46e5', marginBottom: 16 }} />
-            <div style={{ marginBottom: 8 }}>
-              <strong>{resumeData.fileName}</strong>
+        {resumeData ? (() => {
+          const isPdf = resumeData.fileName?.toLowerCase().endsWith('.pdf')
+          const baseResumeUrl = `${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/candidates/${id}/resume`
+          return (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, padding: '4px 0' }}>
+                <Space>
+                  <FileTextOutlined style={{ color: '#4f46e5', fontSize: 16 }} />
+                  <Text strong>{resumeData.fileName}</Text>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    Uploaded: {resumeData.uploadedAt ? new Date(resumeData.uploadedAt).toLocaleDateString() : '—'}
+                  </Text>
+                </Space>
+                <Button size="small" icon={<DownloadOutlined />} href={`${baseResumeUrl}/download`} target="_blank">
+                  Download
+                </Button>
+              </div>
+              {isPdf ? (
+                <iframe
+                  src={`${baseResumeUrl}/view`}
+                  style={{ width: '100%', height: 640, border: '1px solid #e5e7eb', borderRadius: 8 }}
+                  title={resumeData.fileName}
+                />
+              ) : (
+                <div style={{ textAlign: 'center', padding: 40, background: '#f9fafb', borderRadius: 8, border: '1px dashed #e5e7eb' }}>
+                  <FileTextOutlined style={{ fontSize: 40, color: '#9ca3af', marginBottom: 12 }} />
+                  <div style={{ color: '#6b7280', marginBottom: 16 }}>
+                    Preview not available for this file type. Download to view.
+                  </div>
+                  <Button type="primary" icon={<DownloadOutlined />} href={`${baseResumeUrl}/download`} target="_blank">
+                    Download Resume
+                  </Button>
+                </div>
+              )}
             </div>
-            <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
-              Uploaded: {resumeData.uploadedAt ? new Date(resumeData.uploadedAt).toLocaleDateString() : '—'}
-            </Text>
-            <Button
-              type="primary"
-              icon={<DownloadOutlined />}
-              size="large"
-              href={`${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/candidates/${id}/resume/download`}
-              target="_blank"
-            >
-              Download Resume
-            </Button>
-          </div>
-        ) : (
+          )
+        })() : (
           <Empty description="No resume uploaded" />
         )}
         {stageDecision('Resume')}
