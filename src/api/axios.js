@@ -1,6 +1,4 @@
 import axios from 'axios'
-import { message } from 'antd'
-import { getErrorMessage } from '../utils/errorUtils'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
@@ -20,10 +18,6 @@ api.interceptors.response.use(
     if (err.response?.status === 401) {
       localStorage.removeItem('token')
       window.location.href = '/login'
-      return Promise.reject(err)
-    }
-    if (err.response?.status >= 500) {
-      message.error(getErrorMessage(err))
     }
     return Promise.reject(err)
   }

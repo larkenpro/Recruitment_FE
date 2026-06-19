@@ -201,6 +201,13 @@ export default function CandidateDetail() {
 
   const currentStageIdx = PIPELINE_STAGES.indexOf(selectedEvent?.currentStage?.stageName)
 
+  const firstRejectedIdx = PIPELINE_STAGES.findIndex((name) => getStageData(name)?.status === 'REJECTED')
+  const shouldShowStage = (stageName) => {
+    if (!getStageData(stageName)) return false
+    if (firstRejectedIdx === -1) return true
+    return PIPELINE_STAGES.indexOf(stageName) <= firstRejectedIdx
+  }
+
   const tabLabel = (stageName, icon = null) => {
     const d = getStageData(stageName)
     return (
@@ -258,30 +265,22 @@ export default function CandidateDetail() {
           border: '1px solid #e5e7eb',
         }}
       >
-        {d.isCurrent ? (
-          <Space wrap>
-            <Text style={{ fontSize: 13, color: '#6b7280' }}>Decision:</Text>
-            <Radio.Group
-              value={d.status}
-              buttonStyle="solid"
-              size="small"
-              onChange={(e) =>
-                statusMutation.mutate({ candidateId: id, eventId: selectedEvent.eventId, stageName, status: e.target.value })
-              }
-            >
-              <Radio.Button value="SHORTLISTED">Shortlisted</Radio.Button>
-              <Radio.Button value="HOLD">Hold</Radio.Button>
-              <Radio.Button value="REJECTED">Rejected</Radio.Button>
-            </Radio.Group>
-          </Space>
-        ) : d.status ? (
-          <Space>
-            <Text style={{ fontSize: 13, color: '#6b7280' }}>Decision:</Text>
-            <Tag color={STATUS_COLOR[d.status]} style={{ fontSize: 13, padding: '2px 10px' }}>
-              {d.status}
-            </Tag>
-          </Space>
-        ) : null}
+        <Space wrap>
+          <Text style={{ fontSize: 13, color: '#6b7280' }}>Decision:</Text>
+          <Radio.Group
+            value={d.status}
+            buttonStyle="solid"
+            size="small"
+            disabled={statusMutation.isPending}
+            onChange={(e) =>
+              statusMutation.mutate({ candidateId: id, eventId: selectedEvent.eventId, stageName, status: e.target.value })
+            }
+          >
+            <Radio.Button value="SHORTLISTED">Shortlisted</Radio.Button>
+            <Radio.Button value="HOLD">Hold</Radio.Button>
+            <Radio.Button value="REJECTED">Rejected</Radio.Button>
+          </Radio.Group>
+        </Space>
       </div>
     )
   }
@@ -597,7 +596,7 @@ export default function CandidateDetail() {
     ),
   })
 
-  if (getStageData('Rounds')) {
+  if (shouldShowStage('Rounds')) {
     pipelineTabs.push({
       key: 'Rounds',
       label: tabLabel('Rounds'),
@@ -611,7 +610,7 @@ export default function CandidateDetail() {
   }
 
   for (const stageName of ['Offer', 'Joining', '6 Month Review', '12 Month Retained']) {
-    if (getStageData(stageName)) {
+    if (shouldShowStage(stageName)) {
       pipelineTabs.push({
         key: stageName,
         label: tabLabel(stageName),
@@ -625,7 +624,7 @@ export default function CandidateDetail() {
     }
   }
 
-  if (getStageData('Exit')) {
+  if (shouldShowStage('Exit')) {
     pipelineTabs.push({
       key: 'Exit',
       label: tabLabel('Exit', <LogoutOutlined style={{ marginRight: 4 }} />),
