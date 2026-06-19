@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Card, Table, Button, Modal, Form, Input, Select, Tag, message, Space, Divider, InputNumber, List, Popconfirm } from 'antd'
-import { PlusOutlined, LinkOutlined, CopyOutlined, UnorderedListOutlined, AppstoreOutlined, TeamOutlined, DeleteOutlined } from '@ant-design/icons'
+import { PlusOutlined, LinkOutlined, CopyOutlined, UnorderedListOutlined, AppstoreOutlined, TeamOutlined, DeleteOutlined, ExperimentOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { getEvents, createEvent, generateLink, updateEventStatus, getRounds, createRound, getEventPositions, addEventPositions, removeEventPosition, getCandidatesByEvent } from '../api/events'
@@ -96,6 +96,30 @@ export default function Events() {
     onError: (err) => message.error(getErrorMessage(err)),
   })
 
+  const fillEventTestData = () => {
+    const college = colleges?.[Math.floor(Math.random() * (colleges?.length ?? 1))]
+    const year = 2024 + Math.floor(Math.random() * 2)
+    const month = String(Math.floor(Math.random() * 6) + 6).padStart(2, '0')
+    form.setFieldsValue({
+      collegeId: college?.id,
+      recruitmentYear: year,
+      startDate: `${year}-${month}-01`,
+      status: 'UPCOMING',
+    })
+  }
+
+  const fillRoundTestData = () => {
+    const rounds = [
+      { name: 'Aptitude Test', roundType: 'WRITTEN', sequence: 1 },
+      { name: 'Technical Round 1', roundType: 'TECHNICAL', sequence: 2 },
+      { name: 'Coding Challenge', roundType: 'CODING', sequence: 1 },
+      { name: 'Group Discussion', roundType: 'GROUP_DISCUSSION', sequence: 2 },
+      { name: 'HR Interview', roundType: 'HR', sequence: 3 },
+      { name: 'Technical Round 2', roundType: 'TECHNICAL', sequence: 3 },
+    ]
+    roundForm.setFieldsValue(rounds[Math.floor(Math.random() * rounds.length)])
+  }
+
   const handleGenerateLink = async (eventId) => {
     try {
       const res = await generateLink(eventId)
@@ -172,6 +196,9 @@ export default function Events() {
         onOk={() => form.validateFields().then(v => createMutation.mutate({
           ...v, collegeId: Number(v.collegeId), recruitmentYear: Number(v.recruitmentYear)
         }))} okText="Save">
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+          <Button icon={<ExperimentOutlined />} size="small" onClick={fillEventTestData}>Fill Test Data</Button>
+        </div>
         <Form form={form} layout="vertical">
           <Form.Item name="collegeId" label="College" rules={[{ required: true }]}>
             <Select options={colleges?.map(c => ({ value: c.id, label: c.name })) ?? []} />
@@ -214,6 +241,9 @@ export default function Events() {
           )}
         />
         <Divider>Add New Round</Divider>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+          <Button icon={<ExperimentOutlined />} size="small" onClick={fillRoundTestData}>Fill Test Data</Button>
+        </div>
         <Form form={roundForm} layout="vertical"
           onFinish={v => roundMutation.mutate({ eventId: roundsModal.id, data: { ...v, sequence: Number(v.sequence) } })}>
           <Form.Item name="name" label="Round Name" rules={[{ required: true }]}>

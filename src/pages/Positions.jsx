@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Card, Table, Button, Modal, Form, Input, Select, Tag, message, Space, Popconfirm } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, DeleteOutlined, ExperimentOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getPositions, createPosition, updatePosition, deletePosition } from '../api/positions'
 import { useColumnFilter } from '../hooks/useColumnFilter'
@@ -41,6 +41,17 @@ export default function Positions() {
     mutationFn: deletePosition,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['positions'] }); message.success('Position deleted!') }
   })
+
+  const fillTestData = () => {
+    const titles = ['Software Engineer', 'Business Analyst', 'Data Analyst', 'QA Engineer', 'DevOps Engineer', 'Product Manager', 'Technical BA', 'Cloud Engineer']
+    const departments = ['Engineering', 'Product', 'Analytics', 'Quality Assurance', 'Infrastructure', 'Operations']
+    const types = ['Full-Time', 'Internship', 'Contract', 'Part-Time']
+    form.setFieldsValue({
+      title: titles[Math.floor(Math.random() * titles.length)],
+      department: departments[Math.floor(Math.random() * departments.length)],
+      type: types[Math.floor(Math.random() * types.length)],
+    })
+  }
 
   const openCreate = () => { setEditing(null); form.resetFields(); setOpen(true) }
   const openEdit = (record) => { setEditing(record); form.setFieldsValue(record); setOpen(true) }
@@ -101,6 +112,9 @@ export default function Positions() {
         okText="Save"
         confirmLoading={createMutation.isPending || updateMutation.isPending}
       >
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+          <Button icon={<ExperimentOutlined />} size="small" onClick={fillTestData}>Fill Test Data</Button>
+        </div>
         <Form form={form} layout="vertical">
           <Form.Item name="title" label="Title" rules={[{ required: true }]}>
             <Input placeholder="Software Engineer" />

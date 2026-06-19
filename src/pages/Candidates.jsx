@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Card, Table, Button, Modal, Form, Input, InputNumber, Select, DatePicker, Tag, message, Space, Popconfirm, Row, Col, Divider } from 'antd'
 import dayjs from 'dayjs'
-import { EditOutlined, DeleteOutlined, EyeOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons'
+import { EditOutlined, DeleteOutlined, EyeOutlined, ArrowUpOutlined, ArrowDownOutlined, ExperimentOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { getCandidates, getCandidate, getCandidateEvent, updateCandidate, deleteCandidate } from '../api/candidates'
@@ -77,6 +77,26 @@ export default function Candidates() {
     const preferred = full.preferredPositions ?? []
     const preferredIds = new Set(preferred.map(p => p.id))
     setRankedPositions([...preferred, ...eventPositions.filter(p => !preferredIds.has(p.id))])
+  }
+
+  const fillTestData = () => {
+    const rollNum = Math.floor(1000 + Math.random() * 9000)
+    form.setFieldsValue({
+      phone: `${Math.floor(6000000000 + Math.random() * 3999999999)}`,
+      rollNo: `CS2022${rollNum}`,
+      branch: 'Computer Science & Engineering',
+      tenthMark: parseFloat((85 + Math.random() * 14).toFixed(2)),
+      twelfthMark: parseFloat((80 + Math.random() * 18).toFixed(2)),
+      keamRank: Math.floor(100 + Math.random() * 5000),
+      ugDegree: 'B.Tech Computer Science & Engineering',
+      ugCgpa: parseFloat((7.5 + Math.random() * 2.4).toFixed(2)),
+      backlogs: 0,
+      arrears: 0,
+      jobLocation: ['Gurugram NCR', 'Coimbatore', 'Both'][Math.floor(Math.random() * 3)],
+      githubLink: `https://github.com/user${rollNum}`,
+      leadershipPositions: 'Class Representative (2022–2023), Coding Club Core Member',
+      internshipAvailability: [dayjs('2025-06-01'), dayjs('2025-08-01')],
+    })
   }
 
   const closeModal = () => { setEditing(null); form.resetFields() }
@@ -156,6 +176,9 @@ export default function Candidates() {
         confirmLoading={updateMutation.isPending}
         width={720}
       >
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+          <Button icon={<ExperimentOutlined />} size="small" onClick={fillTestData}>Fill Test Data</Button>
+        </div>
         <Form form={form} layout="vertical" style={{ marginTop: 8 }}>
 
           {/* ── Required fields ── */}

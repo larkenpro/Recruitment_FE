@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Card, Table, Button, Modal, Form, Input, Select, Tag } from 'antd'
-import { PlusOutlined, EditOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, ExperimentOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getColleges, createCollege, updateCollege } from '../api/colleges'
 import { useColumnFilter } from '../hooks/useColumnFilter'
@@ -31,6 +31,20 @@ export default function Colleges() {
     mutationFn: ({ id, data }) => updateCollege(id, data),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['colleges'] }); closeModal() }
   })
+
+  const fillTestData = () => {
+    const names = ['IIT Madras', 'NIT Calicut', 'CUSAT', 'BITS Pilani', 'VIT Vellore', 'PSG Tech', 'CEG Anna University', 'RIT Kottayam']
+    const cities = ['Chennai', 'Calicut', 'Kochi', 'Pilani', 'Vellore', 'Coimbatore', 'Chennai', 'Kottayam']
+    const states = ['Tamil Nadu', 'Kerala', 'Kerala', 'Rajasthan', 'Tamil Nadu', 'Tamil Nadu', 'Tamil Nadu', 'Kerala']
+    const tiers = ['Tier 1', 'Tier 2', 'Tier 3']
+    const idx = Math.floor(Math.random() * names.length)
+    form.setFieldsValue({
+      name: names[idx],
+      city: cities[idx],
+      state: states[idx],
+      tier: tiers[Math.floor(Math.random() * tiers.length)],
+    })
+  }
 
   const openAdd = () => { setEditingCollege(null); form.resetFields(); setOpen(true) }
 
@@ -79,6 +93,9 @@ export default function Colleges() {
         okText="Save"
         confirmLoading={createMutation.isPending || updateMutation.isPending}
       >
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+          <Button icon={<ExperimentOutlined />} size="small" onClick={fillTestData}>Fill Test Data</Button>
+        </div>
         <Form form={form} layout="vertical">
           <Form.Item name="name" label="College Name" rules={[{ required: true }]}>
             <Input />
