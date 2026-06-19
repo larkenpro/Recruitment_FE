@@ -8,6 +8,7 @@ import { getColleges } from '../api/colleges'
 import { getPositions } from '../api/positions'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
+import { getErrorMessage } from '../utils/errorUtils'
 
 const FILTER_KEYS = [
   { key: 'college',         label: 'College', getVal: r => r.college?.name },
@@ -56,12 +57,14 @@ export default function Events() {
 
   const createMutation = useMutation({
     mutationFn: createEvent,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['events'] }); setOpen(false); form.resetFields() }
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['events'] }); setOpen(false); form.resetFields() },
+    onError: (err) => message.error(getErrorMessage(err)),
   })
 
   const statusMutation = useMutation({
     mutationFn: ({ id, status }) => updateEventStatus(id, status),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['events'] }); message.success('Status updated!') }
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['events'] }); message.success('Status updated!') },
+    onError: (err) => message.error(getErrorMessage(err)),
   })
 
   const roundMutation = useMutation({
@@ -70,7 +73,8 @@ export default function Events() {
       queryClient.invalidateQueries({ queryKey: ['rounds', roundsModal?.id] })
       roundForm.resetFields()
       message.success('Round added!')
-    }
+    },
+    onError: (err) => message.error(getErrorMessage(err)),
   })
 
   const addPositionsMutation = useMutation({
@@ -79,7 +83,8 @@ export default function Events() {
       queryClient.invalidateQueries({ queryKey: ['eventPositions', positionsModal?.id] })
       positionForm.resetFields()
       message.success('Position(s) added!')
-    }
+    },
+    onError: (err) => message.error(getErrorMessage(err)),
   })
 
   const removePositionMutation = useMutation({
@@ -87,13 +92,18 @@ export default function Events() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['eventPositions', positionsModal?.id] })
       message.success('Position removed!')
-    }
+    },
+    onError: (err) => message.error(getErrorMessage(err)),
   })
 
   const handleGenerateLink = async (eventId) => {
-    const res = await generateLink(eventId)
-    setLinks(prev => ({ ...prev, [eventId]: res.data }))
-    message.success('Link generated!')
+    try {
+      const res = await generateLink(eventId)
+      setLinks(prev => ({ ...prev, [eventId]: res.data }))
+      message.success('Link generated!')
+    } catch (err) {
+      message.error(getErrorMessage(err))
+    }
   }
 
   const handleCopy = (url) => { navigator.clipboard.writeText(url); message.success('Copied!') }

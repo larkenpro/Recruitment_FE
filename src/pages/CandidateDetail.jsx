@@ -55,6 +55,7 @@ import {
   updateStageStatus,
 } from '../api/candidates'
 import { getEventPositions } from '../api/events'
+import { getErrorMessage } from '../utils/errorUtils'
 
 const { Title, Text } = Typography
 
@@ -112,7 +113,7 @@ export default function CandidateDetail() {
       setEditingPrefs(false)
       message.success('Preferences updated!')
     },
-    onError: () => message.error('Failed to update preferences'),
+    onError: (err) => message.error(getErrorMessage(err)),
   })
 
   const roundMutation = useMutation({
@@ -123,13 +124,13 @@ export default function CandidateDetail() {
       scoreForm.resetFields()
       message.success('Score saved!')
     },
-    onError: () => message.error('Failed to save score'),
+    onError: (err) => message.error(getErrorMessage(err)),
   })
 
   const stageMutation = useMutation({
     mutationFn: ({ eventId, stageName }) => addStageEntry(id, eventId, { stageName }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['stage-history', id] }),
-    onError: () => message.error('Failed to update stage'),
+    onError: (err) => message.error(getErrorMessage(err)),
   })
 
   const statusMutation = useMutation({
@@ -141,7 +142,7 @@ export default function CandidateDetail() {
       }
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['stage-history', id] }),
-    onError: () => message.error('Failed to update status'),
+    onError: (err) => message.error(getErrorMessage(err)),
   })
 
   const exitMutation = useMutation({
@@ -151,7 +152,7 @@ export default function CandidateDetail() {
       setEditingExit(false)
       message.success(exitRecord ? 'Exit record updated!' : 'Exit record saved!')
     },
-    onError: () => message.error('Failed to save exit record'),
+    onError: (err) => message.error(getErrorMessage(err)),
   })
 
   const deleteExitMutation = useMutation({
@@ -160,7 +161,7 @@ export default function CandidateDetail() {
       queryClient.invalidateQueries({ queryKey: ['exit', id] })
       message.success('Exit record removed')
     },
-    onError: () => message.error('Failed to remove exit record'),
+    onError: (err) => message.error(getErrorMessage(err)),
   })
 
   const openEditPrefs = async () => {

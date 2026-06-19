@@ -51,6 +51,16 @@ Use this file as a persistent reference for all coding decisions in this project
 - Do not add defensive error handling for internal code paths that can't fail
 - Trust framework and library guarantees
 
+## Testing
+
+- **Always write or update tests when implementing or modifying a feature** — this is non-negotiable
+- Place tests under `src/tests/` mirroring the source structure (e.g. `src/tests/api/candidates.test.js` for `src/api/candidates.js`)
+- For API modules: test the happy path and the key error cases (4xx, network failure)
+- For utility functions: test all branches (e.g. each `errorCode` path in `getErrorMessage`)
+- For React components/pages: test user-visible behaviour, not implementation details
+- Follow the existing test patterns in `src/tests/` before introducing new ones
+- Run the test suite after every change to confirm nothing regressed
+
 ## Git & Changes
 
 - Make targeted changes — do not refactor or clean up code outside the scope of the task
