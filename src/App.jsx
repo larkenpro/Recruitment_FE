@@ -9,6 +9,7 @@ import Colleges from './pages/Colleges'
 import Events from './pages/Events'
 import Positions from './pages/Positions'
 import CandidateDetail from './pages/CandidateDetail'
+import EventDetail from './pages/EventDetail'
 import PublicApply from './pages/PublicApply'
 import Analytics from './pages/Analytics'
 import Candidates from './pages/Candidates'
@@ -37,6 +38,7 @@ export default function App() {
               <Route path="/" element={<Navigate to="/colleges" replace />} />
               <Route path="/colleges" element={<P><Colleges /></P>} />
               <Route path="/events" element={<P><Events/></P>} />
+              <Route path="/events/:id" element={<P><EventDetail /></P>} />
               <Route path="/positions" element={<P><Positions /></P>} />
               <Route path="/candidates" element={<P><Candidates /></P>} />
               <Route path="/candidates/:id" element={<P><CandidateDetail /></P>} />

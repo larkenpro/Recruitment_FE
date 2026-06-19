@@ -23,6 +23,8 @@ export default function AppLayout({ children }) {
 
   const handleLogout = () => { logout(); navigate('/login') }
 
+  const activeMenuKey = menuItems.find((item) => location.pathname.startsWith(item.key))?.key ?? location.pathname
+
   return (
     <Layout style={{ minHeight: '100vh' }}>
       <Sider width={220} style={{ background: '#fff', borderRight: '1px solid #f0f0f0' }}>
@@ -42,7 +44,7 @@ export default function AppLayout({ children }) {
         </div>
         <Menu
           mode="inline"
-          selectedKeys={[location.pathname]}
+          selectedKeys={[activeMenuKey]}
           items={menuItems}
           onClick={({ key }) => navigate(key)}
           style={{ border: 'none', fontSize: 14 }}

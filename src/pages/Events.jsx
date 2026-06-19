@@ -136,7 +136,7 @@ export default function Events() {
 
   const columns = [
     { title: '#', dataIndex: 'id', width: 60 },
-    { title: 'College', render: (_, r) => r.college?.name },
+    { title: 'College', render: (_, r) => <a onClick={() => navigate(`/events/${r.id}`)}><strong>{r.college?.name}</strong></a> },
     { title: 'Year', dataIndex: 'recruitmentYear' },
     { title: 'Start Date', dataIndex: 'startDate' },
     {
