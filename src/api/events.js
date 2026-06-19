@@ -11,3 +11,4 @@ export const getCandidatesByEvent = (eventId) => api.get(`/events/${eventId}/can
 export const getEventPositions = (eventId) => api.get(`/events/${eventId}/positions`)
 export const addEventPositions = (eventId, positionIds) => api.post(`/events/${eventId}/positions`, positionIds)
 export const removeEventPosition = (eventId, positionId) => api.delete(`/events/${eventId}/positions/${positionId}`)
+export const getEventStageSummary = (eventId) => api.get(`/events/${eventId}/candidates/stage-summary`)

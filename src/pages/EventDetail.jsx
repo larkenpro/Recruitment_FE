@@ -1,7 +1,6 @@
 import {
   AppstoreOutlined,
   CalendarOutlined,
-  CheckCircleOutlined,
   CopyOutlined,
   DeleteOutlined,
   FileTextOutlined,
@@ -23,7 +22,6 @@ import {
   List,
   Modal,
   Popconfirm,
-  Radio,
   Row,
   Select,
   Space,
@@ -43,6 +41,7 @@ import {
   getCandidatesByEvent,
   getEvent,
   getEventPositions,
+  getEventStageSummary,
   getRounds,
   removeEventPosition,
   updateEventStatus,
@@ -65,9 +64,8 @@ export default function EventDetail() {
   const [link, setLink] = useState(null)
   const [roundForm] = Form.useForm()
   const [positionForm] = Form.useForm()
-  const [shortlistForm] = Form.useForm()
   const [resumeModal, setResumeModal] = useState({ open: false, candidateId: null, fileName: null })
-  const [shortlistModal, setShortlistModal] = useState({ open: false, candidateId: null, candidateName: null })
+  const [pendingCandidateId, setPendingCandidateId] = useState(null)
 
   const { data: event, isLoading } = useQuery({
     queryKey: ['event', id],
@@ -92,6 +90,11 @@ export default function EventDetail() {
   const { data: candidates, isLoading: candidatesLoading } = useQuery({
     queryKey: ['eventCandidates', id],
     queryFn: () => getCandidatesByEvent(id).then((r) => r.data.data),
+  })
+
+  const { data: stageSummaryList } = useQuery({
+    queryKey: ['eventStageSummary', id],
+    queryFn: () => getEventStageSummary(id).then((r) => r.data.data),
   })
 
   const statusMutation = useMutation({
@@ -135,11 +138,14 @@ export default function EventDetail() {
 
   const shortlistMutation = useStageDecision({
     onSuccess: () => {
-      setShortlistModal({ open: false, candidateId: null, candidateName: null })
-      shortlistForm.resetFields()
-      message.success('Candidate status updated!')
+      queryClient.invalidateQueries({ queryKey: ['eventStageSummary', id] })
+      setPendingCandidateId(null)
+      message.success('Decision saved!')
     },
-    onError: (err) => message.error(getErrorMessage(err)),
+    onError: (err) => {
+      setPendingCandidateId(null)
+      message.error(getErrorMessage(err))
+    },
   })
 
   const handleViewResume = async (candidateId) => {
@@ -167,6 +173,9 @@ export default function EventDetail() {
   const sortedRounds = [...(rounds ?? [])].sort((a, b) => a.sequence - b.sequence)
   const availablePositions = (allPositions ?? []).filter(
     (p) => !(eventPositions ?? []).some((ep) => ep.id === p.id)
+  )
+  const stageSummaryMap = Object.fromEntries(
+    (stageSummaryList ?? []).map((s) => [s.candidateId, s])
   )
 
   const tabItems = [
@@ -353,18 +362,29 @@ export default function EventDetail() {
               ),
             },
             {
-              title: 'Shortlist',
-              render: (_, r) => (
-                <Button
-                  size="small"
-                  type="primary"
-                  ghost
-                  icon={<CheckCircleOutlined />}
-                  onClick={() => setShortlistModal({ open: true, candidateId: r.id, candidateName: r.name })}
-                >
-                  Shortlist
-                </Button>
-              ),
+              title: 'Resume Result',
+              render: (_, r) => {
+                const current = stageSummaryMap[r.id]
+                return (
+                  <Select
+                    size="small"
+                    style={{ width: 140 }}
+                    value={current?.status ?? null}
+                    placeholder="Set decision"
+                    loading={pendingCandidateId === r.id && shortlistMutation.isPending}
+                    disabled={shortlistMutation.isPending && pendingCandidateId !== r.id}
+                    onChange={(status) => {
+                      setPendingCandidateId(r.id)
+                      shortlistMutation.mutate({ candidateId: r.id, eventId: Number(id), stageName: 'Resume', status, ensureStarted: true })
+                    }}
+                    options={[
+                      { value: 'SHORTLISTED', label: 'Shortlisted' },
+                      { value: 'HOLD', label: 'Hold' },
+                      { value: 'REJECTED', label: 'Rejected' },
+                    ]}
+                  />
+                )
+              },
             },
           ]}
         />
@@ -551,34 +571,6 @@ export default function EventDetail() {
         )}
       </Modal>
 
-      {/* Shortlist modal */}
-      <Modal
-        open={shortlistModal.open}
-        title={
-          <Space>
-            <CheckCircleOutlined style={{ color: '#4f46e5' }} />
-            <span>Update Status — {shortlistModal.candidateName}</span>
-          </Space>
-        }
-        onCancel={() => { setShortlistModal({ open: false, candidateId: null, candidateName: null }); shortlistForm.resetFields() }}
-        onOk={() =>
-          shortlistForm.validateFields().then((v) =>
-            shortlistMutation.mutate({ candidateId: shortlistModal.candidateId, eventId: Number(id), stageName: 'Resume', status: v.status, ensureStarted: true })
-          )
-        }
-        okText="Confirm"
-        confirmLoading={shortlistMutation.isPending}
-      >
-        <Form form={shortlistForm} layout="vertical" style={{ marginTop: 16 }}>
-          <Form.Item name="status" label="Decision" rules={[{ required: true, message: 'Select a status' }]}>
-            <Radio.Group>
-              <Radio.Button value="SHORTLISTED" style={{ color: '#16a34a' }}>Shortlisted</Radio.Button>
-              <Radio.Button value="HOLD" style={{ color: '#d97706' }}>Hold</Radio.Button>
-              <Radio.Button value="REJECTED" style={{ color: '#dc2626' }}>Rejected</Radio.Button>
-            </Radio.Group>
-          </Form.Item>
-        </Form>
-      </Modal>
     </div>
   )
 }
