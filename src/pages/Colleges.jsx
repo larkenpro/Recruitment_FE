@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Card, Table, Button, Modal, Form, Input, Select, Tag } from 'antd'
+import { Card, Table, Button, Modal, Form, Input, Select, Tag, message } from 'antd'
 import { PlusOutlined, EditOutlined, ExperimentOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getColleges, createCollege, updateCollege } from '../api/colleges'
@@ -104,23 +104,6 @@ export default function Colleges() {
           <Button icon={<ExperimentOutlined />} size="small" onClick={fillTestData}>Fill Test Data</Button>
         </div>
         <Form form={form} layout="vertical">
-          <div style={{ textAlign: 'right', marginBottom: 12 }}>
-            <Button
-              size="small"
-              icon={<ThunderboltOutlined />}
-              onClick={() => form.setFieldsValue({
-                name: 'Model Engineering College',
-                city: 'Thrikkakara',
-                state: 'Kerala',
-                tier: 'Tier 2',
-                contactPersonName: 'Dr. Priya Nair',
-                emailId: 'placement@mec.ac.in',
-                phoneNumber: '9876543210',
-              })}
-            >
-              Fill Test Data
-            </Button>
-          </div>
           <Form.Item name="name" label="College Name" rules={[{ required: true }]}>
             <Input />
           </Form.Item>

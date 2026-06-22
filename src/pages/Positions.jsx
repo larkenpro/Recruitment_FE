@@ -116,17 +116,6 @@ export default function Positions() {
           <Button icon={<ExperimentOutlined />} size="small" onClick={fillTestData}>Fill Test Data</Button>
         </div>
         <Form form={form} layout="vertical">
-          {!editing && (
-            <div style={{ textAlign: 'right', marginBottom: 12 }}>
-              <Button
-                size="small"
-                icon={<ThunderboltOutlined />}
-                onClick={() => form.setFieldsValue({ title: 'Software Engineer', department: 'Engineering', type: 'Full-Time' })}
-              >
-                Fill Test Data
-              </Button>
-            </div>
-          )}
           <Form.Item name="title" label="Title" rules={[{ required: true }]}>
             <Input placeholder="Software Engineer" />
           </Form.Item>

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
+import dayjs from 'dayjs'
 import { useParams } from 'react-router-dom'
 import { Form, Input, Select, Button, Card, Row, Col, Typography, Divider, Upload, Alert, Steps, Result, DatePicker, Tag, Space } from 'antd'
-import { UploadOutlined, UserOutlined, BookOutlined, AimOutlined, ArrowUpOutlined, ArrowDownOutlined, ThunderboltOutlined } from '@ant-design/icons'
+import { UploadOutlined, UserOutlined, BookOutlined, AimOutlined, ArrowUpOutlined, ArrowDownOutlined, ThunderboltOutlined, ExperimentOutlined } from '@ant-design/icons'
 import { getApplyForm, submitApplication } from '../api/candidates'
 import { getEventPositions } from '../api/events'
 
