@@ -20,6 +20,8 @@ export const updateRoundResult = (candidateId, eventId, roundId, data) => api.pu
 export const getCandidateStageHistory = (id) => api.get(V1(`/${id}/stage-history`))
 export const addStageEntry = (candidateId, eventId, data) => api.post(V1(`/${candidateId}/events/${eventId}/stages`), data)
 export const updateStageStatus = (candidateId, eventId, data) => api.patch(V1(`/${candidateId}/events/${eventId}/stages/current`), data)
+export const updateStageStatusByName = (candidateId, eventId, stageName, data) =>
+  api.patch(V1(`/${candidateId}/events/${eventId}/stages/${encodeURIComponent(stageName)}/status`), data)
 
 export const uploadResume = (candidateId, file) => {
   const form = new FormData()

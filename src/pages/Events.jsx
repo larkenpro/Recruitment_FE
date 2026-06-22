@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react'
-import { Card, Table, Button, Modal, Form, Input, Select, Tag, message, Space, Divider, InputNumber, List, Popconfirm } from 'antd'
-import { PlusOutlined, LinkOutlined, CopyOutlined, UnorderedListOutlined, AppstoreOutlined, TeamOutlined, DeleteOutlined, ThunderboltOutlined } from '@ant-design/icons'
+import { useState } from 'react'
+import { Card, Table, Button, Modal, Form, Input, Select, Tag, message, Space } from 'antd'
+import { PlusOutlined, LinkOutlined, CopyOutlined, ExperimentOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { getEvents, createEvent, generateLink, updateEventStatus, getRounds, createRound, getEventPositions, addEventPositions, removeEventPosition, getCandidatesByEvent } from '../api/events'
+import { getEvents, createEvent, generateLink, updateEventStatus } from '../api/events'
 import { getColleges } from '../api/colleges'
 import { getPositions } from '../api/positions'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
+import { getErrorMessage } from '../utils/errorUtils'
 
 const FILTER_KEYS = [
   { key: 'college',         label: 'College', getVal: r => r.college?.name },
@@ -19,81 +20,46 @@ export default function Events() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
-  const [roundsModal, setRoundsModal] = useState(null) // holds selected event
-  const [positionsModal, setPositionsModal] = useState(null) // holds selected event (read-only)
-  const [candidatesModal, setCandidatesModal] = useState(null) // holds selected event
   const [links, setLinks] = useState({})
   const [form] = Form.useForm()
-  const [roundForm] = Form.useForm()
-  const [positionForm] = Form.useForm()
 
   const { data: events, isLoading } = useQuery({ queryKey: ['events'], queryFn: () => getEvents().then(r => r.data.data) })
-
   const { filteredData, filters, setFilter, removeFilter, optionMap } = useColumnFilter(events, FILTER_KEYS)
   const { data: colleges } = useQuery({ queryKey: ['colleges'], queryFn: () => getColleges().then(r => r.data.data) })
-  const { data: rounds } = useQuery({
-    queryKey: ['rounds', roundsModal?.id],
-    queryFn: () => getRounds(roundsModal.id).then(r => r.data.data),
-    enabled: !!roundsModal
-  })
-
-  const { data: positions } = useQuery({
-    queryKey: ['positions'],
-    queryFn: () => getPositions().then(r => r.data.data)
-  })
-
-  const { data: eventPositions } = useQuery({
-    queryKey: ['eventPositions', positionsModal?.id],
-    queryFn: () => getEventPositions(positionsModal.id).then(r => r.data.data),
-    enabled: !!positionsModal
-  })
-
-  const { data: eventCandidates, isLoading: candidatesLoading } = useQuery({
-    queryKey: ['eventCandidates', candidatesModal?.id],
-    queryFn: () => getCandidatesByEvent(candidatesModal.id).then(r => r.data.data),
-    enabled: !!candidatesModal
-  })
+  const { data: positions } = useQuery({ queryKey: ['positions'], queryFn: () => getPositions().then(r => r.data.data) })
 
   const createMutation = useMutation({
     mutationFn: createEvent,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['events'] }); setOpen(false); form.resetFields() }
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['events'] }); setOpen(false); form.resetFields() },
+    onError: (err) => message.error(getErrorMessage(err)),
   })
 
   const statusMutation = useMutation({
     mutationFn: ({ id, status }) => updateEventStatus(id, status),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['events'] }); message.success('Status updated!') }
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['events'] }); message.success('Status updated!') },
+    onError: (err) => message.error(getErrorMessage(err)),
   })
 
-  const roundMutation = useMutation({
-    mutationFn: ({ eventId, data }) => createRound(eventId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rounds', roundsModal?.id] })
-      roundForm.resetFields()
-      message.success('Round added!')
-    }
-  })
-
-  const addPositionsMutation = useMutation({
-    mutationFn: ({ eventId, positionIds }) => addEventPositions(eventId, positionIds),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['eventPositions', positionsModal?.id] })
-      positionForm.resetFields()
-      message.success('Position(s) added!')
-    }
-  })
-
-  const removePositionMutation = useMutation({
-    mutationFn: ({ eventId, positionId }) => removeEventPosition(eventId, positionId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['eventPositions', positionsModal?.id] })
-      message.success('Position removed!')
-    }
-  })
+  const fillEventTestData = () => {
+    const college = colleges?.[Math.floor(Math.random() * (colleges?.length ?? 1))]
+    const year = 2024 + Math.floor(Math.random() * 2)
+    const month = String(Math.floor(Math.random() * 6) + 6).padStart(2, '0')
+    form.setFieldsValue({
+      collegeId: college?.id,
+      recruitmentYear: year,
+      startDate: `${year}-${month}-01`,
+      status: 'UPCOMING',
+    })
+  }
 
   const handleGenerateLink = async (eventId) => {
-    const res = await generateLink(eventId)
-    setLinks(prev => ({ ...prev, [eventId]: res.data }))
-    message.success('Link generated!')
+    try {
+      const res = await generateLink(eventId)
+      setLinks(prev => ({ ...prev, [eventId]: res.data }))
+      message.success('Link generated!')
+    } catch (err) {
+      message.error(getErrorMessage(err))
+    }
   }
 
   const handleCopy = (url) => { navigator.clipboard.writeText(url); message.success('Copied!') }
@@ -102,7 +68,7 @@ export default function Events() {
 
   const columns = [
     { title: '#', dataIndex: 'id', width: 60 },
-    { title: 'College', render: (_, r) => r.college?.name },
+    { title: 'College', render: (_, r) => <a onClick={() => navigate(`/events/${r.id}`)}><strong>{r.college?.name}</strong></a> },
     { title: 'Year', dataIndex: 'recruitmentYear' },
     { title: 'Start Date', dataIndex: 'startDate' },
     {
@@ -122,24 +88,16 @@ export default function Events() {
             disabled={r.status !== 'ACTIVE'}>
             Generate Link
           </Button>
-          {links[r.id] && <Button size="small" icon={<CopyOutlined />} onClick={() => handleCopy(links[r.id].data)}>Copy</Button>}
-          <Button size="small" icon={<UnorderedListOutlined />} onClick={() => setRoundsModal(r)}>
-            Rounds
-          </Button>
-          <Button size="small" icon={<AppstoreOutlined />} onClick={() => setPositionsModal(r)}>
-            Positions
-          </Button>
-          <Button size="small" icon={<TeamOutlined />} onClick={() => setCandidatesModal(r)}>
-            Candidates
-          </Button>
+          {links[r.id] && (
+            <Button size="small" icon={<CopyOutlined />} onClick={() => handleCopy(links[r.id].data)}>
+              Copy
+            </Button>
+          )}
         </Space>
       )
     },
   ]
 
-  useEffect(() => {
-    console.log(links)
-  }, [links])
   return (
     <>
       <Card
@@ -162,21 +120,10 @@ export default function Events() {
         onOk={() => form.validateFields().then(v => createMutation.mutate({
           ...v, collegeId: Number(v.collegeId), recruitmentYear: Number(v.recruitmentYear)
         }))} okText="Save">
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+          <Button icon={<ExperimentOutlined />} size="small" onClick={fillEventTestData}>Fill Test Data</Button>
+        </div>
         <Form form={form} layout="vertical">
-          <div style={{ textAlign: 'right', marginBottom: 12 }}>
-            <Button
-              size="small"
-              icon={<ThunderboltOutlined />}
-              onClick={() => form.setFieldsValue({
-                collegeId: colleges?.[0]?.id,
-                recruitmentYear: new Date().getFullYear(),
-                startDate: new Date().toISOString().slice(0, 10),
-                status: 'ACTIVE',
-              })}
-            >
-              Fill Test Data
-            </Button>
-          </div>
           <Form.Item name="collegeId" label="College" rules={[{ required: true }]}>
             <Select options={colleges?.map(c => ({ value: c.id, label: c.name })) ?? []} />
           </Form.Item>
@@ -194,141 +141,6 @@ export default function Events() {
               options={positions?.map(p => ({ value: p.id, label: p.type ? `${p.title} — ${p.type}` : p.title })) ?? []}
             />
           </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* Rounds Modal */}
-      <Modal
-        title={`Rounds — ${roundsModal?.college?.name} (${roundsModal?.recruitmentYear})`}
-        open={!!roundsModal}
-        onCancel={() => { setRoundsModal(null); roundForm.resetFields() }}
-        footer={null}
-        width={560}
-      >
-        <List
-          dataSource={rounds ?? []}
-          locale={{ emptyText: 'No rounds added yet' }}
-          renderItem={r => (
-            <List.Item>
-              <List.Item.Meta
-                title={<span>{r.sequence}. {r.name}</span>}
-                description={r.roundType}
-              />
-            </List.Item>
-          )}
-        />
-        <Divider>Add New Round</Divider>
-        <Form form={roundForm} layout="vertical"
-          onFinish={v => roundMutation.mutate({ eventId: roundsModal.id, data: { ...v, sequence: Number(v.sequence) } })}>
-          <div style={{ textAlign: 'right', marginBottom: 12 }}>
-            <Button
-              size="small"
-              icon={<ThunderboltOutlined />}
-              onClick={() => roundForm.setFieldsValue({
-                name: 'Aptitude Test',
-                roundType: 'WRITTEN',
-                sequence: (rounds?.length ?? 0) + 1,
-              })}
-            >
-              Fill Test Data
-            </Button>
-          </div>
-          <Form.Item name="name" label="Round Name" rules={[{ required: true }]}>
-            <Input placeholder="Aptitude Test" />
-          </Form.Item>
-          <Form.Item name="roundType" label="Round Type">
-            <Select options={['WRITTEN', 'TECHNICAL', 'HR', 'GROUP_DISCUSSION', 'CODING'].map(s => ({ value: s }))} />
-          </Form.Item>
-          <Form.Item name="sequence" label="Sequence" rules={[{ required: true }]}>
-            <InputNumber style={{ width: '100%' }} placeholder="1" min={1} />
-          </Form.Item>
-          <Button type="primary" htmlType="submit" block loading={roundMutation.isLoading}>Add Round</Button>
-        </Form>
-      </Modal>
-      {/* Candidates Modal */}
-      <Modal
-        title={`Candidates — ${candidatesModal?.college?.name} (${candidatesModal?.recruitmentYear})`}
-        open={!!candidatesModal}
-        onCancel={() => setCandidatesModal(null)}
-        footer={null}
-        width={860}
-      >
-        <Table
-          dataSource={eventCandidates ?? []}
-          loading={candidatesLoading}
-          rowKey="id"
-          size="small"
-          pagination={{ pageSize: 10 }}
-          locale={{ emptyText: 'No candidates have applied yet' }}
-          columns={[
-            {
-              title: 'Name', dataIndex: 'name',
-              render: (t, r) => <a onClick={() => { setCandidatesModal(null); navigate(`/candidates/${r.id}`) }}><strong>{t}</strong></a>
-            },
-            { title: 'Email', dataIndex: 'email' },
-            { title: 'Phone', dataIndex: 'phone', render: v => v || '—' },
-            { title: 'Branch', dataIndex: 'branch', render: v => v || '—' },
-            { title: 'UG CGPA', dataIndex: 'ugCgpa', render: v => v ?? '—' },
-            {
-              title: 'Backlogs', dataIndex: 'backlogs',
-              render: v => <Tag color={(v ?? 0) === 0 ? 'green' : 'red'}>{v ?? 0}</Tag>
-            },
-          ]}
-        />
-      </Modal>
-
-      {/* Positions Modal */}
-      <Modal
-        title={`Positions — ${positionsModal?.college?.name} (${positionsModal?.recruitmentYear})`}
-        open={!!positionsModal}
-        onCancel={() => { setPositionsModal(null); positionForm.resetFields() }}
-        footer={null}
-        width={480}
-      >
-        <List
-          dataSource={eventPositions ?? []}
-          locale={{ emptyText: 'No positions linked to this event' }}
-          renderItem={p => (
-            <List.Item
-              actions={[
-                <Popconfirm
-                  title="Remove this position?"
-                  onConfirm={() => removePositionMutation.mutate({ eventId: positionsModal.id, positionId: p.id })}
-                  okText="Yes" cancelText="No" okButtonProps={{ danger: true }}
-                >
-                  <Button size="small" danger icon={<DeleteOutlined />} loading={removePositionMutation.isPending} />
-                </Popconfirm>
-              ]}
-            >
-              <List.Item.Meta
-                title={p.title}
-                description={[p.department, p.type].filter(Boolean).join(' · ')}
-              />
-            </List.Item>
-          )}
-        />
-        <Divider>Add Positions</Divider>
-        <Form
-          form={positionForm}
-          layout="vertical"
-          onFinish={v => addPositionsMutation.mutate({ eventId: positionsModal.id, positionIds: v.positionIds })}
-        >
-          <Form.Item name="positionIds" rules={[{ required: true, message: 'Select at least one position' }]}>
-            <Select
-              mode="multiple"
-              placeholder="Select positions to add"
-              optionFilterProp="label"
-              showSearch
-              options={
-                (positions ?? [])
-                  .filter(p => !(eventPositions ?? []).some(ep => ep.id === p.id))
-                  .map(p => ({ value: p.id, label: p.type ? `${p.title} — ${p.type}` : p.title }))
-              }
-            />
-          </Form.Item>
-          <Button type="primary" htmlType="submit" block loading={addPositionsMutation.isPending}>
-            Add
-          </Button>
         </Form>
       </Modal>
     </>

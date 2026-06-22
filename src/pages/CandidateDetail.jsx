@@ -52,13 +52,12 @@ import {
   updateCandidate,
   updateExitRecord,
   updateRoundResult,
-  updateStageStatus,
 } from '../api/candidates'
 import { getEventPositions } from '../api/events'
+import { getErrorMessage } from '../utils/errorUtils'
+import { PIPELINE_STAGES, useStageDecision } from '../hooks/useStageDecision'
 
 const { Title, Text } = Typography
-
-const PIPELINE_STAGES = ['Resume', 'Rounds', 'Offer', 'Joining', '6 Month Review', '12 Month Retained', 'Exit']
 const STATUS_COLOR = { SHORTLISTED: 'green', HOLD: 'orange', REJECTED: 'red' }
 
 export default function CandidateDetail() {
@@ -112,7 +111,7 @@ export default function CandidateDetail() {
       setEditingPrefs(false)
       message.success('Preferences updated!')
     },
-    onError: () => message.error('Failed to update preferences'),
+    onError: (err) => message.error(getErrorMessage(err)),
   })
 
   const roundMutation = useMutation({
@@ -123,25 +122,18 @@ export default function CandidateDetail() {
       scoreForm.resetFields()
       message.success('Score saved!')
     },
-    onError: () => message.error('Failed to save score'),
+    onError: (err) => message.error(getErrorMessage(err)),
   })
 
   const stageMutation = useMutation({
     mutationFn: ({ eventId, stageName }) => addStageEntry(id, eventId, { stageName }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['stage-history', id] }),
-    onError: () => message.error('Failed to update stage'),
+    onError: (err) => message.error(getErrorMessage(err)),
   })
 
-  const statusMutation = useMutation({
-    mutationFn: async ({ eventId, stageName, status }) => {
-      await updateStageStatus(id, eventId, { status })
-      if (status === 'SHORTLISTED') {
-        const next = PIPELINE_STAGES[PIPELINE_STAGES.indexOf(stageName) + 1]
-        if (next) await addStageEntry(id, eventId, { stageName: next })
-      }
-    },
+  const statusMutation = useStageDecision({
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['stage-history', id] }),
-    onError: () => message.error('Failed to update status'),
+    onError: (err) => message.error(getErrorMessage(err)),
   })
 
   const exitMutation = useMutation({
@@ -151,7 +143,7 @@ export default function CandidateDetail() {
       setEditingExit(false)
       message.success(exitRecord ? 'Exit record updated!' : 'Exit record saved!')
     },
-    onError: () => message.error('Failed to save exit record'),
+    onError: (err) => message.error(getErrorMessage(err)),
   })
 
   const deleteExitMutation = useMutation({
@@ -160,7 +152,7 @@ export default function CandidateDetail() {
       queryClient.invalidateQueries({ queryKey: ['exit', id] })
       message.success('Exit record removed')
     },
-    onError: () => message.error('Failed to remove exit record'),
+    onError: (err) => message.error(getErrorMessage(err)),
   })
 
   const openEditPrefs = async () => {
@@ -208,6 +200,13 @@ export default function CandidateDetail() {
   }
 
   const currentStageIdx = PIPELINE_STAGES.indexOf(selectedEvent?.currentStage?.stageName)
+
+  const firstRejectedIdx = PIPELINE_STAGES.findIndex((name) => getStageData(name)?.status === 'REJECTED')
+  const shouldShowStage = (stageName) => {
+    if (!getStageData(stageName)) return false
+    if (firstRejectedIdx === -1) return true
+    return PIPELINE_STAGES.indexOf(stageName) <= firstRejectedIdx
+  }
 
   const tabLabel = (stageName, icon = null) => {
     const d = getStageData(stageName)
@@ -266,30 +265,22 @@ export default function CandidateDetail() {
           border: '1px solid #e5e7eb',
         }}
       >
-        {d.isCurrent ? (
-          <Space wrap>
-            <Text style={{ fontSize: 13, color: '#6b7280' }}>Decision:</Text>
-            <Radio.Group
-              value={d.status}
-              buttonStyle="solid"
-              size="small"
-              onChange={(e) =>
-                statusMutation.mutate({ eventId: selectedEvent.eventId, stageName, status: e.target.value })
-              }
-            >
-              <Radio.Button value="SHORTLISTED">Shortlisted</Radio.Button>
-              <Radio.Button value="HOLD">Hold</Radio.Button>
-              <Radio.Button value="REJECTED">Rejected</Radio.Button>
-            </Radio.Group>
-          </Space>
-        ) : d.status ? (
-          <Space>
-            <Text style={{ fontSize: 13, color: '#6b7280' }}>Decision:</Text>
-            <Tag color={STATUS_COLOR[d.status]} style={{ fontSize: 13, padding: '2px 10px' }}>
-              {d.status}
-            </Tag>
-          </Space>
-        ) : null}
+        <Space wrap>
+          <Text style={{ fontSize: 13, color: '#6b7280' }}>Decision:</Text>
+          <Radio.Group
+            value={d.status}
+            buttonStyle="solid"
+            size="small"
+            disabled={statusMutation.isPending}
+            onChange={(e) =>
+              statusMutation.mutate({ candidateId: id, eventId: selectedEvent.eventId, stageName, status: e.target.value })
+            }
+          >
+            <Radio.Button value="SHORTLISTED">Shortlisted</Radio.Button>
+            <Radio.Button value="HOLD">Hold</Radio.Button>
+            <Radio.Button value="REJECTED">Rejected</Radio.Button>
+          </Radio.Group>
+        </Space>
       </div>
     )
   }
@@ -550,26 +541,43 @@ export default function CandidateDetail() {
     label: tabLabel('Resume'),
     children: (
       <div>
-        {resumeData ? (
-          <div style={{ textAlign: 'center', padding: 32 }}>
-            <FileTextOutlined style={{ fontSize: 48, color: '#4f46e5', marginBottom: 16 }} />
-            <div style={{ marginBottom: 8 }}>
-              <strong>{resumeData.fileName}</strong>
+        {resumeData ? (() => {
+          const isPdf = resumeData.fileName?.toLowerCase().endsWith('.pdf')
+          const baseResumeUrl = `${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/candidates/${id}/resume`
+          return (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, padding: '4px 0' }}>
+                <Space>
+                  <FileTextOutlined style={{ color: '#4f46e5', fontSize: 16 }} />
+                  <Text strong>{resumeData.fileName}</Text>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    Uploaded: {resumeData.uploadedAt ? new Date(resumeData.uploadedAt).toLocaleDateString() : '—'}
+                  </Text>
+                </Space>
+                <Button size="small" icon={<DownloadOutlined />} href={`${baseResumeUrl}/download`} target="_blank">
+                  Download
+                </Button>
+              </div>
+              {isPdf ? (
+                <iframe
+                  src={`${baseResumeUrl}/view`}
+                  style={{ width: '100%', height: 640, border: '1px solid #e5e7eb', borderRadius: 8 }}
+                  title={resumeData.fileName}
+                />
+              ) : (
+                <div style={{ textAlign: 'center', padding: 40, background: '#f9fafb', borderRadius: 8, border: '1px dashed #e5e7eb' }}>
+                  <FileTextOutlined style={{ fontSize: 40, color: '#9ca3af', marginBottom: 12 }} />
+                  <div style={{ color: '#6b7280', marginBottom: 16 }}>
+                    Preview not available for this file type. Download to view.
+                  </div>
+                  <Button type="primary" icon={<DownloadOutlined />} href={`${baseResumeUrl}/download`} target="_blank">
+                    Download Resume
+                  </Button>
+                </div>
+              )}
             </div>
-            <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
-              Uploaded: {resumeData.uploadedAt ? new Date(resumeData.uploadedAt).toLocaleDateString() : '—'}
-            </Text>
-            <Button
-              type="primary"
-              icon={<DownloadOutlined />}
-              size="large"
-              href={`${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/candidates/${id}/resume/download`}
-              target="_blank"
-            >
-              Download Resume
-            </Button>
-          </div>
-        ) : (
+          )
+        })() : (
           <Empty description="No resume uploaded" />
         )}
         {stageDecision('Resume')}
@@ -577,7 +585,7 @@ export default function CandidateDetail() {
     ),
   })
 
-  if (getStageData('Rounds')) {
+  if (shouldShowStage('Rounds')) {
     pipelineTabs.push({
       key: 'Rounds',
       label: tabLabel('Rounds'),
@@ -591,7 +599,7 @@ export default function CandidateDetail() {
   }
 
   for (const stageName of ['Offer', 'Joining', '6 Month Review', '12 Month Retained']) {
-    if (getStageData(stageName)) {
+    if (shouldShowStage(stageName)) {
       pipelineTabs.push({
         key: stageName,
         label: tabLabel(stageName),
@@ -605,7 +613,7 @@ export default function CandidateDetail() {
     }
   }
 
-  if (getStageData('Exit')) {
+  if (shouldShowStage('Exit')) {
     pipelineTabs.push({
       key: 'Exit',
       label: tabLabel('Exit', <LogoutOutlined style={{ marginRight: 4 }} />),

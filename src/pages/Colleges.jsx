@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Card, Table, Button, Modal, Form, Input, Select, Tag, message } from 'antd'
-import { PlusOutlined, EditOutlined, ThunderboltOutlined } from '@ant-design/icons'
+import { Card, Table, Button, Modal, Form, Input, Select, Tag } from 'antd'
+import { PlusOutlined, EditOutlined, ExperimentOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getColleges, createCollege, updateCollege } from '../api/colleges'
 import { useColumnFilter } from '../hooks/useColumnFilter'
@@ -34,6 +34,22 @@ export default function Colleges() {
     onError: (err) => message.error(err.response?.data?.message || `Failed to update college (${err.response?.status ?? 'network error'})`),
   })
 
+  const fillTestData = () => {
+    const colleges = [
+      { name: 'IIT Madras', city: 'Chennai', state: 'Tamil Nadu', contactPerson: 'Dr. Ramesh Kumar', collegeEmail: 'placement@iitm.ac.in', phoneNumber: '9876543210' },
+      { name: 'NIT Calicut', city: 'Calicut', state: 'Kerala', contactPerson: 'Prof. Anil Nair', collegeEmail: 'tpo@nitc.ac.in', phoneNumber: '9876543211' },
+      { name: 'CUSAT', city: 'Kochi', state: 'Kerala', contactPerson: 'Dr. Priya Menon', collegeEmail: 'placements@cusat.ac.in', phoneNumber: '9876543212' },
+      { name: 'BITS Pilani', city: 'Pilani', state: 'Rajasthan', contactPerson: 'Prof. Suresh Sharma', collegeEmail: 'cd@bits-pilani.ac.in', phoneNumber: '9876543213' },
+      { name: 'VIT Vellore', city: 'Vellore', state: 'Tamil Nadu', contactPerson: 'Ms. Lakshmi Devi', collegeEmail: 'placements@vit.ac.in', phoneNumber: '9876543214' },
+    ]
+    const tiers = ['Tier 1', 'Tier 2', 'Tier 3']
+    const idx = Math.floor(Math.random() * colleges.length)
+    form.setFieldsValue({
+      ...colleges[idx],
+      tier: tiers[Math.floor(Math.random() * tiers.length)],
+    })
+  }
+
   const openAdd = () => { setEditingCollege(null); form.resetFields(); setOpen(true) }
 
   const openEdit = (record) => { setEditingCollege(record); form.setFieldsValue(record); setOpen(true) }
@@ -51,9 +67,9 @@ export default function Colleges() {
     { title: 'City', dataIndex: 'city' },
     { title: 'State', dataIndex: 'state' },
     { title: 'Tier', dataIndex: 'tier', render: t => <Tag color={t === 'Tier 1' ? 'blue' : t === 'Tier 2' ? 'green' : 'default'}>{t}</Tag> },
-    { title: 'Contact Person', dataIndex: 'contactPersonName', render: v => v || '—' },
-    { title: 'Email', dataIndex: 'emailId', render: v => v || '—' },
-    { title: 'Phone', dataIndex: 'phoneNumber', render: v => v || '—' },
+    { title: 'Contact Person', dataIndex: 'contactPerson' },
+    { title: 'Email', dataIndex: 'collegeEmail' },
+    { title: 'Phone', dataIndex: 'phoneNumber' },
     {
       title: 'Actions', width: 80, render: (_, record) => (
         <Button icon={<EditOutlined />} size="small" onClick={() => openEdit(record)} />
@@ -84,6 +100,9 @@ export default function Colleges() {
         okText="Save"
         confirmLoading={createMutation.isPending || updateMutation.isPending}
       >
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+          <Button icon={<ExperimentOutlined />} size="small" onClick={fillTestData}>Fill Test Data</Button>
+        </div>
         <Form form={form} layout="vertical">
           <div style={{ textAlign: 'right', marginBottom: 12 }}>
             <Button
@@ -110,8 +129,10 @@ export default function Colleges() {
           <Form.Item name="tier" label="Tier">
             <Select options={[{ value: 'Tier 1' }, { value: 'Tier 2' }, { value: 'Tier 3' }]} />
           </Form.Item>
-          <Form.Item name="contactPersonName" label="Contact Person Name"><Input /></Form.Item>
-          <Form.Item name="emailId" label="Email ID"><Input /></Form.Item>
+          <Form.Item name="contactPerson" label="Contact Person"><Input /></Form.Item>
+          <Form.Item name="collegeEmail" label="College Email" rules={[{ type: 'email', message: 'Enter a valid email' }]}>
+            <Input />
+          </Form.Item>
           <Form.Item name="phoneNumber" label="Phone Number"><Input /></Form.Item>
         </Form>
       </Modal>
