@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { Form, Input, Select, Button, Card, Row, Col, Typography, Divider, Upload, Alert, Steps, Result, DatePicker, Tag, Space } from 'antd'
-import { UploadOutlined, UserOutlined, BookOutlined, AimOutlined, ArrowUpOutlined, ArrowDownOutlined, ExperimentOutlined } from '@ant-design/icons'
-import dayjs from 'dayjs'
+import { UploadOutlined, UserOutlined, BookOutlined, AimOutlined, ArrowUpOutlined, ArrowDownOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { getApplyForm, submitApplication } from '../api/candidates'
 import { getEventPositions } from '../api/events'
 
@@ -91,7 +90,12 @@ export default function PublicApply() {
       }, resumeFile)
       setSubmitted(true)
     } catch (err) {
-      setError(err.response?.data?.message || 'Submission failed. Please try again.')
+      if (err.response?.status === 409) {
+        form.setFields([{ name: 'rollNo', errors: [err.response.data.message || 'A candidate with this roll number already exists in the college'] }])
+        setStep(0)
+      } else {
+        setError(err.response?.data?.message || 'Submission failed. Please try again.')
+      }
     } finally {
       setLoading(false)
     }
@@ -145,7 +149,23 @@ export default function PublicApply() {
 
             {/* Step 0 - Personal Info */}
             <div style={{ display: step === 0 ? 'block' : 'none' }}>
-              <Divider orientation="left">Personal Information</Divider>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Divider orientation="left" style={{ flex: 1 }}>Personal Information</Divider>
+                <Button
+                  size="small"
+                  icon={<ThunderboltOutlined />}
+                  style={{ marginLeft: 12, flexShrink: 0 }}
+                  onClick={() => form.setFieldsValue({
+                    name: 'Arun Kumar',
+                    email: 'arun.kumar@example.com',
+                    phone: '9876543210',
+                    rollNo: 'CS2021001',
+                    branch: 'Computer Science & Engineering',
+                  })}
+                >
+                  Fill Test Data
+                </Button>
+              </div>
               <Row gutter={16}>
                 <Col xs={24} sm={12}>
                   <Form.Item name="name" label="Full Name" rules={[{ required: true }]}>
@@ -204,7 +224,24 @@ export default function PublicApply() {
 
             {/* Step 1 - Academic */}
             <div style={{ display: step === 1 ? 'block' : 'none' }}>
-              <Divider orientation="left">Academic Details</Divider>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Divider orientation="left" style={{ flex: 1 }}>Academic Details</Divider>
+                <Button
+                  size="small"
+                  icon={<ThunderboltOutlined />}
+                  style={{ marginLeft: 12, flexShrink: 0 }}
+                  onClick={() => form.setFieldsValue({
+                    tenthMark: '92.5',
+                    twelfthMark: '88.0',
+                    ugDegree: 'B.Tech Computer Science',
+                    ugCgpa: '8.5',
+                    arrears: '0',
+                    backlogs: '0',
+                  })}
+                >
+                  Fill Test Data
+                </Button>
+              </div>
               <Row gutter={16}>
                 <Col xs={24} sm={12}>
                   <Form.Item name="tenthMark" label="10th Mark %">
@@ -307,6 +344,11 @@ export default function PublicApply() {
                 <Col xs={24} sm={12}>
                   <Form.Item name="githubLink" label="GitHub Link (for Technical BA)">
                     <Input placeholder="https://github.com/username" size="large" />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12}>
+                  <Form.Item name="linkedinLink" label="LinkedIn Profile URL">
+                    <Input placeholder="https://linkedin.com/in/username" size="large" />
                   </Form.Item>
                 </Col>
                 <Col xs={24}>

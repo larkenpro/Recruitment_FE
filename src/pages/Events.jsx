@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Card, Table, Button, Modal, Form, Input, Select, Tag, message, Space, Divider, InputNumber, List, Popconfirm } from 'antd'
-import { PlusOutlined, LinkOutlined, CopyOutlined, UnorderedListOutlined, AppstoreOutlined, TeamOutlined, DeleteOutlined } from '@ant-design/icons'
+import { PlusOutlined, LinkOutlined, CopyOutlined, UnorderedListOutlined, AppstoreOutlined, TeamOutlined, DeleteOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { getEvents, createEvent, generateLink, updateEventStatus, getRounds, createRound, getEventPositions, addEventPositions, removeEventPosition, getCandidatesByEvent } from '../api/events'
@@ -163,6 +163,20 @@ export default function Events() {
           ...v, collegeId: Number(v.collegeId), recruitmentYear: Number(v.recruitmentYear)
         }))} okText="Save">
         <Form form={form} layout="vertical">
+          <div style={{ textAlign: 'right', marginBottom: 12 }}>
+            <Button
+              size="small"
+              icon={<ThunderboltOutlined />}
+              onClick={() => form.setFieldsValue({
+                collegeId: colleges?.[0]?.id,
+                recruitmentYear: new Date().getFullYear(),
+                startDate: new Date().toISOString().slice(0, 10),
+                status: 'ACTIVE',
+              })}
+            >
+              Fill Test Data
+            </Button>
+          </div>
           <Form.Item name="collegeId" label="College" rules={[{ required: true }]}>
             <Select options={colleges?.map(c => ({ value: c.id, label: c.name })) ?? []} />
           </Form.Item>
@@ -206,6 +220,19 @@ export default function Events() {
         <Divider>Add New Round</Divider>
         <Form form={roundForm} layout="vertical"
           onFinish={v => roundMutation.mutate({ eventId: roundsModal.id, data: { ...v, sequence: Number(v.sequence) } })}>
+          <div style={{ textAlign: 'right', marginBottom: 12 }}>
+            <Button
+              size="small"
+              icon={<ThunderboltOutlined />}
+              onClick={() => roundForm.setFieldsValue({
+                name: 'Aptitude Test',
+                roundType: 'WRITTEN',
+                sequence: (rounds?.length ?? 0) + 1,
+              })}
+            >
+              Fill Test Data
+            </Button>
+          </div>
           <Form.Item name="name" label="Round Name" rules={[{ required: true }]}>
             <Input placeholder="Aptitude Test" />
           </Form.Item>

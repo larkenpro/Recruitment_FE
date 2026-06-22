@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Card, Table, Button, Modal, Form, Input, Select, Tag } from 'antd'
-import { PlusOutlined, EditOutlined } from '@ant-design/icons'
+import { Card, Table, Button, Modal, Form, Input, Select, Tag, message } from 'antd'
+import { PlusOutlined, EditOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getColleges, createCollege, updateCollege } from '../api/colleges'
 import { useColumnFilter } from '../hooks/useColumnFilter'
@@ -24,12 +24,14 @@ export default function Colleges() {
 
   const createMutation = useMutation({
     mutationFn: createCollege,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['colleges'] }); closeModal() }
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['colleges'] }); closeModal(); message.success('College created!') },
+    onError: (err) => message.error(err.response?.data?.message || `Failed to create college (${err.response?.status ?? 'network error'})`),
   })
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => updateCollege(id, data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['colleges'] }); closeModal() }
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['colleges'] }); closeModal(); message.success('College updated!') },
+    onError: (err) => message.error(err.response?.data?.message || `Failed to update college (${err.response?.status ?? 'network error'})`),
   })
 
   const openAdd = () => { setEditingCollege(null); form.resetFields(); setOpen(true) }
@@ -49,6 +51,9 @@ export default function Colleges() {
     { title: 'City', dataIndex: 'city' },
     { title: 'State', dataIndex: 'state' },
     { title: 'Tier', dataIndex: 'tier', render: t => <Tag color={t === 'Tier 1' ? 'blue' : t === 'Tier 2' ? 'green' : 'default'}>{t}</Tag> },
+    { title: 'Contact Person', dataIndex: 'contactPersonName', render: v => v || '—' },
+    { title: 'Email', dataIndex: 'emailId', render: v => v || '—' },
+    { title: 'Phone', dataIndex: 'phoneNumber', render: v => v || '—' },
     {
       title: 'Actions', width: 80, render: (_, record) => (
         <Button icon={<EditOutlined />} size="small" onClick={() => openEdit(record)} />
@@ -80,6 +85,23 @@ export default function Colleges() {
         confirmLoading={createMutation.isPending || updateMutation.isPending}
       >
         <Form form={form} layout="vertical">
+          <div style={{ textAlign: 'right', marginBottom: 12 }}>
+            <Button
+              size="small"
+              icon={<ThunderboltOutlined />}
+              onClick={() => form.setFieldsValue({
+                name: 'Model Engineering College',
+                city: 'Thrikkakara',
+                state: 'Kerala',
+                tier: 'Tier 2',
+                contactPersonName: 'Dr. Priya Nair',
+                emailId: 'placement@mec.ac.in',
+                phoneNumber: '9876543210',
+              })}
+            >
+              Fill Test Data
+            </Button>
+          </div>
           <Form.Item name="name" label="College Name" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
@@ -88,6 +110,9 @@ export default function Colleges() {
           <Form.Item name="tier" label="Tier">
             <Select options={[{ value: 'Tier 1' }, { value: 'Tier 2' }, { value: 'Tier 3' }]} />
           </Form.Item>
+          <Form.Item name="contactPersonName" label="Contact Person Name"><Input /></Form.Item>
+          <Form.Item name="emailId" label="Email ID"><Input /></Form.Item>
+          <Form.Item name="phoneNumber" label="Phone Number"><Input /></Form.Item>
         </Form>
       </Modal>
     </Card>

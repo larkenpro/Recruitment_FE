@@ -415,21 +415,10 @@ export default function CandidateDetail() {
           <Descriptions.Item label="Branch">{candidate.branch}</Descriptions.Item>
           <Descriptions.Item label="College">{candidate.college?.name ?? '—'}</Descriptions.Item>
           <Descriptions.Item label="Job Location">{candidate.jobLocation}</Descriptions.Item>
-          <Descriptions.Item label="GitHub">
-            {candidate.githubLink ? (
-              <a href={candidate.githubLink} target="_blank" rel="noreferrer">
-                {candidate.githubLink}
-              </a>
-            ) : (
-              '—'
-            )}
-          </Descriptions.Item>
-          <Descriptions.Item label="Internship Availability">
-            {candidate.internshipAvailability}
-          </Descriptions.Item>
-          <Descriptions.Item label="Leadership Positions" span={2}>
-            {candidate.leadershipPositions}
-          </Descriptions.Item>
+          <Descriptions.Item label="GitHub">{candidate.githubLink ? <a href={candidate.githubLink} target="_blank" rel="noreferrer">{candidate.githubLink}</a> : '—'}</Descriptions.Item>
+          <Descriptions.Item label="LinkedIn">{candidate.linkedinLink ? <a href={candidate.linkedinLink} target="_blank" rel="noreferrer">{candidate.linkedinLink}</a> : '—'}</Descriptions.Item>
+          <Descriptions.Item label="Internship Availability">{candidate.internshipAvailability}</Descriptions.Item>
+          <Descriptions.Item label="Leadership Positions" span={2}>{candidate.leadershipPositions}</Descriptions.Item>
         </Descriptions>
       ),
     },
