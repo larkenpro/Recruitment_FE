@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { getEvents, getEvent, createEvent, updateEventStatus, getRounds, createRound, getEventPositions, getCandidatesByEvent } from '../../api/events'
+import { getEvents, getEvent, createEvent, updateEventStatus, getRounds, createRound, getEventPositions, getCandidatesByEvent, getGroups, generateGroups, updateGroup, deleteAllGroups } from '../../api/events'
 import { getColleges } from '../../api/colleges'
 import { createPosition, deletePosition } from '../../api/positions'
 
@@ -285,6 +285,53 @@ describe('Events API', () => {
       expect(res.data.status).toBe('success')
       expect(Array.isArray(res.data.data)).toBe(true)
       expect(res.data.data.length).toBe(0)
+    })
+  })
+
+  // ── Groups ────────────────────────────────────────────────────────────────
+  describe('Groups', () => {
+    // ── GET groups (empty) ────────────────────────────────────────────────
+    it('GET /events/:id/groups — returns success with an array', async () => {
+      if (!createdId) return
+      const res = await getGroups(createdId)
+      expect(res.data.status).toBe('success')
+      expect(Array.isArray(res.data.data)).toBe(true)
+    })
+
+    // ── POST generate — no candidates ─────────────────────────────────────
+    it('POST /events/:id/groups — returns 400 when no candidates in event', async () => {
+      if (!createdId) return
+      await expect(generateGroups(createdId, 2)).rejects.toMatchObject({
+        response: { status: 400 },
+      })
+    })
+
+    // ── PUT update group ──────────────────────────────────────────────────
+    it('PUT /events/:id/groups/:groupId — returns 404 for unknown group', async () => {
+      if (!createdId) return
+      await expect(updateGroup(createdId, 999999, { name: 'Group X', topic: 'Test' })).rejects.toMatchObject({
+        response: { status: 404 },
+      })
+    })
+
+    // ── DELETE all groups ─────────────────────────────────────────────────
+    it('DELETE /events/:id/groups — returns success', async () => {
+      if (!createdId) return
+      const res = await deleteAllGroups(createdId)
+      expect(res.data.status).toBe('success')
+    })
+
+    // ── 404 for unknown event ─────────────────────────────────────────────
+    it('GET /events/999999/groups — returns 404 for unknown event', async () => {
+      await expect(getGroups(999999)).rejects.toMatchObject({
+        response: { status: 404 },
+      })
+    })
+
+    it('DELETE /events/999999/groups — returns 404 for unknown event', async () => {
+      await expect(deleteAllGroups(999999)).rejects.toMatchObject({
+        response: { status: 404 },
+      })
     })
   })
 

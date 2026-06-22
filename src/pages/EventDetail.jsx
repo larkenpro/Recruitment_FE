@@ -9,6 +9,7 @@ import {
   TeamOutlined,
   ThunderboltOutlined,
   UnorderedListOutlined,
+  UsergroupAddOutlined,
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -46,6 +47,9 @@ import {
   getEvent,
   getEventPositions,
   getEventStageSummary,
+  getGroups,
+  generateGroups,
+  updateGroup,
   getRounds,
   removeEventPosition,
   updateEventStatus,
@@ -87,6 +91,9 @@ export default function EventDetail() {
   const [positionForm] = Form.useForm()
   const [resumeModal, setResumeModal] = useState({ open: false, candidateId: null, fileName: null })
   const [pendingCandidateId, setPendingCandidateId] = useState(null)
+  const [groupCount, setGroupCount] = useState(null)
+  const [editingGroup, setEditingGroup] = useState(null)
+  const [groupForm] = Form.useForm()
 
   const { data: event, isLoading } = useQuery({
     queryKey: ['event', id],
@@ -116,6 +123,12 @@ export default function EventDetail() {
   const { data: stageSummaryList } = useQuery({
     queryKey: ['eventStageSummary', id],
     queryFn: () => getEventStageSummary(id).then((r) => r.data.data),
+  })
+
+  const { data: groups } = useQuery({
+    queryKey: ['eventGroups', id],
+    queryFn: () => getGroups(id).then((r) => r.data.data),
+    enabled: (rounds ?? []).some((r) => r.roundType === 'GROUP_DISCUSSION'),
   })
 
   const stageSummaryMap = useMemo(
@@ -209,6 +222,26 @@ export default function EventDetail() {
     },
   })
 
+  const generateGroupsMutation = useMutation({
+    mutationFn: (count) => generateGroups(id, count),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['eventGroups', id] })
+      message.success('Groups generated!')
+    },
+    onError: (err) => message.error(getErrorMessage(err)),
+  })
+
+  const updateGroupMutation = useMutation({
+    mutationFn: ({ groupId, data }) => updateGroup(id, groupId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['eventGroups', id] })
+      setEditingGroup(null)
+      groupForm.resetFields()
+      message.success('Group updated!')
+    },
+    onError: (err) => message.error(getErrorMessage(err)),
+  })
+
   const handleViewResume = async (candidateId) => {
     try {
       const res = await getCandidateResume(candidateId)
@@ -249,6 +282,7 @@ export default function EventDetail() {
   if (!event) return <Empty />
 
   const sortedRounds = [...(rounds ?? [])].sort((a, b) => a.sequence - b.sequence)
+  const hasGroupDiscussion = sortedRounds.some((r) => r.roundType === 'GROUP_DISCUSSION')
   const availablePositions = (allPositions ?? []).filter(
     (p) => !(eventPositions ?? []).some((ep) => ep.id === p.id)
   )
@@ -435,6 +469,120 @@ export default function EventDetail() {
         </div>
       ),
     },
+    ...(hasGroupDiscussion
+      ? [
+          {
+            key: 'groups',
+            label: (
+              <span>
+                <UsergroupAddOutlined style={{ marginRight: 4 }} />
+                Groups
+                {(groups?.length ?? 0) > 0 && (
+                  <Tag style={{ marginLeft: 6, fontSize: 10, padding: '0 4px', lineHeight: '16px' }}>
+                    {groups.length}
+                  </Tag>
+                )}
+              </span>
+            ),
+            children: (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+                  <InputNumber
+                    min={1}
+                    placeholder="Number of groups"
+                    value={groupCount}
+                    onChange={setGroupCount}
+                    style={{ width: 160 }}
+                  />
+                  {(groups?.length ?? 0) > 0 ? (
+                    <Popconfirm
+                      title="Regenerate groups?"
+                      description="This will delete all existing groups and randomly assign new ones."
+                      onConfirm={() => generateGroupsMutation.mutate(groupCount)}
+                      okText="Regenerate"
+                      cancelText="Cancel"
+                      okButtonProps={{ danger: true }}
+                      disabled={!groupCount}
+                    >
+                      <Button
+                        type="primary"
+                        loading={generateGroupsMutation.isPending}
+                        disabled={!groupCount}
+                      >
+                        Regenerate Groups
+                      </Button>
+                    </Popconfirm>
+                  ) : (
+                    <Button
+                      type="primary"
+                      onClick={() => generateGroupsMutation.mutate(groupCount)}
+                      loading={generateGroupsMutation.isPending}
+                      disabled={!groupCount}
+                    >
+                      Generate Groups
+                    </Button>
+                  )}
+                </div>
+                {(groups?.length ?? 0) === 0 ? (
+                  <Empty description="No groups generated yet" />
+                ) : (
+                  <Row gutter={[16, 16]}>
+                    {groups.map((g) => (
+                      <Col key={g.id} xs={24} sm={12} lg={8}>
+                        <Card
+                          size="small"
+                          title={<Text strong>Group {g.name}</Text>}
+                          extra={
+                            <Button
+                              size="small"
+                              icon={<EditOutlined />}
+                              onClick={() => {
+                                setEditingGroup(g)
+                                groupForm.setFieldsValue({ name: g.name, topic: g.topic ?? '' })
+                              }}
+                            >
+                              Edit
+                            </Button>
+                          }
+                          style={{ height: '100%' }}
+                        >
+                          <div style={{ marginBottom: 10 }}>
+                            <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 2 }}>
+                              TOPIC
+                            </Text>
+                            {g.topic ? (
+                              <Text>{g.topic}</Text>
+                            ) : (
+                              <Text type="secondary" italic style={{ fontSize: 13 }}>
+                                No topic set
+                              </Text>
+                            )}
+                          </div>
+                          <Divider style={{ margin: '10px 0' }} />
+                          <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 6 }}>
+                            MEMBERS ({g.members.length})
+                          </Text>
+                          {g.members.map((m) => (
+                            <div
+                              key={m.id}
+                              style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}
+                            >
+                              <Text style={{ fontSize: 13, flex: 1 }}>{m.name}</Text>
+                              {m.branch && (
+                                <Tag style={{ fontSize: 11, margin: 0 }}>{m.branch}</Tag>
+                              )}
+                            </div>
+                          ))}
+                        </Card>
+                      </Col>
+                    ))}
+                  </Row>
+                )}
+              </div>
+            ),
+          },
+        ]
+      : []),
     {
       key: 'candidates',
       label: (
@@ -723,6 +871,30 @@ export default function EventDetail() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Edit group modal */}
+      <Modal
+        open={!!editingGroup}
+        title={`Edit Group ${editingGroup?.name ?? ''}`}
+        onCancel={() => { setEditingGroup(null); groupForm.resetFields() }}
+        onOk={() => groupForm.submit()}
+        confirmLoading={updateGroupMutation.isPending}
+        destroyOnClose
+      >
+        <Form
+          form={groupForm}
+          layout="vertical"
+          style={{ marginTop: 16 }}
+          onFinish={(v) => updateGroupMutation.mutate({ groupId: editingGroup.id, data: v })}
+        >
+          <Form.Item name="name" label="Group Name" rules={[{ required: true, message: 'Name is required' }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="topic" label="Topic">
+            <Input placeholder="e.g. The future of renewable energy" />
+          </Form.Item>
+        </Form>
       </Modal>
 
     </div>
