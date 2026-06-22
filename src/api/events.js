@@ -7,6 +7,8 @@ export const updateEventStatus = (id, status) => api.put(`/events/${id}/status?s
 export const generateLink = (eventId) => api.post(`/links/generate`, {eventId : eventId})
 export const getRounds = (eventId) => api.get(`/events/${eventId}/rounds`)
 export const createRound = (eventId, data) => api.post(`/events/${eventId}/rounds`, data)
+export const updateRound = (eventId, roundId, data) => api.put(`/events/${eventId}/rounds/${roundId}`, data)
+export const deleteRound = (eventId, roundId) => api.delete(`/events/${eventId}/rounds/${roundId}`)
 export const getCandidatesByEvent = (eventId) => api.get(`/events/${eventId}/candidates`)
 export const getEventPositions = (eventId) => api.get(`/events/${eventId}/positions`)
 export const addEventPositions = (eventId, positionIds) => api.post(`/events/${eventId}/positions`, positionIds)

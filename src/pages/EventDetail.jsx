@@ -3,9 +3,11 @@ import {
   CalendarOutlined,
   CopyOutlined,
   DeleteOutlined,
+  EditOutlined,
   FileTextOutlined,
   LinkOutlined,
   TeamOutlined,
+  ThunderboltOutlined,
   UnorderedListOutlined,
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -37,6 +39,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import {
   addEventPositions,
   createRound,
+  updateRound,
+  deleteRound,
   generateLink,
   getCandidatesByEvent,
   getEvent,
@@ -76,7 +80,10 @@ export default function EventDetail() {
   const queryClient = useQueryClient()
 
   const [link, setLink] = useState(null)
+  const [templateLoading, setTemplateLoading] = useState(false)
+  const [editingRound, setEditingRound] = useState(null)
   const [roundForm] = Form.useForm()
+  const [editRoundForm] = Form.useForm()
   const [positionForm] = Form.useForm()
   const [resumeModal, setResumeModal] = useState({ open: false, candidateId: null, fileName: null })
   const [pendingCandidateId, setPendingCandidateId] = useState(null)
@@ -151,6 +158,26 @@ export default function EventDetail() {
     onError: (err) => message.error(getErrorMessage(err)),
   })
 
+  const updateRoundMutation = useMutation({
+    mutationFn: ({ roundId, data }) => updateRound(id, roundId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rounds', id] })
+      setEditingRound(null)
+      editRoundForm.resetFields()
+      message.success('Round updated!')
+    },
+    onError: (err) => message.error(getErrorMessage(err)),
+  })
+
+  const deleteRoundMutation = useMutation({
+    mutationFn: (roundId) => deleteRound(id, roundId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rounds', id] })
+      message.success('Round deleted!')
+    },
+    onError: (err) => message.error(getErrorMessage(err)),
+  })
+
   const addPositionsMutation = useMutation({
     mutationFn: (positionIds) => addEventPositions(id, positionIds),
     onSuccess: () => {
@@ -198,6 +225,23 @@ export default function EventDetail() {
       message.success('Link generated!')
     } catch (err) {
       message.error(getErrorMessage(err))
+    }
+  }
+
+  const handleDefaultTemplate = async () => {
+    setTemplateLoading(true)
+    try {
+      await Promise.all([
+        createRound(id, { name: 'Group Discussion', roundType: 'GROUP_DISCUSSION', sequence: 1 }),
+        createRound(id, { name: 'Interview', roundType: 'TECHNICAL', sequence: 2 }),
+        createRound(id, { name: 'HR Round', roundType: 'HR', sequence: 3 }),
+      ])
+      queryClient.invalidateQueries({ queryKey: ['rounds', id] })
+      message.success('Default rounds added!')
+    } catch (err) {
+      message.error(getErrorMessage(err))
+    } finally {
+      setTemplateLoading(false)
     }
   }
 
@@ -298,6 +342,21 @@ export default function EventDetail() {
       ),
       children: (
         <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+            <Button
+              icon={<ThunderboltOutlined />}
+              onClick={handleDefaultTemplate}
+              loading={templateLoading}
+              disabled={sortedRounds.length > 0}
+            >
+              Use Default Template
+            </Button>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {sortedRounds.length > 0
+                ? 'Remove existing rounds to use the template'
+                : 'Adds Group Discussion · Interview · HR rounds'}
+            </Text>
+          </div>
           {sortedRounds.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
               {sortedRounds.map((r) => (
@@ -305,6 +364,33 @@ export default function EventDetail() {
                   key={r.id}
                   size="small"
                   style={{ borderRadius: 10, border: '1.5px solid #e5e7eb' }}
+                  extra={
+                    <Space size="small">
+                      <Button
+                        size="small"
+                        icon={<EditOutlined />}
+                        onClick={() => {
+                          setEditingRound(r)
+                          editRoundForm.setFieldsValue({ name: r.name, roundType: r.roundType ?? undefined, sequence: r.sequence })
+                        }}
+                      />
+                      <Popconfirm
+                        title="Delete this round?"
+                        description="All round results for this round will also be deleted."
+                        onConfirm={() => deleteRoundMutation.mutate(r.id)}
+                        okText="Delete"
+                        cancelText="Cancel"
+                        okButtonProps={{ danger: true }}
+                      >
+                        <Button
+                          size="small"
+                          danger
+                          icon={<DeleteOutlined />}
+                          loading={deleteRoundMutation.isPending && deleteRoundMutation.variables === r.id}
+                        />
+                      </Popconfirm>
+                    </Space>
+                  }
                 >
                   <Space>
                     <Tag style={{ fontWeight: 700, minWidth: 28, textAlign: 'center' }}>#{r.sequence}</Tag>
@@ -562,6 +648,36 @@ export default function EventDetail() {
       >
         <Tabs items={tabItems} />
       </Card>
+
+      {/* Edit round modal */}
+      <Modal
+        open={!!editingRound}
+        title="Edit Round"
+        onCancel={() => { setEditingRound(null); editRoundForm.resetFields() }}
+        onOk={() => editRoundForm.submit()}
+        confirmLoading={updateRoundMutation.isPending}
+        destroyOnClose
+      >
+        <Form
+          form={editRoundForm}
+          layout="vertical"
+          style={{ marginTop: 16 }}
+          onFinish={(v) => updateRoundMutation.mutate({ roundId: editingRound.id, data: { ...v, sequence: Number(v.sequence) } })}
+        >
+          <Form.Item name="name" label="Round Name" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="roundType" label="Round Type">
+            <Select
+              allowClear
+              options={['WRITTEN', 'TECHNICAL', 'HR', 'GROUP_DISCUSSION', 'CODING'].map((s) => ({ value: s }))}
+            />
+          </Form.Item>
+          <Form.Item name="sequence" label="Sequence" rules={[{ required: true }]}>
+            <InputNumber style={{ width: '100%' }} min={1} />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       {/* Resume viewer modal */}
       <Modal
