@@ -358,48 +358,53 @@ export default function EventDetail() {
             </Text>
           </div>
           {sortedRounds.length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 24 }}>
               {sortedRounds.map((r) => (
-                <Card
+                <div
                   key={r.id}
-                  size="small"
-                  style={{ borderRadius: 10, border: '1.5px solid #e5e7eb' }}
-                  extra={
-                    <Space size="small">
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    border: '1.5px solid #e5e7eb',
+                    background: '#fafafa',
+                  }}
+                >
+                  <Tag style={{ fontWeight: 700, minWidth: 28, textAlign: 'center', margin: 0 }}>#{r.sequence}</Tag>
+                  <Text strong style={{ fontSize: 14, flex: 1 }}>{r.name}</Text>
+                  {r.roundType && (
+                    <Tag color={ROUND_TYPE_COLOR[r.roundType] ?? 'default'} style={{ margin: 0 }}>{r.roundType}</Tag>
+                  )}
+                  <Space size={4}>
+                    <Button
+                      size="small"
+                      type="text"
+                      icon={<EditOutlined />}
+                      onClick={() => {
+                        setEditingRound(r)
+                        editRoundForm.setFieldsValue({ name: r.name, roundType: r.roundType ?? undefined, sequence: r.sequence })
+                      }}
+                    />
+                    <Popconfirm
+                      title="Delete this round?"
+                      description="All round results for this round will also be deleted."
+                      onConfirm={() => deleteRoundMutation.mutate(r.id)}
+                      okText="Delete"
+                      cancelText="Cancel"
+                      okButtonProps={{ danger: true }}
+                    >
                       <Button
                         size="small"
-                        icon={<EditOutlined />}
-                        onClick={() => {
-                          setEditingRound(r)
-                          editRoundForm.setFieldsValue({ name: r.name, roundType: r.roundType ?? undefined, sequence: r.sequence })
-                        }}
+                        type="text"
+                        danger
+                        icon={<DeleteOutlined />}
+                        loading={deleteRoundMutation.isPending && deleteRoundMutation.variables === r.id}
                       />
-                      <Popconfirm
-                        title="Delete this round?"
-                        description="All round results for this round will also be deleted."
-                        onConfirm={() => deleteRoundMutation.mutate(r.id)}
-                        okText="Delete"
-                        cancelText="Cancel"
-                        okButtonProps={{ danger: true }}
-                      >
-                        <Button
-                          size="small"
-                          danger
-                          icon={<DeleteOutlined />}
-                          loading={deleteRoundMutation.isPending && deleteRoundMutation.variables === r.id}
-                        />
-                      </Popconfirm>
-                    </Space>
-                  }
-                >
-                  <Space>
-                    <Tag style={{ fontWeight: 700, minWidth: 28, textAlign: 'center' }}>#{r.sequence}</Tag>
-                    <Text strong style={{ fontSize: 14 }}>{r.name}</Text>
-                    {r.roundType && (
-                      <Tag color={ROUND_TYPE_COLOR[r.roundType] ?? 'default'}>{r.roundType}</Tag>
-                    )}
+                    </Popconfirm>
                   </Space>
-                </Card>
+                </div>
               ))}
             </div>
           ) : (
