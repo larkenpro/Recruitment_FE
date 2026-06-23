@@ -36,6 +36,25 @@ export const createExitRecord = (candidateId, data) => api.post(C(`/${candidateI
 export const updateExitRecord = (candidateId, data) => api.put(C(`/${candidateId}/exit`), data)
 export const deleteExitRecord = (candidateId) => api.delete(C(`/${candidateId}/exit`))
 
+// Offer
+export const getOffer = (candidateId, eventId) =>
+  api.get(`/candidates/${candidateId}/events/${eventId}/offer`)
+export const upsertOffer = (candidateId, eventId, data) =>
+  api.put(`/candidates/${candidateId}/events/${eventId}/offer`, data)
+
+// Documents
+export const getCandidateDocuments = (candidateId) =>
+  api.get(`/candidates/${candidateId}/documents`)
+export const uploadCandidateDocument = (candidateId, file, documentType, description) => {
+  const form = new FormData()
+  form.append('file', file)
+  if (documentType) form.append('documentType', documentType)
+  if (description) form.append('description', description)
+  return api.post(`/candidates/${candidateId}/documents`, form)
+}
+export const deleteCandidateDocument = (candidateId, documentId) =>
+  api.delete(`/candidates/${candidateId}/documents/${documentId}`)
+
 // Public apply — no auth
 // validates token in backend
 export const getApplyForm = (token) =>

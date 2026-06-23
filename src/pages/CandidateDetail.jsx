@@ -2,13 +2,16 @@ import {
   ArrowDownOutlined,
   ArrowUpOutlined,
   BookOutlined,
+  DeleteOutlined,
   DownloadOutlined,
   EditOutlined,
+  EyeOutlined,
   FileTextOutlined,
   GithubOutlined,
   LogoutOutlined,
   MailOutlined,
   PhoneOutlined,
+  PlusOutlined,
   UserOutlined,
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -30,10 +33,12 @@ import {
   Space,
   Statistic,
   Steps,
+  Table,
   Tabs,
   Tag,
   Timeline,
   Typography,
+  Upload,
   message,
 } from 'antd'
 import dayjs from 'dayjs'
@@ -43,15 +48,20 @@ import {
   addStageEntry,
   createExitRecord,
   deleteExitRecord,
+  deleteCandidateDocument,
   getCandidate,
+  getCandidateDocuments,
   getCandidateEvent,
   getCandidateResume,
   getCandidateRoundResults,
   getCandidateStageHistory,
   getExitRecord,
+  getOffer,
   updateCandidate,
   updateExitRecord,
   updateRoundResult,
+  upsertOffer,
+  uploadCandidateDocument,
 } from '../api/candidates'
 import { getEventPositions } from '../api/events'
 import { getErrorMessage } from '../utils/errorUtils'
@@ -71,6 +81,12 @@ export default function CandidateDetail() {
   const [selectedEventId, setSelectedEventId] = useState(null)
   const [exitForm] = Form.useForm()
   const [editingExit, setEditingExit] = useState(false)
+  const [offerForm] = Form.useForm()
+  const [editingOffer, setEditingOffer] = useState(false)
+  const [docUploadOpen, setDocUploadOpen] = useState(false)
+  const [docFile, setDocFile] = useState(null)
+  const [docForm] = Form.useForm()
+  const [viewingDoc, setViewingDoc] = useState(null)
 
   const movePosition = (index, dir) => {
     const next = index + dir
@@ -102,6 +118,22 @@ export default function CandidateDetail() {
       getExitRecord(id)
         .then((r) => r.data.data)
         .catch((e) => (e.response?.status === 404 ? null : Promise.reject(e))),
+  })
+
+  const activeEventId = selectedEventId ?? stageHistory?.[0]?.eventId
+
+  const { data: offerData } = useQuery({
+    queryKey: ['offer', id, activeEventId],
+    queryFn: () =>
+      activeEventId
+        ? getOffer(id, activeEventId).then((r) => r.data.data)
+        : null,
+    enabled: !!activeEventId,
+  })
+
+  const { data: documents, isLoading: docsLoading } = useQuery({
+    queryKey: ['documents', id],
+    queryFn: () => getCandidateDocuments(id).then((r) => r.data.data),
   })
 
   const prefMutation = useMutation({
@@ -151,6 +183,38 @@ export default function CandidateDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['exit', id] })
       message.success('Exit record removed')
+    },
+    onError: (err) => message.error(getErrorMessage(err)),
+  })
+
+  const offerMutation = useMutation({
+    mutationFn: (data) => upsertOffer(id, activeEventId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['offer', id, activeEventId] })
+      setEditingOffer(false)
+      message.success('Offer saved!')
+    },
+    onError: (err) => message.error(getErrorMessage(err)),
+  })
+
+  const uploadDocMutation = useMutation({
+    mutationFn: ({ file, documentType, description }) =>
+      uploadCandidateDocument(id, file, documentType, description),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents', id] })
+      setDocUploadOpen(false)
+      setDocFile(null)
+      docForm.resetFields()
+      message.success('Document uploaded!')
+    },
+    onError: (err) => message.error(getErrorMessage(err)),
+  })
+
+  const deleteDocMutation = useMutation({
+    mutationFn: (documentId) => deleteCandidateDocument(id, documentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents', id] })
+      message.success('Document deleted')
     },
     onError: (err) => message.error(getErrorMessage(err)),
   })
@@ -598,7 +662,128 @@ export default function CandidateDetail() {
     })
   }
 
-  for (const stageName of ['Offer', 'Joining', '6 Month Review', '12 Month Retained']) {
+  if (shouldShowStage('Offer')) {
+    pipelineTabs.push({
+      key: 'Offer',
+      label: tabLabel('Offer'),
+      children: (
+        <div>
+          {editingOffer || !offerData ? (
+            <div style={{ maxWidth: 520 }}>
+              <Form
+                form={offerForm}
+                layout="vertical"
+                initialValues={
+                  offerData
+                    ? {
+                        offerDate: offerData.offerDate ? dayjs(offerData.offerDate) : undefined,
+                        location: offerData.location,
+                        offeredPositionId: offerData.offeredPosition?.id,
+                        status: offerData.status,
+                      }
+                    : {}
+                }
+                onFinish={(values) =>
+                  offerMutation.mutate({
+                    ...values,
+                    offerDate: values.offerDate?.format('YYYY-MM-DD') ?? null,
+                  })
+                }
+              >
+                <Row gutter={16}>
+                  <Col xs={24} sm={12}>
+                    <Form.Item name="offerDate" label="Offer Date">
+                      <DatePicker style={{ width: '100%' }} />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <Form.Item name="location" label="Location">
+                      <Select
+                        placeholder="Select location"
+                        allowClear
+                        options={[
+                          { value: 'Gurugram NCR', label: 'Gurugram NCR' },
+                          { value: 'Coimbatore', label: 'Coimbatore' },
+                          { value: 'Both', label: 'Both' },
+                        ]}
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <Form.Item name="offeredPositionId" label="Offered Position">
+                      <Select
+                        placeholder="Select position"
+                        allowClear
+                        options={(candidate.preferredPositions ?? []).map((p) => ({
+                          value: p.id,
+                          label: `${p.title}${p.type ? ` — ${p.type}` : ''}`,
+                        }))}
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <Form.Item name="status" label="Status">
+                      <Select
+                        placeholder="Select status"
+                        allowClear
+                        options={['PENDING', 'ACCEPTED', 'DECLINED', 'WITHDRAWN'].map((v) => ({ value: v }))}
+                      />
+                    </Form.Item>
+                  </Col>
+                </Row>
+                <Space>
+                  <Button type="primary" htmlType="submit" loading={offerMutation.isPending}>
+                    Save Offer
+                  </Button>
+                  {offerData && <Button onClick={() => setEditingOffer(false)}>Cancel</Button>}
+                </Space>
+              </Form>
+            </div>
+          ) : (
+            <div>
+              <Descriptions column={{ xs: 1, sm: 2 }} bordered size="small" style={{ marginBottom: 16 }}>
+                <Descriptions.Item label="Offer Date">
+                  {offerData.offerDate ? new Date(offerData.offerDate).toLocaleDateString() : '—'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Location">
+                  {offerData.location ? <Tag color="blue">{offerData.location}</Tag> : '—'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Offered Position">
+                  {offerData.offeredPosition
+                    ? `${offerData.offeredPosition.title}${offerData.offeredPosition.type ? ` — ${offerData.offeredPosition.type}` : ''}`
+                    : '—'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Status">
+                  {offerData.status ? (
+                    <Tag color={offerData.status === 'ACCEPTED' ? 'green' : offerData.status === 'DECLINED' ? 'red' : 'orange'}>
+                      {offerData.status}
+                    </Tag>
+                  ) : '—'}
+                </Descriptions.Item>
+              </Descriptions>
+              <Button
+                icon={<EditOutlined />}
+                onClick={() => {
+                  offerForm.setFieldsValue({
+                    offerDate: offerData.offerDate ? dayjs(offerData.offerDate) : undefined,
+                    location: offerData.location,
+                    offeredPositionId: offerData.offeredPosition?.id,
+                    status: offerData.status,
+                  })
+                  setEditingOffer(true)
+                }}
+              >
+                Edit
+              </Button>
+            </div>
+          )}
+          {stageDecision('Offer')}
+        </div>
+      ),
+    })
+  }
+
+  for (const stageName of ['Joining', '6 Month Review', '12 Month Retained']) {
     if (shouldShowStage(stageName)) {
       pipelineTabs.push({
         key: stageName,
@@ -916,6 +1101,166 @@ export default function CandidateDetail() {
       >
         <Tabs items={[...pipelineTabs, stageHistoryTab]} />
       </Card>
+
+      {/* ── Documents section ── */}
+      <Card
+        bordered={false}
+        style={{ borderRadius: 12 }}
+        title={<Text strong style={{ fontSize: 15 }}>Documents</Text>}
+        extra={
+          <Button type="primary" icon={<PlusOutlined />} size="small" onClick={() => setDocUploadOpen(true)}>
+            Upload
+          </Button>
+        }
+      >
+        <Table
+          dataSource={documents ?? []}
+          loading={docsLoading}
+          rowKey="id"
+          pagination={false}
+          size="small"
+          locale={{ emptyText: 'No documents uploaded' }}
+          columns={[
+            {
+              title: 'File Name',
+              dataIndex: 'fileName',
+              render: (name) => (
+                <Space>
+                  <FileTextOutlined style={{ color: '#4f46e5' }} />
+                  <Text>{name}</Text>
+                </Space>
+              ),
+            },
+            { title: 'Type', dataIndex: 'documentType', render: (t) => t ? <Tag>{t}</Tag> : '—' },
+            { title: 'Description', dataIndex: 'description', render: (d) => d || '—' },
+            {
+              title: 'Uploaded',
+              dataIndex: 'uploadedAt',
+              render: (d) => d ? new Date(d).toLocaleDateString() : '—',
+            },
+            {
+              title: 'Actions',
+              width: 120,
+              render: (_, record) => {
+                const base = `${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/candidates/${id}/documents/${record.id}`
+                const viewUrl = `${base}/view`
+                const downloadUrl = `${base}/download`
+                return (
+                  <Space>
+                    <Button
+                      size="small"
+                      icon={<EyeOutlined />}
+                      onClick={() => setViewingDoc({ ...record, viewUrl, downloadUrl })}
+                    />
+                    <Button
+                      size="small"
+                      icon={<DownloadOutlined />}
+                      href={downloadUrl}
+                      target="_blank"
+                    />
+                    <Popconfirm
+                      title="Delete this document?"
+                      onConfirm={() => deleteDocMutation.mutate(record.id)}
+                      okText="Yes"
+                      cancelText="No"
+                    >
+                      <Button size="small" danger icon={<DeleteOutlined />} loading={deleteDocMutation.isPending} />
+                    </Popconfirm>
+                  </Space>
+                )
+              },
+            },
+          ]}
+        />
+      </Card>
+
+      {/* ── Document preview modal ── */}
+      <Modal
+        title={
+          <Space>
+            <FileTextOutlined style={{ color: '#4f46e5' }} />
+            <span>{viewingDoc?.fileName}</span>
+            {viewingDoc?.documentType && <Tag>{viewingDoc.documentType}</Tag>}
+          </Space>
+        }
+        open={!!viewingDoc}
+        onCancel={() => setViewingDoc(null)}
+        footer={
+          <Space>
+            <Button icon={<DownloadOutlined />} href={viewingDoc?.downloadUrl} target="_blank">
+              Download
+            </Button>
+            <Button onClick={() => setViewingDoc(null)}>Close</Button>
+          </Space>
+        }
+        width={860}
+        styles={{ body: { padding: 0 } }}
+      >
+        {viewingDoc && (() => {
+          const isPdf = viewingDoc.fileName?.toLowerCase().endsWith('.pdf')
+          return isPdf ? (
+            <iframe
+              src={viewingDoc.viewUrl}
+              style={{ width: '100%', height: 600, border: 'none', display: 'block' }}
+              title={viewingDoc.fileName}
+            />
+          ) : (
+            <div style={{ textAlign: 'center', padding: 48 }}>
+              <FileTextOutlined style={{ fontSize: 48, color: '#9ca3af', marginBottom: 16 }} />
+              <div style={{ color: '#6b7280', marginBottom: 20 }}>
+                Preview is not available for this file type.
+              </div>
+              <Button type="primary" icon={<DownloadOutlined />} href={viewingDoc.downloadUrl} target="_blank">
+                Download to view
+              </Button>
+            </div>
+          )
+        })()}
+      </Modal>
+
+      {/* ── Document upload modal ── */}
+      <Modal
+        title="Upload Document"
+        open={docUploadOpen}
+        onCancel={() => { setDocUploadOpen(false); setDocFile(null); docForm.resetFields() }}
+        onOk={() =>
+          docForm.validateFields().then((values) =>
+            uploadDocMutation.mutate({ file: docFile, ...values })
+          )
+        }
+        okText="Upload"
+        okButtonProps={{ disabled: !docFile }}
+        confirmLoading={uploadDocMutation.isPending}
+      >
+        <Form form={docForm} layout="vertical" style={{ marginTop: 8 }}>
+          <Form.Item label="File">
+            <Upload
+              beforeUpload={(file) => { setDocFile(file); return false }}
+              maxCount={1}
+              onRemove={() => setDocFile(null)}
+            >
+              <Button icon={<PlusOutlined />}>Select File</Button>
+            </Upload>
+          </Form.Item>
+          <Form.Item name="documentType" label="Document Type">
+            <Select
+              placeholder="Select type"
+              allowClear
+              options={[
+                'Offer Letter',
+                'Appointment Letter',
+                'ID Proof',
+                'Educational Certificate',
+                'Experience Letter',
+                'Other',
+              ].map((v) => ({ value: v }))}
+            />
+          </Form.Item>
+          <Form.Item name="description" label="Description">
+            <Input.TextArea rows={2} placeholder="Optional description" />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       {/* ── Score entry modal ── */}
       <Modal

@@ -68,6 +68,10 @@ export default function PublicApply() {
   }
 
   const handleSubmit = async (values) => {
+    if (!resumeFile) {
+      setError('Please upload your resume before submitting.')
+      return
+    }
     setLoading(true)
     setError('')
     try {
@@ -189,8 +193,8 @@ export default function PublicApply() {
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12}>
-                  <Form.Item 
-                    name="branch" 
+                  <Form.Item
+                    name="branch"
                     label="Branch"
                     rules={[{ required: true, message: 'Please select your branch!' }]}
                   >
@@ -216,7 +220,11 @@ export default function PublicApply() {
                     />
                   </Form.Item>
                 </Col>
-                
+                <Col xs={24} sm={12}>
+                  <Form.Item name="linkedinLink" label="LinkedIn Profile URL">
+                    <Input placeholder="https://linkedin.com/in/username" size="large" />
+                  </Form.Item>
+                </Col>
               </Row>
               <Button type="primary" size="large" block onClick={() => {
                 form.validateFields(['name', 'email', 'branch']).then(() => setStep(1))
@@ -347,11 +355,6 @@ export default function PublicApply() {
                     <Input placeholder="https://github.com/username" size="large" />
                   </Form.Item>
                 </Col>
-                <Col xs={24} sm={12}>
-                  <Form.Item name="linkedinLink" label="LinkedIn Profile URL">
-                    <Input placeholder="https://linkedin.com/in/username" size="large" />
-                  </Form.Item>
-                </Col>
                 <Col xs={24}>
                   <Form.Item name="leadershipPositions" label="Leadership Positions Held">
                     <Input.TextArea rows={3} placeholder="Class Representative, Coding Club Lead..." size="large" />
@@ -368,8 +371,16 @@ export default function PublicApply() {
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12}>
-                  <Form.Item label="Resume (PDF/DOC)">
-                    <Upload beforeUpload={file => { setResumeFile(file); return false }} maxCount={1} accept=".pdf,.doc,.docx">
+                  <Form.Item
+                    label={<span>Resume (PDF/DOC) <span style={{ color: '#ff4d4f' }}>*</span></span>}
+                    validateStatus={resumeFile ? '' : 'warning'}
+                  >
+                    <Upload
+                      beforeUpload={file => { setResumeFile(file); return false }}
+                      onRemove={() => setResumeFile(null)}
+                      maxCount={1}
+                      accept=".pdf,.doc,.docx"
+                    >
                       <Button icon={<UploadOutlined />} size="large" block>Upload Resume</Button>
                     </Upload>
                   </Form.Item>
