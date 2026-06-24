@@ -401,11 +401,25 @@ export default function EventDetail() {
   const eventRoundScoreMutation = useMutation({
     mutationFn: ({ candidateId, roundId, ...data }) =>
       updateRoundResult(candidateId, Number(id), roundId, data),
-    onSuccess: () => {
+    onSuccess: (_, { candidateId, roundId, result }) => {
       queryClient.invalidateQueries({ queryKey: ['eventRoundResults', id] })
       setEditingEventRound(null)
       eventRoundScoreForm.resetFields()
       message.success('Score saved!')
+
+      if (result === 'FAIL') {
+        roundsDecisionMutation.mutate({ candidateId, eventId: Number(id), stageName: 'Rounds', status: 'REJECTED', ensureStarted: true })
+      } else if (result === 'PASS') {
+        const currentRound = sortedRounds.find((r) => r.id === roundId)
+        const isLast = currentRound?.id === sortedRounds[sortedRounds.length - 1]?.id
+        if (isLast) {
+          const priorRounds = sortedRounds.filter((r) => r.sequence < currentRound.sequence)
+          const allPriorPassed = priorRounds.every((pr) => roundResultMap[pr.id]?.[candidateId]?.result === 'PASS')
+          if (allPriorPassed) {
+            roundsDecisionMutation.mutate({ candidateId, eventId: Number(id), stageName: 'Rounds', status: 'SHORTLISTED', ensureStarted: true })
+          }
+        }
+      }
     },
     onError: (err) => message.error(getErrorMessage(err)),
   })
