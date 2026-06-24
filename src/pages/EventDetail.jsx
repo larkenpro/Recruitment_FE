@@ -66,9 +66,21 @@ import FilterBar from '../components/FilterBar'
 const { Title, Text } = Typography
 
 const CANDIDATE_FILTER_KEYS = [
+  { key: 'branch', label: 'Branch', getVal: (r) => r.branch },
   { key: 'ugCgpa', label: 'CGPA', type: 'min', getVal: (r) => r.ugCgpa },
   { key: 'backlogs', label: 'Backlogs', type: 'max', getVal: (r) => r.backlogs ?? 0 },
   { key: 'resumeStatus', label: 'Resume Result', getVal: (r) => r.resumeStatus },
+]
+
+const ROUND_FILTER_KEYS = [
+  { key: 'branch', label: 'Branch', getVal: (r) => r.branch },
+  { key: 'backlogs', label: 'Backlogs', type: 'max', getVal: (r) => r.backlogs ?? 0 },
+  { key: 'roundsDecision', label: 'Decision', getVal: (r) => r.roundsDecision },
+]
+
+const LATE_STAGE_FILTER_KEYS = [
+  { key: 'branch', label: 'Branch', getVal: (r) => r.branch },
+  { key: 'stageStatus', label: 'Decision', getVal: (r) => r.stageStatus },
 ]
 
 const RESUME_STATUS_OPTIONS = [
@@ -233,6 +245,42 @@ export default function EventDetail() {
       Object.fromEntries(list.map((s) => [s.candidateId, s])),
     ])
   ), [lateStageLists])
+
+  const shortlistedWithRoundsDecision = useMemo(
+    () => shortlistedCandidates.map((c) => ({ ...c, roundsDecision: roundsStageSummaryMap[c.id]?.status ?? null })),
+    [shortlistedCandidates, roundsStageSummaryMap]
+  )
+
+  const {
+    filteredData: filteredShortlisted,
+    filters: roundFilters,
+    setFilter: setRoundFilter,
+    removeFilter: removeRoundFilter,
+    optionMap: rawRoundOptionMap,
+  } = useColumnFilter(shortlistedWithRoundsDecision, ROUND_FILTER_KEYS)
+
+  const roundOptionMap = { ...rawRoundOptionMap, roundsDecision: ROUND_DECISION_OPTIONS }
+
+  const lateStageEnrichedData = useMemo(() => Object.fromEntries(
+    Object.entries(lateStageLists).map(([stage, list]) => [
+      stage,
+      list.map((s) => ({ ...candidateMap[s.candidateId], key: s.candidateId, stageStatus: s.status })).filter((r) => r.id),
+    ])
+  ), [lateStageLists, candidateMap])
+
+  const { filteredData: filteredOfferData, filters: offerFilters, setFilter: setOfferFilter, removeFilter: removeOfferFilter, optionMap: offerOptionMap } = useColumnFilter(lateStageEnrichedData['Offer'], LATE_STAGE_FILTER_KEYS)
+  const { filteredData: filteredJoiningData, filters: joiningFilters, setFilter: setJoiningFilter, removeFilter: removeJoiningFilter, optionMap: joiningOptionMap } = useColumnFilter(lateStageEnrichedData['Joining'], LATE_STAGE_FILTER_KEYS)
+  const { filteredData: filteredSixMonthData, filters: sixMonthFilters, setFilter: setSixMonthFilter, removeFilter: removeSixMonthFilter, optionMap: sixMonthOptionMap } = useColumnFilter(lateStageEnrichedData['6 Month Review'], LATE_STAGE_FILTER_KEYS)
+  const { filteredData: filteredTwelveMonthData, filters: twelveMonthFilters, setFilter: setTwelveMonthFilter, removeFilter: removeTwelveMonthFilter, optionMap: twelveMonthOptionMap } = useColumnFilter(lateStageEnrichedData['12 Month Retained'], LATE_STAGE_FILTER_KEYS)
+  const { filteredData: filteredExitData, filters: exitFilters, setFilter: setExitFilter, removeFilter: removeExitFilter, optionMap: exitOptionMap } = useColumnFilter(lateStageEnrichedData['Exit'], LATE_STAGE_FILTER_KEYS)
+
+  const lateStageFilterProps = {
+    'Offer': { filteredData: filteredOfferData, filters: offerFilters, setFilter: setOfferFilter, removeFilter: removeOfferFilter, optionMap: { ...offerOptionMap, stageStatus: ROUND_DECISION_OPTIONS } },
+    'Joining': { filteredData: filteredJoiningData, filters: joiningFilters, setFilter: setJoiningFilter, removeFilter: removeJoiningFilter, optionMap: { ...joiningOptionMap, stageStatus: ROUND_DECISION_OPTIONS } },
+    '6 Month Review': { filteredData: filteredSixMonthData, filters: sixMonthFilters, setFilter: setSixMonthFilter, removeFilter: removeSixMonthFilter, optionMap: { ...sixMonthOptionMap, stageStatus: ROUND_DECISION_OPTIONS } },
+    '12 Month Retained': { filteredData: filteredTwelveMonthData, filters: twelveMonthFilters, setFilter: setTwelveMonthFilter, removeFilter: removeTwelveMonthFilter, optionMap: { ...twelveMonthOptionMap, stageStatus: ROUND_DECISION_OPTIONS } },
+    'Exit': { filteredData: filteredExitData, filters: exitFilters, setFilter: setExitFilter, removeFilter: removeExitFilter, optionMap: { ...exitOptionMap, stageStatus: ROUND_DECISION_OPTIONS } },
+  }
 
   const statusMutation = useMutation({
     mutationFn: (status) => updateEventStatus(id, status),
@@ -410,53 +458,60 @@ export default function EventDetail() {
   const LATE_STAGE_NAMES = ['Offer', 'Joining', '6 Month Review', '12 Month Retained', 'Exit']
 
   const renderLateStageTab = (stageName) => {
-    const list = lateStageLists[stageName]
+    const { filteredData, filters, setFilter, removeFilter, optionMap } = lateStageFilterProps[stageName]
     const summaryMap = lateStageSummaryMaps[stageName]
-    const data = (list ?? [])
-      .map((s) => ({ ...candidateMap[s.candidateId], key: s.candidateId, stageStatus: s.status }))
-      .filter((r) => r.id)
-    if (data.length === 0) {
+    const totalCount = (lateStageEnrichedData[stageName] ?? []).length
+    if (totalCount === 0) {
       return <Empty description={`No candidates at the ${stageName} stage yet`} />
     }
     return (
-      <Table
-        dataSource={data}
-        rowKey="key"
-        size="small"
-        pagination={{ pageSize: 10 }}
-        columns={[
-          {
-            title: 'Name',
-            dataIndex: 'name',
-            render: (t, r) => (
-              <a onClick={() => navigate(`/candidates/${r.id}`)}>
-                <strong>{t}</strong>
-              </a>
-            ),
-          },
-          { title: 'Email', dataIndex: 'email' },
-          { title: 'Branch', dataIndex: 'branch', render: (v) => v || '—' },
-          { title: 'UG CGPA', dataIndex: 'ugCgpa', render: (v) => v ?? '—' },
-          {
-            title: 'Decision',
-            render: (_, r) => (
-              <Select
-                size="small"
-                style={{ width: 140 }}
-                value={summaryMap[r.id]?.status ?? null}
-                placeholder="Set decision"
-                loading={pendingPipelineCandidateId === r.id && pipelineDecisionMutation.isPending}
-                disabled={pipelineDecisionMutation.isPending && pendingPipelineCandidateId !== r.id}
-                onChange={(status) => {
-                  setPendingPipelineCandidateId(r.id)
-                  pipelineDecisionMutation.mutate({ candidateId: r.id, eventId: Number(id), stageName, status, ensureStarted: true })
-                }}
-                options={ROUND_DECISION_OPTIONS}
-              />
-            ),
-          },
-        ]}
-      />
+      <>
+        <FilterBar
+          filterKeys={LATE_STAGE_FILTER_KEYS}
+          optionMap={optionMap}
+          filters={filters}
+          setFilter={setFilter}
+          removeFilter={removeFilter}
+        />
+        <Table
+          dataSource={filteredData}
+          rowKey="key"
+          size="small"
+          pagination={{ pageSize: 10 }}
+          columns={[
+            {
+              title: 'Name',
+              dataIndex: 'name',
+              render: (t, r) => (
+                <a onClick={() => navigate(`/candidates/${r.id}`)}>
+                  <strong>{t}</strong>
+                </a>
+              ),
+            },
+            { title: 'Email', dataIndex: 'email' },
+            { title: 'Branch', dataIndex: 'branch', render: (v) => v || '—' },
+            { title: 'UG CGPA', dataIndex: 'ugCgpa', render: (v) => v ?? '—' },
+            {
+              title: 'Decision',
+              render: (_, r) => (
+                <Select
+                  size="small"
+                  style={{ width: 140 }}
+                  value={summaryMap[r.id]?.status ?? null}
+                  placeholder="Set decision"
+                  loading={pendingPipelineCandidateId === r.id && pipelineDecisionMutation.isPending}
+                  disabled={pipelineDecisionMutation.isPending && pendingPipelineCandidateId !== r.id}
+                  onChange={(status) => {
+                    setPendingPipelineCandidateId(r.id)
+                    pipelineDecisionMutation.mutate({ candidateId: r.id, eventId: Number(id), stageName, status, ensureStarted: true })
+                  }}
+                  options={ROUND_DECISION_OPTIONS}
+                />
+              ),
+            },
+          ]}
+        />
+      </>
     )
   }
 
@@ -776,6 +831,18 @@ export default function EventDetail() {
       return <Empty description="No candidates have passed the Resume stage yet" />
     }
 
+    const isLastRound = round.id === sortedRounds[sortedRounds.length - 1]?.id
+    const roundFilterKeys = isLastRound
+      ? ROUND_FILTER_KEYS
+      : ROUND_FILTER_KEYS.filter((k) => k.key !== 'roundsDecision')
+
+    const priorRounds = sortedRounds.filter((r) => r.sequence < round.sequence)
+    const displayCandidates = priorRounds.length === 0
+      ? filteredShortlisted
+      : filteredShortlisted.filter((c) =>
+          priorRounds.every((pr) => roundResultMap[pr.id]?.[c.id]?.result === 'PASS')
+        )
+
     const roundColumns = [
       {
         title: 'Name',
@@ -808,7 +875,7 @@ export default function EventDetail() {
         title: 'Interviewer',
         render: (_, r) => roundResultMap[round.id]?.[r.id]?.interviewer || '—',
       },
-      {
+      ...(isLastRound ? [{
         title: 'Rounds Decision',
         render: (_, r) => (
           <Select
@@ -825,7 +892,7 @@ export default function EventDetail() {
             options={ROUND_DECISION_OPTIONS}
           />
         ),
-      },
+      }] : []),
       {
         title: 'Actions',
         width: 110,
@@ -854,14 +921,17 @@ export default function EventDetail() {
 
     // GD round with assigned groups — render per-group cards
     if (round.roundType === 'GROUP_DISCUSSION' && (groups ?? []).length > 0) {
+      const displayCandidateIds = new Set(displayCandidates.map((c) => c.id))
       const assignedIds = new Set((groups ?? []).flatMap((g) => g.members.map((m) => m.id)))
-      const unassigned = shortlistedCandidates.filter((c) => !assignedIds.has(c.id))
+      const unassigned = displayCandidates.filter((c) => !assignedIds.has(c.id))
 
       return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <>
+          <FilterBar filterKeys={roundFilterKeys} optionMap={roundOptionMap} filters={roundFilters} setFilter={setRoundFilter} removeFilter={removeRoundFilter} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {(groups ?? []).map((group) => {
             const groupData = group.members
-              .filter((m) => shortlistedIds.has(m.id))
+              .filter((m) => displayCandidateIds.has(m.id))
               .map((m) => ({
                 ...(candidateMap[m.id] ?? {}),
                 id: m.id,
@@ -907,19 +977,23 @@ export default function EventDetail() {
               />
             </Card>
           )}
-        </div>
+          </div>
+        </>
       )
     }
 
     // All other rounds — flat table
     return (
-      <Table
-        dataSource={shortlistedCandidates}
-        rowKey="id"
-        size="small"
-        pagination={{ pageSize: 10 }}
-        columns={roundColumns}
-      />
+      <>
+        <FilterBar filterKeys={roundFilterKeys} optionMap={roundOptionMap} filters={roundFilters} setFilter={setRoundFilter} removeFilter={removeRoundFilter} />
+        <Table
+          dataSource={displayCandidates}
+          rowKey="id"
+          size="small"
+          pagination={{ pageSize: 10 }}
+          columns={roundColumns}
+        />
+      </>
     )
   }
 
