@@ -67,6 +67,7 @@ export default function Candidates() {
     const full = await getCandidate(record.id).then(r => r.data.data)
     form.setFieldsValue({
       ...full,
+      linkedinLink: full.linkedInLink,
       collegeId: full.college?.id,
       internshipAvailability: (() => {
         if (!full.internshipAvailability) return null

@@ -91,6 +91,12 @@ const RESUME_STATUS_OPTIONS = [
 
 const ROUND_DECISION_OPTIONS = RESUME_STATUS_OPTIONS
 
+const ROUND_RESULT_OPTIONS = [
+  { value: 'PASS', label: 'Pass' },
+  { value: 'FAIL', label: 'Fail' },
+  { value: 'ON_HOLD', label: 'On Hold' },
+]
+
 const STATUS_COLOR = { UPCOMING: 'blue', ACTIVE: 'green', COMPLETED: 'default', CANCELLED: 'red' }
 const ROUND_TYPE_COLOR = { WRITTEN: 'purple', TECHNICAL: 'blue', HR: 'green', GROUP_DISCUSSION: 'orange', CODING: 'cyan' }
 
@@ -110,8 +116,8 @@ export default function EventDetail() {
   const [groupCount, setGroupCount] = useState(null)
   const [editingGroup, setEditingGroup] = useState(null)
   const [groupForm] = Form.useForm()
-  const [editingEventRound, setEditingEventRound] = useState(null)
-  const [eventRoundScoreForm] = Form.useForm()
+  const [editingRoundId, setEditingRoundId] = useState(null)
+  const [roundTableEdits, setRoundTableEdits] = useState({})
   const [pendingRoundCandidateId, setPendingRoundCandidateId] = useState(null)
   const [pendingPipelineCandidateId, setPendingPipelineCandidateId] = useState(null)
 
@@ -403,8 +409,6 @@ export default function EventDetail() {
       updateRoundResult(candidateId, Number(id), roundId, data),
     onSuccess: (_, { candidateId, roundId, result }) => {
       queryClient.invalidateQueries({ queryKey: ['eventRoundResults', id] })
-      setEditingEventRound(null)
-      eventRoundScoreForm.resetFields()
       message.success('Score saved!')
 
       if (result === 'FAIL') {
@@ -857,6 +861,49 @@ export default function EventDetail() {
           priorRounds.every((pr) => roundResultMap[pr.id]?.[c.id]?.result === 'PASS')
         )
 
+    const isEditing = editingRoundId === round.id
+
+    const updateRoundEdit = (candidateId, field, value) =>
+      setRoundTableEdits((prev) => ({ ...prev, [candidateId]: { ...(prev[candidateId] ?? {}), [field]: value } }))
+
+    const initRoundEdit = () => {
+      const initial = {}
+      displayCandidates.forEach((c) => {
+        const ex = roundResultMap[round.id]?.[c.id]
+        initial[c.id] = {
+          score: ex?.score != null ? Number(ex.score) : null,
+          result: ex?.result ?? null,
+          interviewer: ex?.interviewer ?? null,
+          comments: ex?.comments ?? null,
+        }
+      })
+      setRoundTableEdits(initial)
+      setEditingRoundId(round.id)
+    }
+
+    const handleRoundSave = () => {
+      Object.entries(roundTableEdits).forEach(([cidStr, data]) => {
+        if (data.score != null || data.result != null) {
+          eventRoundScoreMutation.mutate({ candidateId: Number(cidStr), roundId: round.id, ...data })
+        }
+      })
+      setEditingRoundId(null)
+      setRoundTableEdits({})
+    }
+
+    const editControls = (
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12 }}>
+        {isEditing ? (
+          <Space>
+            <Button size="small" onClick={() => { setEditingRoundId(null); setRoundTableEdits({}) }}>Cancel</Button>
+            <Button size="small" type="primary" onClick={handleRoundSave} loading={eventRoundScoreMutation.isPending}>Save</Button>
+          </Space>
+        ) : (
+          <Button size="small" icon={<EditOutlined />} onClick={initRoundEdit}>Edit Scores</Button>
+        )}
+      </div>
+    )
+
     const roundColumns = [
       {
         title: 'Name',
@@ -872,6 +919,17 @@ export default function EventDetail() {
       {
         title: 'Score',
         render: (_, r) => {
+          if (isEditing) return (
+            <InputNumber
+              size="small"
+              style={{ width: 80 }}
+              min={0}
+              max={100}
+              step={0.5}
+              value={roundTableEdits[r.id]?.score ?? null}
+              onChange={(val) => updateRoundEdit(r.id, 'score', val)}
+            />
+          )
           const res = roundResultMap[round.id]?.[r.id]
           return res?.score != null ? String(res.score) : '—'
         },
@@ -879,6 +937,17 @@ export default function EventDetail() {
       {
         title: 'Result',
         render: (_, r) => {
+          if (isEditing) return (
+            <Select
+              size="small"
+              style={{ width: 110 }}
+              value={roundTableEdits[r.id]?.result ?? null}
+              placeholder="—"
+              allowClear
+              options={ROUND_RESULT_OPTIONS}
+              onChange={(val) => updateRoundEdit(r.id, 'result', val ?? null)}
+            />
+          )
           const res = roundResultMap[round.id]?.[r.id]
           if (!res?.result) return <Tag>Pending</Tag>
           const color = res.result === 'PASS' ? 'green' : res.result === 'FAIL' ? 'red' : 'orange'
@@ -887,7 +956,32 @@ export default function EventDetail() {
       },
       {
         title: 'Interviewer',
-        render: (_, r) => roundResultMap[round.id]?.[r.id]?.interviewer || '—',
+        render: (_, r) => {
+          if (isEditing) return (
+            <Input
+              size="small"
+              style={{ width: 130 }}
+              value={roundTableEdits[r.id]?.interviewer ?? ''}
+              onChange={(e) => updateRoundEdit(r.id, 'interviewer', e.target.value || null)}
+            />
+          )
+          return roundResultMap[round.id]?.[r.id]?.interviewer || '—'
+        },
+      },
+      {
+        title: 'Comments',
+        render: (_, r) => {
+          if (isEditing) return (
+            <Input
+              size="small"
+              style={{ width: 160 }}
+              value={roundTableEdits[r.id]?.comments ?? ''}
+              onChange={(e) => updateRoundEdit(r.id, 'comments', e.target.value || null)}
+            />
+          )
+          const val = roundResultMap[round.id]?.[r.id]?.comments
+          return val ? <span title={val}>{val.length > 24 ? val.slice(0, 24) + '…' : val}</span> : '—'
+        },
       },
       ...(isLastRound ? [{
         title: 'Rounds Decision',
@@ -907,30 +1001,6 @@ export default function EventDetail() {
           />
         ),
       }] : []),
-      {
-        title: 'Actions',
-        width: 110,
-        render: (_, r) => {
-          const existing = roundResultMap[round.id]?.[r.id]
-          return (
-            <Button
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => {
-                setEditingEventRound({ candidateId: r.id, candidateName: r.name, roundId: round.id, roundName: round.name })
-                eventRoundScoreForm.setFieldsValue({
-                  score: existing?.score != null ? Number(existing.score) : undefined,
-                  result: existing?.result ?? undefined,
-                  interviewer: existing?.interviewer ?? undefined,
-                  comments: existing?.comments ?? undefined,
-                })
-              }}
-            >
-              {existing?.score == null && existing?.result == null ? 'Enter Score' : 'Edit'}
-            </Button>
-          )
-        },
-      },
     ]
 
     // GD round with assigned groups — render per-group cards
@@ -941,6 +1011,7 @@ export default function EventDetail() {
 
       return (
         <>
+          {editControls}
           <FilterBar filterKeys={roundFilterKeys} optionMap={roundOptionMap} filters={roundFilters} setFilter={setRoundFilter} removeFilter={removeRoundFilter} />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {(groups ?? []).map((group) => {
@@ -999,6 +1070,7 @@ export default function EventDetail() {
     // All other rounds — flat table
     return (
       <>
+        {editControls}
         <FilterBar filterKeys={roundFilterKeys} optionMap={roundOptionMap} filters={roundFilters} setFilter={setRoundFilter} removeFilter={removeRoundFilter} />
         <Table
           dataSource={displayCandidates}
@@ -1366,35 +1438,6 @@ export default function EventDetail() {
         </Form>
       </Modal>
 
-      {/* Round score entry modal */}
-      <Modal
-        title={editingEventRound ? `${editingEventRound.roundName} — ${editingEventRound.candidateName}` : ''}
-        open={!!editingEventRound}
-        onCancel={() => { setEditingEventRound(null); eventRoundScoreForm.resetFields() }}
-        onOk={() =>
-          eventRoundScoreForm.validateFields().then((values) =>
-            eventRoundScoreMutation.mutate({ ...editingEventRound, ...values })
-          )
-        }
-        confirmLoading={eventRoundScoreMutation.isPending}
-        okText="Save"
-        destroyOnClose
-      >
-        <Form form={eventRoundScoreForm} layout="vertical" style={{ marginTop: 8 }}>
-          <Form.Item name="score" label="Score">
-            <InputNumber style={{ width: '100%' }} min={0} max={100} step={0.5} />
-          </Form.Item>
-          <Form.Item name="result" label="Result" rules={[{ required: true, message: 'Select a result' }]}>
-            <Select options={['PASS', 'FAIL', 'ON_HOLD'].map((v) => ({ value: v }))} />
-          </Form.Item>
-          <Form.Item name="interviewer" label="Interviewer">
-            <Input />
-          </Form.Item>
-          <Form.Item name="comments" label="Comments">
-            <Input.TextArea rows={3} />
-          </Form.Item>
-        </Form>
-      </Modal>
 
     </div>
   )

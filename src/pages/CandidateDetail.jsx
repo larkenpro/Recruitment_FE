@@ -8,6 +8,7 @@ import {
   EyeOutlined,
   FileTextOutlined,
   GithubOutlined,
+  LinkedinOutlined,
   LogoutOutlined,
   MailOutlined,
   PhoneOutlined,
@@ -471,7 +472,7 @@ export default function CandidateDetail() {
           <Descriptions.Item label="College">{candidate.college?.name ?? '—'}</Descriptions.Item>
           <Descriptions.Item label="Job Location">{candidate.jobLocation}</Descriptions.Item>
           <Descriptions.Item label="GitHub">{candidate.githubLink ? <a href={candidate.githubLink} target="_blank" rel="noreferrer">{candidate.githubLink}</a> : '—'}</Descriptions.Item>
-          <Descriptions.Item label="LinkedIn">{candidate.linkedinLink ? <a href={candidate.linkedinLink} target="_blank" rel="noreferrer">{candidate.linkedinLink}</a> : '—'}</Descriptions.Item>
+          <Descriptions.Item label="LinkedIn">{candidate.linkedInLink ? <a href={candidate.linkedInLink} target="_blank" rel="noreferrer">{candidate.linkedInLink}</a> : '—'}</Descriptions.Item>
           <Descriptions.Item label="Internship Availability">{candidate.internshipAvailability}</Descriptions.Item>
           <Descriptions.Item label="Leadership Positions" span={2}>{candidate.leadershipPositions}</Descriptions.Item>
         </Descriptions>
@@ -914,6 +915,14 @@ export default function CandidateDetail() {
       value: (
         <a href={candidate.githubLink} target="_blank" rel="noreferrer">
           GitHub
+        </a>
+      ),
+    },
+    candidate.linkedInLink && {
+      icon: <LinkedinOutlined />,
+      value: (
+        <a href={candidate.linkedInLink} target="_blank" rel="noreferrer">
+          LinkedIn
         </a>
       ),
     },
