@@ -3,4 +3,4 @@ services:
     image: rajathhebbark/recruitment-fe:prod
     restart: unless-stopped
     ports:
-      - "3001:80"
+      - "3002:80"
