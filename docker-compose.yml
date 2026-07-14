@@ -1,0 +1,6 @@
+services:
+  recruitment-fe:
+    image: rajathhebbark/recruitment-fe:prod
+    restart: unless-stopped
+    ports:
+      - "3001:80"
