@@ -20,8 +20,8 @@ export default function Login() {
       const res = await api.post('/auth/login', values)
       loginUser(res.data.data)
       navigate('/colleges')
-    } catch {
-      setError('Invalid username or password')
+    } catch (err) {
+      setError(err.response?.data?.message || 'Invalid username or password')
     } finally {
       setLoading(false)
     }

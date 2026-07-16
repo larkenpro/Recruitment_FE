@@ -1,3 +1,4 @@
+import axios from 'axios'
 import { beforeAll, afterAll } from 'vitest'
 
 // In a Node environment, localStorage and window don't exist.
@@ -17,9 +18,15 @@ if (typeof window === 'undefined') {
   global.window = { location: { href: '' } }
 }
 
-// Seed auth token. Override with VITE_TEST_TOKEN env var for a real JWT backend.
-beforeAll(() => {
-  localStorage.setItem('token', import.meta.env.VITE_TEST_TOKEN ?? 'dev-token')
+// Log in against the real backend with the seeded admin account to get a real JWT.
+// Override with VITE_TEST_ADMIN_USERNAME / VITE_TEST_ADMIN_PASSWORD for a different account.
+beforeAll(async () => {
+  const username = import.meta.env.VITE_TEST_ADMIN_USERNAME ?? 'admin'
+  const password = import.meta.env.VITE_TEST_ADMIN_PASSWORD ?? 'j&j.hire'
+
+  const res = await axios.post(`${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/auth/login`, { username, password })
+  localStorage.setItem('token', res.data.data.token)
+  localStorage.setItem('user', JSON.stringify({ username: res.data.data.username, role: res.data.data.role }))
 })
 
 afterAll(() => {
