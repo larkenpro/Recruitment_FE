@@ -10,8 +10,8 @@ const { Header, Sider, Content } = Layout
 
 const menuItems = [
   { key: '/colleges', icon: <BankOutlined />, label: 'Colleges' },
-  { key: '/events', icon: <CalendarOutlined />, label: 'Events' },
   { key: '/positions', icon: <AuditOutlined />, label: 'Positions' },
+  { key: '/events', icon: <CalendarOutlined />, label: 'Events' },
   { key: '/candidates', icon: <TeamOutlined />, label: 'Candidates' },
   { key: '/analytics', icon: <BarChartOutlined />, label: 'Analytics' },
 ]
