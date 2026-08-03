@@ -1,5 +1,6 @@
 services:
   recruitment-fe:
+    build: .
     image: rajathhebbark/recruitment-fe:prod
     restart: unless-stopped
     ports:

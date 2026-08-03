@@ -13,6 +13,7 @@ import EventDetail from './pages/EventDetail'
 import PublicApply from './pages/PublicApply'
 import Analytics from './pages/Analytics'
 import Candidates from './pages/Candidates'
+import StudentDataSheet from './pages/StudentDataSheet'
 
 const queryClient = new QueryClient()
 
@@ -42,6 +43,7 @@ export default function App() {
               <Route path="/positions" element={<P><Positions /></P>} />
               <Route path="/candidates" element={<P><Candidates /></P>} />
               <Route path="/candidates/:id" element={<P><CandidateDetail /></P>} />
+              <Route path="/student-data-sheet" element={<P><StudentDataSheet /></P>} />
               <Route path="/analytics" element={<P><Analytics /></P>} />
             </Routes>
           </BrowserRouter>

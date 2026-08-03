@@ -36,7 +36,6 @@ describe('Candidates API', () => {
     if (!collegeId) return
     const ts = Date.now()
     const res = await createCandidate({
-      username: `test_user_${ts}`,
       name: '_Test Candidate',
       email: `test_${ts}@example.com`,
       collegeId,
@@ -61,7 +60,6 @@ describe('Candidates API', () => {
     if (!createdId || !collegeId) return
     const ts = Date.now()
     const res = await updateCandidate(createdId, {
-      username: `test_user_${ts}`,
       name: '_Test Candidate Updated',
       email: `test_${ts}@example.com`,
       collegeId,

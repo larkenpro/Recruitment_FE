@@ -233,7 +233,6 @@ export default function CandidateDetail() {
 
   const savePrefs = () => {
     prefMutation.mutate({
-      username: candidate.username,
       name: candidate.name,
       email: candidate.email,
       collegeId: candidate.college?.id,
@@ -464,7 +463,6 @@ export default function CandidateDetail() {
       children: (
         <Descriptions column={{ xs: 1, sm: 2 }} bordered size="small">
           <Descriptions.Item label="Full Name">{candidate.name}</Descriptions.Item>
-          <Descriptions.Item label="Username">{candidate.username}</Descriptions.Item>
           <Descriptions.Item label="Email">{candidate.email}</Descriptions.Item>
           <Descriptions.Item label="Phone">{candidate.phone}</Descriptions.Item>
           <Descriptions.Item label="Roll No">{candidate.rollNo}</Descriptions.Item>

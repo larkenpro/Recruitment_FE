@@ -196,11 +196,6 @@ export default function Candidates() {
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="username" label="Username" rules={[{ required: true }]}>
-                <Input disabled />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
               <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email' }]}>
                 <Input />
               </Form.Item>
