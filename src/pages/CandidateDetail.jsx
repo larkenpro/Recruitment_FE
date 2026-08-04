@@ -7,6 +7,7 @@ import {
   EditOutlined,
   EyeOutlined,
   FileTextOutlined,
+  LinkOutlined,
   GithubOutlined,
   LinkedinOutlined,
   LogoutOutlined,
@@ -604,7 +605,41 @@ export default function CandidateDetail() {
     label: tabLabel('Resume'),
     children: (
       <div>
-        {resumeData ? (() => {
+        {resumeData?.sourceUrl ? (() => {
+          // Imported resumes are links, not files. Google Drive renders inline via /preview.
+          const driveId = resumeData.sourceUrl.match(/(?:\/d\/|[?&]id=)([\w-]+)/)?.[1]
+          return (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, padding: '4px 0' }}>
+                <Space>
+                  <LinkOutlined style={{ color: '#4f46e5', fontSize: 16 }} />
+                  <Text strong>External resume link</Text>
+                  <Text type="secondary" style={{ fontSize: 12, wordBreak: 'break-all' }}>{resumeData.sourceUrl}</Text>
+                </Space>
+                <Button size="small" icon={<LinkOutlined />} href={resumeData.sourceUrl} target="_blank" rel="noreferrer">
+                  Open
+                </Button>
+              </div>
+              {driveId ? (
+                <iframe
+                  src={`https://drive.google.com/file/d/${driveId}/preview`}
+                  style={{ width: '100%', height: 640, border: '1px solid #e5e7eb', borderRadius: 8 }}
+                  title="Resume"
+                />
+              ) : (
+                <div style={{ textAlign: 'center', padding: 40, background: '#f9fafb', borderRadius: 8, border: '1px dashed #e5e7eb' }}>
+                  <FileTextOutlined style={{ fontSize: 40, color: '#9ca3af', marginBottom: 12 }} />
+                  <div style={{ color: '#6b7280', marginBottom: 16 }}>
+                    This resume lives outside the system and can&apos;t be previewed here.
+                  </div>
+                  <Button type="primary" icon={<LinkOutlined />} href={resumeData.sourceUrl} target="_blank" rel="noreferrer">
+                    Open Resume
+                  </Button>
+                </div>
+              )}
+            </div>
+          )
+        })() : resumeData ? (() => {
           const isPdf = resumeData.fileName?.toLowerCase().endsWith('.pdf')
           const baseResumeUrl = `${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/candidates/${id}/resume`
           return (

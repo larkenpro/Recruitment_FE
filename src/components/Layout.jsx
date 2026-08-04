@@ -1,7 +1,8 @@
 import { Layout, Menu, Avatar, Badge } from 'antd'
 import {
   DashboardOutlined, BankOutlined, CalendarOutlined,
-  UserOutlined, BarChartOutlined, GiftOutlined, LogoutOutlined, BellOutlined, AuditOutlined, CheckCircleOutlined, TeamOutlined
+  UserOutlined, BarChartOutlined, GiftOutlined, LogoutOutlined, BellOutlined, AuditOutlined, CheckCircleOutlined, TeamOutlined,
+  ImportOutlined
 } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
@@ -13,6 +14,7 @@ const menuItems = [
   { key: '/positions', icon: <AuditOutlined />, label: 'Positions' },
   { key: '/events', icon: <CalendarOutlined />, label: 'Events' },
   { key: '/candidates', icon: <TeamOutlined />, label: 'Candidates' },
+  { key: '/import', icon: <ImportOutlined />, label: 'Import' },
   { key: '/analytics', icon: <BarChartOutlined />, label: 'Analytics' },
 ]
 

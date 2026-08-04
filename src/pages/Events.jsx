@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Card, Table, Button, Modal, Form, Input, Select, Tag, message, Space } from 'antd'
-import { PlusOutlined, LinkOutlined, CopyOutlined, ExperimentOutlined } from '@ant-design/icons'
+import { PlusOutlined, LinkOutlined, CopyOutlined, ExperimentOutlined, ImportOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { getEvents, createEvent, generateLink, updateEventStatus } from '../api/events'
@@ -102,7 +102,12 @@ export default function Events() {
     <>
       <Card
         title="Recruitment Events"
-        extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>Create Event</Button>}
+        extra={
+          <Space>
+            <Button icon={<ImportOutlined />} onClick={() => navigate('/import')}>Import from Excel</Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>Create Event</Button>
+          </Space>
+        }
         bordered={false} style={{ borderRadius: 12 }}
       >
         <FilterBar
