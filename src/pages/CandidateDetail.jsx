@@ -44,7 +44,7 @@ import {
   message,
 } from 'antd'
 import dayjs from 'dayjs'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import {
   addStageEntry,
@@ -56,6 +56,7 @@ import {
   getCandidateEvent,
   getCandidateResume,
   getCandidateRoundResults,
+  getResumeFile,
   getCandidateStageHistory,
   getExitRecord,
   getOffer,
@@ -106,6 +107,20 @@ export default function CandidateDetail() {
     queryKey: ['resume', id],
     queryFn: () => getCandidateResume(id).then((r) => r.data.data),
   })
+
+  // /resume/view requires a JWT, which a plain <iframe src>/<a href> can't send —
+  // fetch the bytes through the authed axios instance and hand the iframe/download
+  // button a blob: URL instead.
+  const [resumeBlobUrl, setResumeBlobUrl] = useState(null)
+  useEffect(() => {
+    if (!resumeData || resumeData.sourceUrl) return
+    let url
+    getResumeFile(id).then((r) => {
+      url = URL.createObjectURL(r.data)
+      setResumeBlobUrl(url)
+    })
+    return () => { if (url) URL.revokeObjectURL(url) }
+  }, [id, resumeData])
   const { data: roundResults } = useQuery({
     queryKey: ['round-results', id],
     queryFn: () => getCandidateRoundResults(id).then((r) => r.data),
@@ -641,7 +656,6 @@ export default function CandidateDetail() {
           )
         })() : resumeData ? (() => {
           const isPdf = resumeData.fileName?.toLowerCase().endsWith('.pdf')
-          const baseResumeUrl = `${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/candidates/${id}/resume`
           return (
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, padding: '4px 0' }}>
@@ -652,13 +666,13 @@ export default function CandidateDetail() {
                     Uploaded: {resumeData.uploadedAt ? new Date(resumeData.uploadedAt).toLocaleDateString() : '—'}
                   </Text>
                 </Space>
-                <Button size="small" icon={<DownloadOutlined />} href={`${baseResumeUrl}/download`} target="_blank">
+                <Button size="small" icon={<DownloadOutlined />} href={resumeBlobUrl} download={resumeData.fileName} disabled={!resumeBlobUrl}>
                   Download
                 </Button>
               </div>
               {isPdf ? (
                 <iframe
-                  src={`${baseResumeUrl}/view`}
+                  src={resumeBlobUrl}
                   style={{ width: '100%', height: 640, border: '1px solid #e5e7eb', borderRadius: 8 }}
                   title={resumeData.fileName}
                 />
@@ -668,7 +682,7 @@ export default function CandidateDetail() {
                   <div style={{ color: '#6b7280', marginBottom: 16 }}>
                     Preview not available for this file type. Download to view.
                   </div>
-                  <Button type="primary" icon={<DownloadOutlined />} href={`${baseResumeUrl}/download`} target="_blank">
+                  <Button type="primary" icon={<DownloadOutlined />} href={resumeBlobUrl} download={resumeData.fileName} disabled={!resumeBlobUrl}>
                     Download Resume
                   </Button>
                 </div>

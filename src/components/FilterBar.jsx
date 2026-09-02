@@ -1,5 +1,5 @@
-import { Select, Tag, Space, InputNumber } from 'antd'
-import { FilterOutlined } from '@ant-design/icons'
+import { Select, Tag, Space, InputNumber, Input } from 'antd'
+import { FilterOutlined, SearchOutlined } from '@ant-design/icons'
 
 export default function FilterBar({ filterKeys, optionMap, filters, setFilter, removeFilter }) {
   const activeTags = Object.entries(filters)
@@ -8,6 +8,21 @@ export default function FilterBar({ filterKeys, optionMap, filters, setFilter, r
     <div style={{ marginBottom: 16 }}>
       <Space wrap>
         {filterKeys.map(({ key, label, type }) => {
+          if (type === 'text') {
+            return (
+              <Input
+                key={key}
+                placeholder={`Search ${label}`}
+                size="small"
+                style={{ width: 180 }}
+                allowClear
+                prefix={<SearchOutlined style={{ color: '#bbb' }} />}
+                value={filters[key] ?? ''}
+                onChange={e => setFilter(key, e.target.value || null)}
+              />
+            )
+          }
+
           if (type === 'min' || type === 'max') {
             const prefix = type === 'min' ? '≥' : '≤'
             return (

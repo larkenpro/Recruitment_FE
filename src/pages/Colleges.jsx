@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getColleges, createCollege, updateCollege } from '../api/colleges'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
+import { EMAIL_RULE, PHONE_RULE } from '../components/validation/rules'
 
 const FILTER_KEYS = [
   { key: 'city',  label: 'City',  getVal: r => r.city },
@@ -113,10 +114,10 @@ export default function Colleges() {
             <Select options={[{ value: 'Tier 1' }, { value: 'Tier 2' }, { value: 'Tier 3' }]} />
           </Form.Item>
           <Form.Item name="contactPerson" label="Contact Person"><Input /></Form.Item>
-          <Form.Item name="collegeEmail" label="College Email" rules={[{ type: 'email', message: 'Enter a valid email' }]}>
+          <Form.Item name="collegeEmail" label="College Email" rules={[EMAIL_RULE]}>
             <Input />
           </Form.Item>
-          <Form.Item name="phoneNumber" label="Phone Number"><Input /></Form.Item>
+          <Form.Item name="phoneNumber" label="Phone Number" rules={[PHONE_RULE]}><Input /></Form.Item>
         </Form>
       </Modal>
     </Card>

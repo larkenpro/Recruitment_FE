@@ -9,8 +9,10 @@ import { getColleges } from '../api/colleges'
 import { getEventPositions } from '../api/events'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
+import { EMAIL_RULE, PHONE_RULE, URL_RULE, requiredRule } from '../components/validation/rules'
 
 const FILTER_KEYS = [
+  { key: 'name',      label: 'Name',     getVal: r => r.name, type: 'text' },
   { key: 'college',  label: 'College',  getVal: r => r.college?.name },
   { key: 'branch',   label: 'Branch',   getVal: r => r.branch },
   { key: 'ugCgpa',   label: 'UG CGPA',  getVal: r => r.ugCgpa,   type: 'min' },
@@ -196,7 +198,7 @@ export default function Candidates() {
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email' }]}>
+              <Form.Item name="email" label="Email" rules={[requiredRule('Email is required'), EMAIL_RULE]}>
                 <Input />
               </Form.Item>
             </Col>
@@ -210,7 +212,7 @@ export default function Candidates() {
           {/* ── Contact & basic ── */}
           <Row gutter={16}>
             <Col span={8}>
-              <Form.Item name="phone" label="Phone">
+              <Form.Item name="phone" label="Phone" rules={[PHONE_RULE]}>
                 <Input />
               </Form.Item>
             </Col>
@@ -240,12 +242,12 @@ export default function Candidates() {
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="githubLink" label="GitHub Link">
+              <Form.Item name="githubLink" label="GitHub Link" rules={[URL_RULE]}>
                 <Input />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="linkedinLink" label="LinkedIn Profile URL">
+              <Form.Item name="linkedinLink" label="LinkedIn Profile URL" rules={[URL_RULE]}>
                 <Input />
               </Form.Item>
             </Col>

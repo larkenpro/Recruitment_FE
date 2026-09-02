@@ -15,6 +15,10 @@ export const getCandidateResume = (id) => api.get(`${import.meta.env.VITE_PUBLIC
 
 const V1 = (path = '') => `${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/candidates${path}`
 
+// Fetches the actual resume bytes through the authed axios instance (the /view and
+// /download endpoints require a JWT, which a plain <iframe>/<a href> can't send).
+export const getResumeFile = (id) => api.get(V1(`/${id}/resume/view`), { responseType: 'blob' })
+
 export const getCandidateRoundResults = (id) => api.get(V1(`/${id}/round-results`))
 export const updateRoundResult = (candidateId, eventId, roundId, data) => api.put(V1(`/${candidateId}/events/${eventId}/rounds/${roundId}`), data)
 export const getCandidateStageHistory = (id) => api.get(V1(`/${id}/stage-history`))

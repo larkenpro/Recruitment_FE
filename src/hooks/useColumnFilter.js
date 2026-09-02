@@ -5,6 +5,7 @@ import { useState, useMemo } from 'react'
  *   { key, label, getVal }               — dropdown (exact string match)
  *   { key, label, type: 'min', getVal }  — single value, row >= value
  *   { key, label, type: 'max', getVal }  — single value, row <= value
+ *   { key, label, type: 'text', getVal } — free-text, case-insensitive substring match
  */
 export function useColumnFilter(data, filterKeys) {
   const [filters, setFilters] = useState({})
@@ -36,6 +37,7 @@ export function useColumnFilter(data, filterKeys) {
         const val = getVal(row)
         if (type === 'min') return filters[key] == null || (val != null && val >= filters[key])
         if (type === 'max') return filters[key] == null || (val != null && val <= filters[key])
+        if (type === 'text') return !filters[key] || String(val ?? '').toLowerCase().includes(filters[key].toLowerCase())
         return filters[key] == null || String(val ?? '') === filters[key]
       })
     )

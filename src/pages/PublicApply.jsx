@@ -4,6 +4,7 @@ import { Form, Input, Select, Button, Card, Row, Col, Typography, Divider, Uploa
 import { UploadOutlined, UserOutlined, BookOutlined, AimOutlined, ArrowUpOutlined, ArrowDownOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { getApplyForm, submitApplication } from '../api/candidates'
 import { getEventPositions } from '../api/events'
+import { EMAIL_RULE, PHONE_RULE, URL_RULE, requiredRule } from '../components/validation/rules'
 
 const { Title, Text } = Typography
 
@@ -148,12 +149,12 @@ export default function PublicApply() {
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12}>
-                  <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email' }]}>
+                  <Form.Item name="email" label="Email" rules={[requiredRule('Email is required'), EMAIL_RULE]}>
                     <Input placeholder="john@example.com" size="large" />
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12}>
-                  <Form.Item name="phone" label="Mobile Number">
+                  <Form.Item name="phone" label="Mobile Number" rules={[PHONE_RULE]}>
                     <Input placeholder="9876543210" size="large" />
                   </Form.Item>
                 </Col>
@@ -191,7 +192,7 @@ export default function PublicApply() {
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12}>
-                  <Form.Item name="linkedinLink" label="LinkedIn Profile URL">
+                  <Form.Item name="linkedinLink" label="LinkedIn Profile URL" rules={[URL_RULE]}>
                     <Input placeholder="https://linkedin.com/in/username" size="large" />
                   </Form.Item>
                 </Col>
@@ -248,7 +249,7 @@ export default function PublicApply() {
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12}>
-                  <Form.Item name="ugCgpa" label="UG CGPA">
+                  <Form.Item name="ugCgpa" label="UG CGPA" rules={[{ required: true, message: 'UG CGPA is required' }]}>
                     <Input type="number" step="0.01" placeholder="8.5" size="large" />
                   </Form.Item>
                 </Col>
@@ -275,7 +276,11 @@ export default function PublicApply() {
               </Row>
               <Row gutter={8}>
                 <Col span={12}><Button size="large" block onClick={() => setStep(0)}>← Back</Button></Col>
-                <Col span={12}><Button type="primary" size="large" block onClick={() => setStep(2)}>Next →</Button></Col>
+                <Col span={12}>
+                  <Button type="primary" size="large" block onClick={() => {
+                    form.validateFields(['ugCgpa']).then(() => setStep(2))
+                  }}>Next →</Button>
+                </Col>
               </Row>
             </div>
 
@@ -321,7 +326,7 @@ export default function PublicApply() {
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12}>
-                  <Form.Item name="githubLink" label="GitHub Link (for Technical BA)">
+                  <Form.Item name="githubLink" label="GitHub Link (for Technical BA)" rules={[URL_RULE]}>
                     <Input placeholder="https://github.com/username" size="large" />
                   </Form.Item>
                 </Col>
