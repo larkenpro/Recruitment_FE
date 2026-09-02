@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Card, Table, Button, Modal, Form, Input, Select, Tag, message } from 'antd'
-import { PlusOutlined, EditOutlined, ExperimentOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, ExperimentOutlined, TeamOutlined, DeleteOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getColleges, createCollege, updateCollege } from '../api/colleges'
 import { useColumnFilter } from '../hooks/useColumnFilter'
@@ -12,11 +12,51 @@ const FILTER_KEYS = [
   { key: 'tier',  label: 'Tier',  getVal: r => r.tier },
 ]
 
+// Additional contacts are stored as a flat string on the college: "name,email,phone"
+// entries joined by ";", in the order they were added — no separate contacts table.
+// ponytail: naive split, breaks if a value itself contains ',' or ';'.
+const parseContacts = (str) =>
+  (str || '')
+    .split(';')
+    .map(s => s.trim())
+    .filter(Boolean)
+    .map(entry => {
+      const [name = '', email = '', phone = ''] = entry.split(',').map(s => s.trim())
+      return { name, email, phone }
+    })
+
+const serializeContacts = (contacts) =>
+  contacts.map(c => [c.name, c.email, c.phone].join(',')).join(';')
+
+// Merges the primary contact fields with the parsed additionalContacts entries
+// into one ordered list of rows for display as a table.
+const buildContactRows = (college) => {
+  const rows = []
+  if (college?.contactPerson || college?.collegeEmail || college?.phoneNumber) {
+    rows.push({ key: 'primary', name: college.contactPerson, email: college.collegeEmail, phone: college.phoneNumber, primary: true })
+  }
+  parseContacts(college?.additionalContacts).forEach((c, i) => rows.push({ key: i, contactIndex: i, ...c }))
+  return rows
+}
+
+const buildCollegeRequestPayload = (college, additionalContacts) => ({
+  name: college.name,
+  city: college.city,
+  state: college.state,
+  tier: college.tier,
+  contactPerson: college.contactPerson,
+  collegeEmail: college.collegeEmail,
+  phoneNumber: college.phoneNumber,
+  additionalContacts,
+})
+
 export default function Colleges() {
   const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
   const [editingCollege, setEditingCollege] = useState(null)
   const [form] = Form.useForm()
+  const [contactsFor, setContactsFor] = useState(null)
+  const [contactForm] = Form.useForm()
 
   const { data: colleges, isLoading } = useQuery({ queryKey: ['colleges'], queryFn: () => getColleges().then(r => r.data.data) })
 
@@ -33,6 +73,29 @@ export default function Colleges() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['colleges'] }); closeModal(); message.success('College updated!') },
     onError: (err) => message.error(err.response?.data?.message || `Failed to update college (${err.response?.status ?? 'network error'})`),
   })
+
+  const contactsMutation = useMutation({
+    mutationFn: ({ id, data }) => updateCollege(id, data),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['colleges'] })
+      setContactsFor(res.data.data)
+      contactForm.resetFields()
+    },
+    onError: (err) => message.error(err.response?.data?.message || `Failed to update contacts (${err.response?.status ?? 'network error'})`),
+  })
+
+  const openContacts = (record) => setContactsFor(record)
+  const closeContacts = () => { setContactsFor(null); contactForm.resetFields() }
+
+  const addContact = (values) => {
+    const updated = [...parseContacts(contactsFor.additionalContacts), values]
+    contactsMutation.mutate({ id: contactsFor.id, data: buildCollegeRequestPayload(contactsFor, serializeContacts(updated)) })
+  }
+
+  const removeContact = (index) => {
+    const updated = parseContacts(contactsFor.additionalContacts).filter((_, i) => i !== index)
+    contactsMutation.mutate({ id: contactsFor.id, data: buildCollegeRequestPayload(contactsFor, serializeContacts(updated)) })
+  }
 
   const fillTestData = () => {
     const colleges = [
@@ -61,18 +124,33 @@ export default function Colleges() {
     else createMutation.mutate(values)
   })
 
+  const contactColumns = [
+    { title: 'Name', dataIndex: 'name', render: v => v || '—' },
+    { title: 'Email', dataIndex: 'email', render: v => v || '—' },
+    { title: 'Phone', dataIndex: 'phone', render: v => v || '—' },
+    {
+      title: '', width: 40, render: (_, record) => record.primary ? null : (
+        <Button
+          size="small" type="text" danger icon={<DeleteOutlined />}
+          onClick={() => removeContact(record.contactIndex)}
+          loading={contactsMutation.isPending}
+        />
+      )
+    },
+  ]
+
   const columns = [
     { title: '#', dataIndex: 'id', width: 60 },
     { title: 'Name', dataIndex: 'name', render: t => <strong>{t}</strong> },
     { title: 'City', dataIndex: 'city' },
     { title: 'State', dataIndex: 'state' },
     { title: 'Tier', dataIndex: 'tier', render: t => <Tag color={t === 'Tier 1' ? 'blue' : t === 'Tier 2' ? 'green' : 'default'}>{t}</Tag> },
-    { title: 'Contact Person', dataIndex: 'contactPerson' },
-    { title: 'Email', dataIndex: 'collegeEmail' },
-    { title: 'Phone', dataIndex: 'phoneNumber' },
     {
-      title: 'Actions', width: 80, render: (_, record) => (
-        <Button icon={<EditOutlined />} size="small" onClick={() => openEdit(record)} />
+      title: 'Actions', width: 120, render: (_, record) => (
+        <>
+          <Button icon={<EditOutlined />} size="small" onClick={() => openEdit(record)} />
+          <Button icon={<TeamOutlined />} size="small" style={{ marginLeft: 8 }} onClick={() => openContacts(record)} />
+        </>
       )
     },
   ]
@@ -117,6 +195,33 @@ export default function Colleges() {
             <Input />
           </Form.Item>
           <Form.Item name="phoneNumber" label="Phone Number"><Input /></Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={`Contacts — ${contactsFor?.name ?? ''}`}
+        open={!!contactsFor}
+        onCancel={closeContacts}
+        footer={null}
+      >
+        <Table
+          dataSource={buildContactRows(contactsFor)}
+          columns={contactColumns}
+          pagination={false}
+          size="small"
+          style={{ marginBottom: 20 }}
+        />
+        <Form form={contactForm} layout="inline" onFinish={addContact} style={{ rowGap: 12, columnGap: 12 }}>
+          <Form.Item name="name" style={{ marginRight: 0 }} rules={[{ required: true, message: 'Name required' }]}>
+            <Input placeholder="Name" />
+          </Form.Item>
+          <Form.Item name="email" style={{ marginRight: 0 }} rules={[{ type: 'email', message: 'Invalid email' }]}>
+            <Input placeholder="Email" />
+          </Form.Item>
+          <Form.Item name="phone" style={{ marginRight: 0 }}>
+            <Input placeholder="Phone" />
+          </Form.Item>
+          <Button type="primary" htmlType="submit" loading={contactsMutation.isPending}>Add Contact</Button>
         </Form>
       </Modal>
     </Card>

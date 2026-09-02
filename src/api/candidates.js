@@ -26,9 +26,7 @@ export const updateStageStatusByName = (candidateId, eventId, stageName, data) =
 export const uploadResume = (candidateId, file) => {
   const form = new FormData()
   form.append('file', file)
-  return axios.post(`${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/candidates/${candidateId}/resume`, form, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  })
+  return api.post(V1(`/${candidateId}/resume`), form)
 }
 
 export const getExitRecord = (candidateId) => api.get(C(`/${candidateId}/exit`))
