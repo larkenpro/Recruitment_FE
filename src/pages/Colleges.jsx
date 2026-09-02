@@ -12,6 +12,9 @@ const FILTER_KEYS = [
   { key: 'tier',  label: 'Tier',  getVal: r => r.tier },
 ]
 
+// Standard phone format: optional leading +, 10-15 digits (E.164-ish, no libphonenumber).
+const PHONE_RULE = { pattern: /^\+?[0-9]{10,15}$/, message: 'Enter a valid phone number' }
+
 // Additional contacts are stored as a flat string on the college: "name,email,phone"
 // entries joined by ";", in the order they were added — no separate contacts table.
 // ponytail: naive split, breaks if a value itself contains ',' or ';'.
@@ -194,7 +197,7 @@ export default function Colleges() {
           <Form.Item name="collegeEmail" label="College Email" rules={[{ type: 'email', message: 'Enter a valid email' }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="phoneNumber" label="Phone Number"><Input /></Form.Item>
+          <Form.Item name="phoneNumber" label="Phone Number" rules={[PHONE_RULE]}><Input /></Form.Item>
         </Form>
       </Modal>
 
@@ -218,7 +221,7 @@ export default function Colleges() {
           <Form.Item name="email" style={{ marginRight: 0 }} rules={[{ type: 'email', message: 'Invalid email' }]}>
             <Input placeholder="Email" />
           </Form.Item>
-          <Form.Item name="phone" style={{ marginRight: 0 }}>
+          <Form.Item name="phone" style={{ marginRight: 0 }} rules={[PHONE_RULE]}>
             <Input placeholder="Phone" />
           </Form.Item>
           <Button type="primary" htmlType="submit" loading={contactsMutation.isPending}>Add Contact</Button>
