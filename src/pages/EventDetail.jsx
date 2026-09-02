@@ -57,7 +57,7 @@ import {
   updateEventStatus,
 } from '../api/events'
 import { getPositions } from '../api/positions'
-import { getCandidateResume, updateRoundResult, addStageEntry, updateStageStatusByName } from '../api/candidates'
+import { getCandidateResume, getResumeFile, updateRoundResult, addStageEntry, updateStageStatusByName } from '../api/candidates'
 import { getErrorMessage } from '../utils/errorUtils'
 import { useStageDecision } from '../hooks/useStageDecision'
 import { useColumnFilter } from '../hooks/useColumnFilter'
@@ -111,7 +111,7 @@ export default function EventDetail() {
   const [roundForm] = Form.useForm()
   const [editRoundForm] = Form.useForm()
   const [positionForm] = Form.useForm()
-  const [resumeModal, setResumeModal] = useState({ open: false, candidateId: null, fileName: null })
+  const [resumeModal, setResumeModal] = useState({ open: false, candidateId: null, fileName: null, blobUrl: null })
   const [pendingCandidateId, setPendingCandidateId] = useState(null)
   const [groupCount, setGroupCount] = useState(null)
   const [editingGroup, setEditingGroup] = useState(null)
@@ -428,13 +428,26 @@ export default function EventDetail() {
     onError: (err) => message.error(getErrorMessage(err)),
   })
 
+  // /resume/view and /resume/download require a JWT, which a plain <iframe src>/<a href>
+  // can't send — fetch the bytes through the authed axios instance and hand the
+  // iframe/download button a blob: URL instead (mirrors CandidateDetail.jsx).
   const handleViewResume = async (candidateId) => {
     try {
       const res = await getCandidateResume(candidateId)
-      setResumeModal({ open: true, candidateId, fileName: res.data.data?.fileName ?? null })
+      const fileName = res.data.data?.fileName ?? null
+      const fileRes = await getResumeFile(candidateId)
+      const blobUrl = URL.createObjectURL(fileRes.data)
+      setResumeModal({ open: true, candidateId, fileName, blobUrl })
     } catch {
       message.error('No resume found for this candidate')
     }
+  }
+
+  const closeResumeModal = () => {
+    setResumeModal((prev) => {
+      if (prev.blobUrl) URL.revokeObjectURL(prev.blobUrl)
+      return { open: false, candidateId: null, fileName: null, blobUrl: null }
+    })
   }
 
   const handleGenerateLink = async () => {
@@ -1382,25 +1395,26 @@ export default function EventDetail() {
             <span>{resumeModal.fileName ?? 'Resume'}</span>
           </Space>
         }
-        onCancel={() => setResumeModal({ open: false, candidateId: null, fileName: null })}
+        onCancel={closeResumeModal}
         footer={[
           <Button
             key="download"
-            href={`${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/candidates/${resumeModal.candidateId}/resume/download`}
-            target="_blank"
+            href={resumeModal.blobUrl}
+            download={resumeModal.fileName}
+            disabled={!resumeModal.blobUrl}
           >
             Download
           </Button>,
-          <Button key="close" type="primary" onClick={() => setResumeModal({ open: false, candidateId: null, fileName: null })}>
+          <Button key="close" type="primary" onClick={closeResumeModal}>
             Close
           </Button>,
         ]}
         width={900}
         styles={{ body: { padding: 0 } }}
       >
-        {resumeModal.candidateId && resumeModal.fileName?.toLowerCase().endsWith('.pdf') ? (
+        {resumeModal.blobUrl && resumeModal.fileName?.toLowerCase().endsWith('.pdf') ? (
           <iframe
-            src={`${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/candidates/${resumeModal.candidateId}/resume/view`}
+            src={resumeModal.blobUrl}
             style={{ width: '100%', height: 620, border: 'none' }}
             title={resumeModal.fileName}
           />

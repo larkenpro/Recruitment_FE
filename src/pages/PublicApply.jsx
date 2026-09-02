@@ -13,6 +13,7 @@ export default function PublicApply() {
   const [form] = Form.useForm()
   const [eventInfo, setEventInfo] = useState(null)
   const [rankedPositions, setRankedPositions] = useState([])
+  const [positionsLoaded, setPositionsLoaded] = useState(false)
 
   const movePosition = (index, dir) => {
     const next = index + dir
@@ -33,7 +34,7 @@ export default function PublicApply() {
         setEventInfo(r.data)
         return getEventPositions(r.data.data.event.id)
       })
-      .then(r => setRankedPositions(r.data.data))
+      .then(r => { setRankedPositions(r.data.data); setPositionsLoaded(true) })
       .catch(() => setError('Invalid or expired link'))
   }, [token])
 
@@ -95,6 +96,12 @@ export default function PublicApply() {
   if (!eventInfo) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <Text>Loading...</Text>
+    </div>
+  )
+
+  if (positionsLoaded && rankedPositions.length === 0) return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f6fa' }}>
+      <Result status="warning" title="No Open Positions" subTitle="This event doesn't have any positions open for applications yet. Please check back later or contact the recruiter." />
     </div>
   )
 
