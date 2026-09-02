@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Card, Col, Row, Statistic, Empty, Spin, Select, Descriptions } from 'antd'
+import { Card, Col, Row, Statistic, Empty, Spin, Select, Descriptions, Table } from 'antd'
 import { UserOutlined, TrophyOutlined, BookOutlined, AimOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -102,6 +102,13 @@ function ConfigurableChart({ candidates, roundResults }) {
   )
 }
 
+const ROUND_RESULT_COLUMNS = [
+  { title: 'Round', dataIndex: 'roundName' },
+  { title: 'Type', dataIndex: 'roundType', render: v => v ?? '—' },
+  { title: 'Score', dataIndex: 'score', render: v => v ?? '—' },
+  { title: 'Result', dataIndex: 'result', render: v => v ?? '—' },
+]
+
 function CandidatePanel({ candidate, rounds }) {
   if (!candidate) return <Empty description="Select a candidate" />
   return (
@@ -117,16 +124,17 @@ function CandidatePanel({ candidate, rounds }) {
       </Descriptions>
 
       {rounds.length > 0 && (
-        <div style={{ marginTop: 16 }}>
+        <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
           {rounds.map(ev => (
-            <div key={ev.eventId} style={{ marginBottom: 12 }}>
-              <div style={{ fontWeight: 600, marginBottom: 4 }}>{ev.collegeName} ({ev.recruitmentYear})</div>
-              {ev.rounds.map(r => (
-                <div key={r.roundId} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                  <span>{r.roundName}</span>
-                  <span>{r.score ?? '—'}</span>
-                </div>
-              ))}
+            <div key={ev.eventId}>
+              <div style={{ fontWeight: 600, marginBottom: 6 }}>{ev.collegeName} ({ev.recruitmentYear})</div>
+              <Table
+                size="small"
+                pagination={false}
+                rowKey="roundId"
+                dataSource={ev.rounds}
+                columns={ROUND_RESULT_COLUMNS}
+              />
             </div>
           ))}
         </div>
@@ -153,7 +161,9 @@ function CandidateCompare({ candidates }) {
     enabled: !!idB,
   })
 
-  const options = candidates.map(c => ({ value: c.id, label: `${c.name} — ${c.college?.name ?? ''}` }))
+  const toOption = c => ({ value: c.id, label: `${c.name} — ${c.college?.name ?? ''}` })
+  const optionsForA = candidates.filter(c => c.id !== idB).map(toOption)
+  const optionsForB = candidates.filter(c => c.id !== idA).map(toOption)
   const filterOption = (input, option) => option.label.toLowerCase().includes(input.toLowerCase())
 
   return (
@@ -162,14 +172,14 @@ function CandidateCompare({ candidates }) {
         <Col xs={24} sm={12}>
           <Select
             showSearch placeholder="Select candidate A" style={{ width: '100%', marginBottom: 16 }}
-            options={options} value={idA} onChange={setIdA} filterOption={filterOption}
+            options={optionsForA} value={idA} onChange={setIdA} filterOption={filterOption}
           />
           <CandidatePanel candidate={candA} rounds={roundsA} />
         </Col>
         <Col xs={24} sm={12}>
           <Select
             showSearch placeholder="Select candidate B" style={{ width: '100%', marginBottom: 16 }}
-            options={options} value={idB} onChange={setIdB} filterOption={filterOption}
+            options={optionsForB} value={idB} onChange={setIdB} filterOption={filterOption}
           />
           <CandidatePanel candidate={candB} rounds={roundsB} />
         </Col>

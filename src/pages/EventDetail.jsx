@@ -1,5 +1,7 @@
 import {
   AppstoreOutlined,
+  ArrowDownOutlined,
+  ArrowUpOutlined,
   CalendarOutlined,
   CopyOutlined,
   DeleteOutlined,
@@ -13,6 +15,7 @@ import {
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  Alert,
   Button,
   Card,
   Col,
@@ -43,6 +46,7 @@ import {
   createRound,
   updateRound,
   deleteRound,
+  reorderRounds,
   generateLink,
   getCandidatesByEvent,
   getEvent,
@@ -328,6 +332,21 @@ export default function EventDetail() {
     onError: (err) => message.error(getErrorMessage(err)),
   })
 
+  const reorderRoundsMutation = useMutation({
+    mutationFn: (roundIds) => reorderRounds(id, roundIds),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['rounds', id] }),
+    onError: (err) => message.error(getErrorMessage(err)),
+  })
+
+  const moveRound = (round, direction) => {
+    const idx = sortedRounds.findIndex((r) => r.id === round.id)
+    const swapIdx = idx + direction
+    if (swapIdx < 0 || swapIdx >= sortedRounds.length) return
+    const reordered = [...sortedRounds]
+    ;[reordered[idx], reordered[swapIdx]] = [reordered[swapIdx], reordered[idx]]
+    reorderRoundsMutation.mutate(reordered.map((r) => r.id))
+  }
+
   const addPositionsMutation = useMutation({
     mutationFn: (positionIds) => addEventPositions(id, positionIds),
     onSuccess: () => {
@@ -451,6 +470,14 @@ export default function EventDetail() {
   }
 
   const handleGenerateLink = async () => {
+    if ((eventPositions?.length ?? 0) === 0) {
+      message.warning('Add at least one position before generating the application link.')
+      return
+    }
+    if ((rounds?.length ?? 0) === 0) {
+      message.warning('Add at least one interview round before generating the application link.')
+      return
+    }
     try {
       const res = await generateLink(Number(id))
       setLink(res.data.data)
@@ -652,7 +679,7 @@ export default function EventDetail() {
           </div>
           {sortedRounds.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 24 }}>
-              {sortedRounds.map((r) => (
+              {sortedRounds.map((r, index) => (
                 <div
                   key={r.id}
                   style={{
@@ -671,6 +698,20 @@ export default function EventDetail() {
                     <Tag color={ROUND_TYPE_COLOR[r.roundType] ?? 'default'} style={{ margin: 0 }}>{r.roundType}</Tag>
                   )}
                   <Space size={4}>
+                    <Button
+                      size="small"
+                      type="text"
+                      icon={<ArrowUpOutlined />}
+                      disabled={index === 0 || reorderRoundsMutation.isPending}
+                      onClick={() => moveRound(r, -1)}
+                    />
+                    <Button
+                      size="small"
+                      type="text"
+                      icon={<ArrowDownOutlined />}
+                      disabled={index === sortedRounds.length - 1 || reorderRoundsMutation.isPending}
+                      onClick={() => moveRound(r, 1)}
+                    />
                     <Button
                       size="small"
                       type="text"
@@ -748,11 +789,17 @@ export default function EventDetail() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
                   <InputNumber
                     min={1}
+                    max={candidates?.length || undefined}
                     placeholder="Number of groups"
                     value={groupCount}
                     onChange={setGroupCount}
                     style={{ width: 160 }}
                   />
+                  {candidates?.length > 0 && (
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      Max {candidates.length} group{candidates.length === 1 ? '' : 's'} ({candidates.length} candidate{candidates.length === 1 ? '' : 's'} in this event)
+                    </Text>
+                  )}
                   {(groups?.length ?? 0) > 0 ? (
                     <Popconfirm
                       title="Regenerate groups?"
@@ -761,12 +808,12 @@ export default function EventDetail() {
                       okText="Regenerate"
                       cancelText="Cancel"
                       okButtonProps={{ danger: true }}
-                      disabled={!groupCount}
+                      disabled={!groupCount || !candidates?.length}
                     >
                       <Button
                         type="primary"
                         loading={generateGroupsMutation.isPending}
-                        disabled={!groupCount}
+                        disabled={!groupCount || !candidates?.length}
                       >
                         Regenerate Groups
                       </Button>
@@ -776,13 +823,15 @@ export default function EventDetail() {
                       type="primary"
                       onClick={() => generateGroupsMutation.mutate(groupCount)}
                       loading={generateGroupsMutation.isPending}
-                      disabled={!groupCount}
+                      disabled={!groupCount || !candidates?.length}
                     >
                       Generate Groups
                     </Button>
                   )}
                 </div>
-                {(groups?.length ?? 0) === 0 ? (
+                {!candidates?.length ? (
+                  <Empty description="No candidates in this event yet — add candidates before generating groups" />
+                ) : (groups?.length ?? 0) === 0 ? (
                   <Empty description="No groups generated yet" />
                 ) : (
                   <Row gutter={[16, 16]}>
@@ -1050,13 +1099,19 @@ export default function EventDetail() {
                   </Space>
                 }
               >
-                <Table
-                  dataSource={groupData}
-                  rowKey="key"
-                  size="small"
-                  pagination={false}
-                  columns={roundColumns}
-                />
+                {groupData.length === 0 ? (
+                  <Text type="secondary" italic style={{ fontSize: 12 }}>
+                    No candidates in this group at this stage
+                  </Text>
+                ) : (
+                  <Table
+                    dataSource={groupData}
+                    rowKey="key"
+                    size="small"
+                    pagination={false}
+                    columns={roundColumns}
+                  />
+                )}
               </Card>
             )
           })}
@@ -1209,8 +1264,25 @@ export default function EventDetail() {
     })),
   ]
 
+  const missingPositions = (eventPositions?.length ?? 0) === 0
+  const missingRounds = sortedRounds.length === 0
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {(missingPositions || missingRounds) && (
+        <Alert
+          type="warning"
+          showIcon
+          message="This event isn't ready to accept applications yet"
+          description={
+            <>
+              {missingPositions && <div>Add at least one position in the Positions tab.</div>}
+              {missingRounds && <div>Add at least one interview round in the Rounds tab.</div>}
+            </>
+          }
+        />
+      )}
+
       {/* Top row */}
       <Row gutter={[16, 16]} align="stretch">
         {/* Event info card */}
@@ -1308,13 +1380,13 @@ export default function EventDetail() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <Text type="secondary" style={{ fontSize: 13 }}>
                 Generate a shareable link for candidates to apply. Only available when the event is{' '}
-                <Tag color="green" style={{ margin: 0 }}>ACTIVE</Tag>.
+                <Tag color="green" style={{ margin: 0 }}>ACTIVE</Tag> and has at least one position and round set up.
               </Text>
               <Button
                 type="primary"
                 icon={<LinkOutlined />}
                 onClick={handleGenerateLink}
-                disabled={event.status !== 'ACTIVE'}
+                disabled={event.status !== 'ACTIVE' || missingPositions || missingRounds}
               >
                 Generate Link
               </Button>

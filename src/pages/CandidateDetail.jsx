@@ -1333,7 +1333,11 @@ export default function CandidateDetail() {
         okText="Save"
       >
         <Form form={scoreForm} layout="vertical" style={{ marginTop: 8 }}>
-          <Form.Item name="score" label="Score">
+          <Form.Item
+            name="score"
+            label="Score"
+            rules={[{ type: 'number', min: 0, max: 100, message: 'Score must be a number between 0 and 100' }]}
+          >
             <InputNumber style={{ width: '100%' }} min={0} max={100} step={0.5} />
           </Form.Item>
           <Form.Item name="result" label="Result" rules={[{ required: true, message: 'Select a result' }]}>

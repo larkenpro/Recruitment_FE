@@ -45,8 +45,20 @@ export function groupAndAggregate(arr, getKey, aggregate) {
 /**
  * Average round-result score grouped by interview round type (e.g. GD, Technical, HR).
  */
+// Fixed display order for the "Average Score by Round Type" chart — round types
+// not listed here (e.g. WRITTEN, CODING) sort alphabetically after these.
+const ROUND_TYPE_ORDER = ['GROUP_DISCUSSION', 'TECHNICAL', 'HR']
+
 export function computeScoreByRoundType(roundResults) {
-  return groupAndAggregate(roundResults, r => r.roundType, items => Number(avg(items, r => r.score)))
+  const byType = groupAndAggregate(roundResults, r => r.roundType, items => Number(avg(items, r => r.score)))
+  return byType.sort((a, b) => {
+    const ai = ROUND_TYPE_ORDER.indexOf(a.name)
+    const bi = ROUND_TYPE_ORDER.indexOf(b.name)
+    if (ai === -1 && bi === -1) return a.name.localeCompare(b.name)
+    if (ai === -1) return 1
+    if (bi === -1) return -1
+    return ai - bi
+  })
 }
 
 /**

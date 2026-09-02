@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { Card, Table, Button, Modal, Form, Input, Select, Tag, message, Space } from 'antd'
-import { PlusOutlined, LinkOutlined, CopyOutlined, ExperimentOutlined, ImportOutlined } from '@ant-design/icons'
+import { PlusOutlined, LinkOutlined, ExperimentOutlined, ImportOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { getEvents, createEvent, generateLink, updateEventStatus } from '../api/events'
+import { getEvents, createEvent, updateEventStatus } from '../api/events'
 import { getColleges } from '../api/colleges'
 import { getPositions } from '../api/positions'
 import { useColumnFilter } from '../hooks/useColumnFilter'
@@ -20,7 +20,6 @@ export default function Events() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
-  const [links, setLinks] = useState({})
   const [form] = Form.useForm()
 
   const { data: events, isLoading } = useQuery({ queryKey: ['events'], queryFn: () => getEvents().then(r => r.data.data) })
@@ -30,7 +29,13 @@ export default function Events() {
 
   const createMutation = useMutation({
     mutationFn: createEvent,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['events'] }); setOpen(false); form.resetFields() },
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['events'] })
+      setOpen(false)
+      form.resetFields()
+      message.success('Event created — add positions and interview rounds to activate it.')
+      navigate(`/events/${res.data.data.id}`)
+    },
     onError: (err) => message.error(getErrorMessage(err)),
   })
 
@@ -52,18 +57,6 @@ export default function Events() {
     })
   }
 
-  const handleGenerateLink = async (eventId) => {
-    try {
-      const res = await generateLink(eventId)
-      setLinks(prev => ({ ...prev, [eventId]: res.data }))
-      message.success('Link generated!')
-    } catch (err) {
-      message.error(getErrorMessage(err))
-    }
-  }
-
-  const handleCopy = (url) => { navigator.clipboard.writeText(url); message.success('Copied!') }
-
   const statusColor = { UPCOMING: 'blue', ACTIVE: 'green', COMPLETED: 'default', CANCELLED: 'red' }
 
   const columns = [
@@ -82,18 +75,9 @@ export default function Events() {
     },
     {
       title: 'Actions', render: (_, r) => (
-        <Space>
-          <Button size="small" icon={<LinkOutlined />}
-            onClick={() => handleGenerateLink(r.id)}
-            disabled={r.status !== 'ACTIVE'}>
-            Generate Link
-          </Button>
-          {links[r.id] && (
-            <Button size="small" icon={<CopyOutlined />} onClick={() => handleCopy(links[r.id].data)}>
-              Copy
-            </Button>
-          )}
-        </Space>
+        <Button size="small" icon={<LinkOutlined />} onClick={() => navigate(`/events/${r.id}`)}>
+          Generate Link
+        </Button>
       )
     },
   ]
