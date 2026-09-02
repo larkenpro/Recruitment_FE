@@ -27,6 +27,29 @@ export function avg(arr, getVal) {
 }
 
 /**
+ * Group an array by a key, then reduce each group to one number.
+ * Returns [{name, value}] sorted by value descending, groups with a null/empty key skipped.
+ */
+export function groupAndAggregate(arr, getKey, aggregate) {
+  const groups = {}
+  arr.forEach(item => {
+    const key = getKey(item)
+    if (key == null || key === '') return
+    ;(groups[key] ??= []).push(item)
+  })
+  return Object.entries(groups)
+    .map(([name, items]) => ({ name, value: aggregate(items) }))
+    .sort((a, b) => b.value - a.value)
+}
+
+/**
+ * Average round-result score grouped by interview round type (e.g. GD, Technical, HR).
+ */
+export function computeScoreByRoundType(roundResults) {
+  return groupAndAggregate(roundResults, r => r.roundType, items => Number(avg(items, r => r.score)))
+}
+
+/**
  * Derive all analytics stats from a flat candidate array.
  * Returns null when the array is empty.
  */

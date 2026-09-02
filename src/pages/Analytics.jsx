@@ -1,15 +1,182 @@
-import { useMemo } from 'react'
-import { Card, Col, Row, Statistic, Empty, Spin } from 'antd'
+import { useMemo, useState } from 'react'
+import { Card, Col, Row, Statistic, Empty, Spin, Select, Descriptions } from 'antd'
 import { UserOutlined, TrophyOutlined, BookOutlined, AimOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from 'recharts'
-import { getCandidates } from '../api/candidates'
-import { computeAnalytics } from '../utils/analyticsHelpers'
+import { getCandidates, getCandidateRoundResults } from '../api/candidates'
+import { getAllRoundResults } from '../api/roundResults'
+import { computeAnalytics, computeScoreByRoundType, groupAndAggregate, avg } from '../utils/analyticsHelpers'
 
 const COLORS = ['#4f46e5', '#7c3aed', '#2563eb', '#0891b2', '#059669', '#d97706', '#dc2626', '#db2777']
+
+const DATA_SOURCES = {
+  candidates: {
+    label: 'Candidates',
+    dimensions: [
+      { key: 'branch', label: 'Branch', get: c => c.branch },
+      { key: 'collegeName', label: 'College', get: c => c.college?.name },
+      { key: 'collegeCity', label: 'College City', get: c => c.college?.city },
+      { key: 'collegeState', label: 'College State', get: c => c.college?.state },
+      { key: 'collegeTier', label: 'College Tier', get: c => c.college?.tier },
+      { key: 'jobLocation', label: 'Job Location', get: c => c.jobLocation },
+    ],
+    metrics: [
+      { key: 'count', label: 'Count', get: null },
+      { key: 'avgCgpa', label: 'Avg UG CGPA', get: c => c.ugCgpa },
+      { key: 'avg10th', label: 'Avg 10th Mark', get: c => c.tenthMark },
+      { key: 'avg12th', label: 'Avg 12th Mark', get: c => c.twelfthMark },
+      { key: 'avgBacklogs', label: 'Avg Backlogs', get: c => c.backlogs },
+    ],
+  },
+  rounds: {
+    label: 'Interview Rounds',
+    dimensions: [
+      { key: 'roundType', label: 'Round Type', get: r => r.roundType },
+      { key: 'collegeName', label: 'College', get: r => r.collegeName },
+      { key: 'recruitmentYear', label: 'Recruitment Year', get: r => r.recruitmentYear },
+    ],
+    metrics: [
+      { key: 'count', label: 'Count', get: null },
+      { key: 'avgScore', label: 'Avg Score', get: r => r.score },
+    ],
+  },
+}
+
+function ConfigurableChart({ candidates, roundResults }) {
+  const [source, setSource] = useState('candidates')
+  const [dimKey, setDimKey] = useState('branch')
+  const [metricKey, setMetricKey] = useState('count')
+
+  const config = DATA_SOURCES[source]
+  const data = source === 'candidates' ? candidates : roundResults
+  const dimension = config.dimensions.find(d => d.key === dimKey) ?? config.dimensions[0]
+  const metric = config.metrics.find(m => m.key === metricKey) ?? config.metrics[0]
+
+  const chartData = useMemo(() => {
+    if (!data.length) return []
+    return groupAndAggregate(
+      data,
+      dimension.get,
+      metric.get ? (items => Number(avg(items, metric.get))) : (items => items.length)
+    )
+  }, [data, dimension, metric])
+
+  const handleSourceChange = (value) => {
+    setSource(value)
+    setDimKey(DATA_SOURCES[value].dimensions[0].key)
+    setMetricKey('count')
+  }
+
+  return (
+    <Card title="Custom Chart" bordered={false} style={{ borderRadius: 12 }}>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+        <Select
+          value={source} onChange={handleSourceChange} style={{ width: 180 }}
+          options={Object.entries(DATA_SOURCES).map(([key, c]) => ({ value: key, label: c.label }))}
+        />
+        <Select
+          value={dimension.key} onChange={setDimKey} style={{ width: 180 }}
+          options={config.dimensions.map(d => ({ value: d.key, label: d.label }))}
+        />
+        <Select
+          value={metric.key} onChange={setMetricKey} style={{ width: 180 }}
+          options={config.metrics.map(m => ({ value: m.key, label: m.label }))}
+        />
+      </div>
+      {chartData.length ? (
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={chartData} layout="vertical" margin={{ left: 160, right: 24 }}>
+            <XAxis type="number" />
+            <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 12 }} />
+            <Tooltip />
+            <Bar dataKey="value" name={metric.label} radius={[0, 4, 4, 0]}>
+              {chartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      ) : <Empty description="No data for this combination" />}
+    </Card>
+  )
+}
+
+function CandidatePanel({ candidate, rounds }) {
+  if (!candidate) return <Empty description="Select a candidate" />
+  return (
+    <div>
+      <Descriptions column={1} size="small" bordered>
+        <Descriptions.Item label="Name">{candidate.name}</Descriptions.Item>
+        <Descriptions.Item label="Branch">{candidate.branch ?? '—'}</Descriptions.Item>
+        <Descriptions.Item label="College">{candidate.college?.name ?? '—'}</Descriptions.Item>
+        <Descriptions.Item label="UG CGPA">{candidate.ugCgpa ?? '—'}</Descriptions.Item>
+        <Descriptions.Item label="10th Mark">{candidate.tenthMark ?? '—'}</Descriptions.Item>
+        <Descriptions.Item label="12th Mark">{candidate.twelfthMark ?? '—'}</Descriptions.Item>
+        <Descriptions.Item label="Backlogs (active/total)">{candidate.arrears ?? 0} / {candidate.backlogs ?? 0}</Descriptions.Item>
+      </Descriptions>
+
+      {rounds.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          {rounds.map(ev => (
+            <div key={ev.eventId} style={{ marginBottom: 12 }}>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>{ev.collegeName} ({ev.recruitmentYear})</div>
+              {ev.rounds.map(r => (
+                <div key={r.roundId} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                  <span>{r.roundName}</span>
+                  <span>{r.score ?? '—'}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CandidateCompare({ candidates }) {
+  const [idA, setIdA] = useState()
+  const [idB, setIdB] = useState()
+
+  const candA = candidates.find(c => c.id === idA)
+  const candB = candidates.find(c => c.id === idB)
+
+  const { data: roundsA = [] } = useQuery({
+    queryKey: ['candidateRoundResults', idA],
+    queryFn: () => getCandidateRoundResults(idA).then(r => r.data),
+    enabled: !!idA,
+  })
+  const { data: roundsB = [] } = useQuery({
+    queryKey: ['candidateRoundResults', idB],
+    queryFn: () => getCandidateRoundResults(idB).then(r => r.data),
+    enabled: !!idB,
+  })
+
+  const options = candidates.map(c => ({ value: c.id, label: `${c.name} — ${c.college?.name ?? ''}` }))
+  const filterOption = (input, option) => option.label.toLowerCase().includes(input.toLowerCase())
+
+  return (
+    <Card title="Compare Candidates" bordered={false} style={{ borderRadius: 12 }}>
+      <Row gutter={16}>
+        <Col xs={24} sm={12}>
+          <Select
+            showSearch placeholder="Select candidate A" style={{ width: '100%', marginBottom: 16 }}
+            options={options} value={idA} onChange={setIdA} filterOption={filterOption}
+          />
+          <CandidatePanel candidate={candA} rounds={roundsA} />
+        </Col>
+        <Col xs={24} sm={12}>
+          <Select
+            showSearch placeholder="Select candidate B" style={{ width: '100%', marginBottom: 16 }}
+            options={options} value={idB} onChange={setIdB} filterOption={filterOption}
+          />
+          <CandidatePanel candidate={candB} rounds={roundsB} />
+        </Col>
+      </Row>
+    </Card>
+  )
+}
 
 export default function Analytics() {
   const { data: candidates = [], isLoading } = useQuery({
@@ -17,7 +184,13 @@ export default function Analytics() {
     queryFn: () => getCandidates().then(r => r.data.data),
   })
 
+  const { data: roundResults = [] } = useQuery({
+    queryKey: ['roundResults'],
+    queryFn: () => getAllRoundResults().then(r => r.data),
+  })
+
   const stats = useMemo(() => computeAnalytics(candidates), [candidates])
+  const scoreByRoundType = useMemo(() => computeScoreByRoundType(roundResults), [roundResults])
 
   if (isLoading) return <Spin size="large" style={{ display: 'block', marginTop: 80, textAlign: 'center' }} />
   if (!stats) return <Empty description="No candidate data available" style={{ marginTop: 80 }} />
@@ -120,6 +293,40 @@ export default function Analytics() {
               </ResponsiveContainer>
             ) : <Empty description="No location data" />}
           </Card>
+        </Col>
+      </Row>
+
+      {/* Exam / round scores */}
+      <Row gutter={16}>
+        <Col xs={24}>
+          <Card title="Average Score by Round Type" bordered={false} style={{ borderRadius: 12 }}>
+            {scoreByRoundType.length ? (
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={scoreByRoundType} layout="vertical" margin={{ left: 160, right: 24 }}>
+                  <XAxis type="number" />
+                  <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 12 }} />
+                  <Tooltip />
+                  <Bar dataKey="value" name="Avg Score" radius={[0, 4, 4, 0]}>
+                    {scoreByRoundType.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <Empty description="No round scores recorded yet" />}
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Configurable graph */}
+      <Row gutter={16}>
+        <Col xs={24}>
+          <ConfigurableChart candidates={candidates} roundResults={roundResults} />
+        </Col>
+      </Row>
+
+      {/* Candidate comparison */}
+      <Row gutter={16}>
+        <Col xs={24}>
+          <CandidateCompare candidates={candidates} />
         </Col>
       </Row>
 
