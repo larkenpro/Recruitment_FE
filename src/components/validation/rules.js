@@ -13,3 +13,18 @@ export const EMAIL_RULE = { type: 'email', message: 'Enter a valid email' }
 export const URL_RULE = { type: 'url', message: 'Enter a valid URL' }
 
 export const requiredRule = (message) => ({ required: true, message })
+
+// Works with both InputNumber (numeric value) and plain Input type="number"
+// (string value) — coerces before comparing, so it doesn't matter which the
+// field uses. Empty/unset is left to a separate requiredRule.
+const rangeRule = (min, max, message) => ({
+  validator: (_, value) => {
+    if (value === undefined || value === null || value === '') return Promise.resolve()
+    const num = Number(value)
+    if (Number.isNaN(num) || num < min || num > max) return Promise.reject(message)
+    return Promise.resolve()
+  },
+})
+
+export const SCORE_RULE = rangeRule(0, 100, 'Score must be between 0 and 100')
+export const CGPA_RULE = rangeRule(0, 10, 'CGPA must be between 0 and 10')

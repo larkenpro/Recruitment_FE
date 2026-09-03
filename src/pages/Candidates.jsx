@@ -9,7 +9,7 @@ import { getColleges } from '../api/colleges'
 import { getEventPositions } from '../api/events'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
-import { EMAIL_RULE, PHONE_RULE, URL_RULE, requiredRule } from '../components/validation/rules'
+import { EMAIL_RULE, PHONE_RULE, URL_RULE, CGPA_RULE, SCORE_RULE, requiredRule } from '../components/validation/rules'
 
 const FILTER_KEYS = [
   { key: 'name',      label: 'Name',     getVal: r => r.name, type: 'text' },
@@ -256,17 +256,17 @@ export default function Candidates() {
           {/* ── Academic ── */}
           <Row gutter={16}>
             <Col span={8}>
-              <Form.Item name="tenthMark" label="10th Mark %">
+              <Form.Item name="tenthMark" label="10th Mark %" rules={[SCORE_RULE]}>
                 <InputNumber style={{ width: '100%' }} min={0} max={100} step={0.01} />
               </Form.Item>
             </Col>
             <Col span={8}>
-              <Form.Item name="twelfthMark" label="12th Mark %">
+              <Form.Item name="twelfthMark" label="12th Mark %" rules={[SCORE_RULE]}>
                 <InputNumber style={{ width: '100%' }} min={0} max={100} step={0.01} />
               </Form.Item>
             </Col>
             <Col span={8}>
-              <Form.Item name="diplomaMark" label="Diploma Mark %">
+              <Form.Item name="diplomaMark" label="Diploma Mark %" rules={[SCORE_RULE]}>
                 <InputNumber style={{ width: '100%' }} min={0} max={100} step={0.01} />
               </Form.Item>
             </Col>
@@ -276,7 +276,7 @@ export default function Candidates() {
               </Form.Item>
             </Col>
             <Col span={8}>
-              <Form.Item name="ugCgpa" label="UG CGPA">
+              <Form.Item name="ugCgpa" label="UG CGPA" rules={[CGPA_RULE]}>
                 <InputNumber style={{ width: '100%' }} min={0} max={10} step={0.01} />
               </Form.Item>
             </Col>
@@ -291,7 +291,7 @@ export default function Candidates() {
               </Form.Item>
             </Col>
             <Col span={8}>
-              <Form.Item name="pgCgpa" label="PG CGPA">
+              <Form.Item name="pgCgpa" label="PG CGPA" rules={[CGPA_RULE]}>
                 <InputNumber style={{ width: '100%' }} min={0} max={10} step={0.01} />
               </Form.Item>
             </Col>

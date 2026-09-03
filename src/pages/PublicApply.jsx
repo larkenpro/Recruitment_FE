@@ -4,7 +4,7 @@ import { Form, Input, Select, Button, Card, Row, Col, Typography, Divider, Uploa
 import { UploadOutlined, UserOutlined, BookOutlined, AimOutlined, ArrowUpOutlined, ArrowDownOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { getApplyForm, submitApplication } from '../api/candidates'
 import { getEventPositions } from '../api/events'
-import { EMAIL_RULE, PHONE_RULE, URL_RULE, requiredRule } from '../components/validation/rules'
+import { EMAIL_RULE, PHONE_RULE, URL_RULE, CGPA_RULE, SCORE_RULE, requiredRule } from '../components/validation/rules'
 
 const { Title, Text } = Typography
 
@@ -231,17 +231,17 @@ export default function PublicApply() {
               </div>
               <Row gutter={16}>
                 <Col xs={24} sm={12}>
-                  <Form.Item name="tenthMark" label="10th Mark %">
+                  <Form.Item name="tenthMark" label="10th Mark %" rules={[SCORE_RULE]}>
                     <Input type="number" step="0.01" placeholder="92.5" size="large" />
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12}>
-                  <Form.Item name="twelfthMark" label="12th Mark %">
+                  <Form.Item name="twelfthMark" label="12th Mark %" rules={[SCORE_RULE]}>
                     <Input type="number" step="0.01" placeholder="88.0" size="large" />
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12}>
-                  <Form.Item name="diplomaMark" label="Diploma Mark % (if applicable)">
+                  <Form.Item name="diplomaMark" label="Diploma Mark % (if applicable)" rules={[SCORE_RULE]}>
                     <Input type="number" step="0.01" placeholder="85.0" size="large" />
                   </Form.Item>
                 </Col>
@@ -256,7 +256,7 @@ export default function PublicApply() {
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12}>
-                  <Form.Item name="ugCgpa" label="UG CGPA" rules={[{ required: true, message: 'UG CGPA is required' }]}>
+                  <Form.Item name="ugCgpa" label="UG CGPA" rules={[{ required: true, message: 'UG CGPA is required' }, CGPA_RULE]}>
                     <Input type="number" step="0.01" placeholder="8.5" size="large" />
                   </Form.Item>
                 </Col>
@@ -266,7 +266,7 @@ export default function PublicApply() {
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12}>
-                  <Form.Item name="pgCgpa" label="PG CGPA (if applicable)">
+                  <Form.Item name="pgCgpa" label="PG CGPA (if applicable)" rules={[CGPA_RULE]}>
                     <Input type="number" step="0.01" placeholder="9.0" size="large" />
                   </Form.Item>
                 </Col>

@@ -69,6 +69,7 @@ import {
 import { getEventPositions } from '../api/events'
 import { getErrorMessage } from '../utils/errorUtils'
 import { PIPELINE_STAGES, useStageDecision } from '../hooks/useStageDecision'
+import { SCORE_RULE } from '../components/validation/rules'
 
 const { Title, Text } = Typography
 const STATUS_COLOR = { SHORTLISTED: 'green', HOLD: 'orange', REJECTED: 'red' }
@@ -1336,7 +1337,7 @@ export default function CandidateDetail() {
           <Form.Item
             name="score"
             label="Score"
-            rules={[{ type: 'number', min: 0, max: 100, message: 'Score must be a number between 0 and 100' }]}
+            rules={[SCORE_RULE]}
           >
             <InputNumber style={{ width: '100%' }} min={0} max={100} step={0.5} />
           </Form.Item>
