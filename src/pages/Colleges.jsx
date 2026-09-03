@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Card, Table, Button, Modal, Form, Input, Select, Tag, message } from 'antd'
-import { PlusOutlined, EditOutlined, ExperimentOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, ExperimentOutlined, DeleteOutlined, TeamOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getColleges, createCollege, updateCollege } from '../api/colleges'
 import { useColumnFilter } from '../hooks/useColumnFilter'
@@ -13,11 +13,36 @@ const FILTER_KEYS = [
   { key: 'tier',  label: 'Tier',  getVal: r => r.tier },
 ]
 
+// contactPerson/collegeEmail/phoneNumber each hold a comma-joined, index-aligned
+// list of values — contact i is {name[i], email[i], phone[i]}.
+const splitList = (s) => (s || '').split(',').map(v => v.trim())
+
+const contactsFromRecord = (r) => {
+  const names = splitList(r?.contactPerson)
+  const emails = splitList(r?.collegeEmail)
+  const phones = splitList(r?.phoneNumber)
+  const count = Math.max(names.length, emails.length, phones.length, 1)
+  return Array.from({ length: count }, (_, i) => ({
+    contactPerson: names[i] || '',
+    collegeEmail: emails[i] || '',
+    phoneNumber: phones[i] || '',
+  }))
+}
+
+const contactsToFields = (contacts) => ({
+  contactPerson: contacts.map(c => c.contactPerson || '').join(','),
+  collegeEmail: contacts.map(c => c.collegeEmail || '').join(','),
+  phoneNumber: contacts.map(c => c.phoneNumber || '').join(','),
+})
+
 export default function Colleges() {
   const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
   const [editingCollege, setEditingCollege] = useState(null)
   const [form] = Form.useForm()
+
+  const [contactsCollege, setContactsCollege] = useState(null)
+  const [contactsForm] = Form.useForm()
 
   const { data: colleges, isLoading } = useQuery({ queryKey: ['colleges'], queryFn: () => getColleges().then(r => r.data.data) })
 
@@ -35,13 +60,19 @@ export default function Colleges() {
     onError: (err) => message.error(err.response?.data?.message || `Failed to update college (${err.response?.status ?? 'network error'})`),
   })
 
+  const updateContactsMutation = useMutation({
+    mutationFn: ({ id, data }) => updateCollege(id, data),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['colleges'] }); closeContactsModal(); message.success('Contacts updated!') },
+    onError: (err) => message.error(err.response?.data?.message || `Failed to update contacts (${err.response?.status ?? 'network error'})`),
+  })
+
   const fillTestData = () => {
     const colleges = [
-      { name: 'IIT Madras', city: 'Chennai', state: 'Tamil Nadu', contactPerson: 'Dr. Ramesh Kumar', collegeEmail: 'placement@iitm.ac.in', phoneNumber: '9876543210' },
-      { name: 'NIT Calicut', city: 'Calicut', state: 'Kerala', contactPerson: 'Prof. Anil Nair', collegeEmail: 'tpo@nitc.ac.in', phoneNumber: '9876543211' },
-      { name: 'CUSAT', city: 'Kochi', state: 'Kerala', contactPerson: 'Dr. Priya Menon', collegeEmail: 'placements@cusat.ac.in', phoneNumber: '9876543212' },
-      { name: 'BITS Pilani', city: 'Pilani', state: 'Rajasthan', contactPerson: 'Prof. Suresh Sharma', collegeEmail: 'cd@bits-pilani.ac.in', phoneNumber: '9876543213' },
-      { name: 'VIT Vellore', city: 'Vellore', state: 'Tamil Nadu', contactPerson: 'Ms. Lakshmi Devi', collegeEmail: 'placements@vit.ac.in', phoneNumber: '9876543214' },
+      { name: 'IIT Madras', city: 'Chennai', state: 'Tamil Nadu' },
+      { name: 'NIT Calicut', city: 'Calicut', state: 'Kerala' },
+      { name: 'CUSAT', city: 'Kochi', state: 'Kerala' },
+      { name: 'BITS Pilani', city: 'Pilani', state: 'Rajasthan' },
+      { name: 'VIT Vellore', city: 'Vellore', state: 'Tamil Nadu' },
     ]
     const tiers = ['Tier 1', 'Tier 2', 'Tier 3']
     const idx = Math.floor(Math.random() * colleges.length)
@@ -58,8 +89,24 @@ export default function Colleges() {
   const closeModal = () => { setOpen(false); setEditingCollege(null); form.resetFields() }
 
   const handleOk = () => form.validateFields().then(values => {
-    if (editingCollege) updateMutation.mutate({ id: editingCollege.id, data: values })
-    else createMutation.mutate(values)
+    if (editingCollege) {
+      const { id, ...base } = editingCollege
+      updateMutation.mutate({ id, data: { ...base, ...values } })
+    } else {
+      createMutation.mutate(values)
+    }
+  })
+
+  const openContacts = (record) => {
+    setContactsCollege(record)
+    contactsForm.setFieldsValue({ contacts: contactsFromRecord(record) })
+  }
+
+  const closeContactsModal = () => { setContactsCollege(null); contactsForm.resetFields() }
+
+  const handleContactsOk = () => contactsForm.validateFields().then(({ contacts }) => {
+    const { id, ...base } = contactsCollege
+    updateContactsMutation.mutate({ id, data: { ...base, ...contactsToFields(contacts) } })
   })
 
   const columns = [
@@ -68,9 +115,16 @@ export default function Colleges() {
     { title: 'City', dataIndex: 'city' },
     { title: 'State', dataIndex: 'state' },
     { title: 'Tier', dataIndex: 'tier', render: t => <Tag color={t === 'Tier 1' ? 'blue' : t === 'Tier 2' ? 'green' : 'default'}>{t}</Tag> },
-    { title: 'Contact Person', dataIndex: 'contactPerson' },
-    { title: 'Email', dataIndex: 'collegeEmail' },
-    { title: 'Phone', dataIndex: 'phoneNumber' },
+    {
+      title: 'Contacts', width: 140, render: (_, record) => {
+        const n = contactsFromRecord(record).filter(c => c.contactPerson || c.collegeEmail || c.phoneNumber).length
+        return (
+          <Button size="small" icon={<TeamOutlined />} onClick={() => openContacts(record)}>
+            {n} contact{n === 1 ? '' : 's'}
+          </Button>
+        )
+      }
+    },
     {
       title: 'Actions', width: 80, render: (_, record) => (
         <Button icon={<EditOutlined />} size="small" onClick={() => openEdit(record)} />
@@ -113,11 +167,62 @@ export default function Colleges() {
           <Form.Item name="tier" label="Tier">
             <Select options={[{ value: 'Tier 1' }, { value: 'Tier 2' }, { value: 'Tier 3' }]} />
           </Form.Item>
-          <Form.Item name="contactPerson" label="Contact Person"><Input /></Form.Item>
-          <Form.Item name="collegeEmail" label="College Email" rules={[EMAIL_RULE]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="phoneNumber" label="Phone Number" rules={[PHONE_RULE]}><Input /></Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={`Contacts — ${contactsCollege?.name ?? ''}`}
+        open={!!contactsCollege}
+        onCancel={closeContactsModal}
+        onOk={handleContactsOk}
+        okText="Save"
+        confirmLoading={updateContactsMutation.isPending}
+        destroyOnClose
+      >
+        <Form form={contactsForm} layout="vertical">
+          <Form.List name="contacts" initialValue={[{}]}>
+            {(fields, { add, remove }) => (
+              <>
+                <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'left', paddingBottom: 8 }}>Contact Person</th>
+                      <th style={{ textAlign: 'left', paddingBottom: 8 }}>Email</th>
+                      <th style={{ textAlign: 'left', paddingBottom: 8 }}>Phone</th>
+                      <th style={{ width: 32 }} />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {fields.map(({ key, name, ...field }) => (
+                      <tr key={key}>
+                        <td style={{ paddingRight: 8, paddingBottom: 8 }}>
+                          <Form.Item {...field} name={[name, 'contactPerson']} noStyle>
+                            <Input placeholder="Contact Person" />
+                          </Form.Item>
+                        </td>
+                        <td style={{ paddingRight: 8, paddingBottom: 8 }}>
+                          <Form.Item {...field} name={[name, 'collegeEmail']} rules={[EMAIL_RULE]} noStyle>
+                            <Input placeholder="Email" />
+                          </Form.Item>
+                        </td>
+                        <td style={{ paddingRight: 8, paddingBottom: 8 }}>
+                          <Form.Item {...field} name={[name, 'phoneNumber']} rules={[PHONE_RULE]} noStyle>
+                            <Input placeholder="Phone" />
+                          </Form.Item>
+                        </td>
+                        <td style={{ paddingBottom: 8 }}>
+                          {fields.length > 1 && (
+                            <Button icon={<DeleteOutlined />} size="small" danger onClick={() => remove(name)} />
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <Button icon={<PlusOutlined />} size="small" onClick={() => add()}>Add Contact</Button>
+              </>
+            )}
+          </Form.List>
         </Form>
       </Modal>
     </Card>
