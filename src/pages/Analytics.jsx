@@ -1,15 +1,15 @@
 import { useMemo, useState } from 'react'
-import { Card, Col, Row, Statistic, Empty, Spin, Select, Descriptions, Table, Button } from 'antd'
+import { Card, Col, Row, Statistic, Empty, Spin, Select, Table, Button, Tag, Space } from 'antd'
 import { UserOutlined, TrophyOutlined, BookOutlined, AimOutlined } from '@ant-design/icons'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueries } from '@tanstack/react-query'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   PieChart, Pie, Cell, Legend,
 } from 'recharts'
 import { getCandidates, getCandidateRoundResults } from '../api/candidates'
 import { getAllRoundResults } from '../api/roundResults'
-import { computeAnalytics, computeScoreByRoundType, groupAndAggregate, avg } from '../utils/analyticsHelpers'
-import { SPACE, GUTTER, RADIUS, FONT_SIZE, INK, useLayoutMetrics } from '../theme'
+import { computeAnalytics, computeScoreByRoundType, groupAndAggregate, avg, buildRoundComparisonRows } from '../utils/analyticsHelpers'
+import { SPACE, GUTTER, RADIUS, FONT_SIZE, FONT_WEIGHT, INK, TEXT, useLayoutMetrics } from '../theme'
 
 const COLORS = ['#4f46e5', '#7c3aed', '#2563eb', '#0891b2', '#059669', '#d97706', '#dc2626', '#db2777']
 
@@ -148,89 +148,115 @@ function ConfigurableChart({ candidates, roundResults }) {
   )
 }
 
-const ROUND_RESULT_COLUMNS = [
-  { title: 'Round', dataIndex: 'roundName' },
-  { title: 'Type', dataIndex: 'roundType', render: v => v ?? '—' },
-  { title: 'Score', dataIndex: 'score', render: v => v ?? '—' },
-  { title: 'Result', dataIndex: 'result', render: v => v ?? '—' },
+const PROFILE_CRITERIA = [
+  { key: 'branch', label: 'Branch', get: c => c.branch },
+  { key: 'college', label: 'College', get: c => c.college?.name },
+  { key: 'ugCgpa', label: 'UG CGPA', get: c => c.ugCgpa },
+  { key: 'tenthMark', label: '10th Mark', get: c => c.tenthMark },
+  { key: 'twelfthMark', label: '12th Mark', get: c => c.twelfthMark },
+  { key: 'backlogs', label: 'Backlogs (active/total)', get: c => `${c.arrears ?? 0} / ${c.backlogs ?? 0}` },
 ]
 
-function CandidatePanel({ candidate, rounds }) {
-  if (!candidate) return <Empty description="Select a candidate" />
-  return (
-    <div>
-      <Descriptions column={1} size="small" bordered>
-        <Descriptions.Item label="Name">{candidate.name}</Descriptions.Item>
-        <Descriptions.Item label="Branch">{candidate.branch ?? '—'}</Descriptions.Item>
-        <Descriptions.Item label="College">{candidate.college?.name ?? '—'}</Descriptions.Item>
-        <Descriptions.Item label="UG CGPA">{candidate.ugCgpa ?? '—'}</Descriptions.Item>
-        <Descriptions.Item label="10th Mark">{candidate.tenthMark ?? '—'}</Descriptions.Item>
-        <Descriptions.Item label="12th Mark">{candidate.twelfthMark ?? '—'}</Descriptions.Item>
-        <Descriptions.Item label="Backlogs (active/total)">{candidate.arrears ?? 0} / {candidate.backlogs ?? 0}</Descriptions.Item>
-      </Descriptions>
+const RESULT_COLOR = { PASS: 'green', FAIL: 'red', ON_HOLD: 'orange' }
 
-      {rounds.length > 0 && (
-        <div style={{ marginTop: SPACE.md, display: 'flex', flexDirection: 'column', gap: SPACE.md }}>
-          {rounds.map(ev => (
-            <div key={ev.eventId}>
-              <div style={{ fontWeight: 600, marginBottom: 6 }}>{ev.collegeName} ({ev.recruitmentYear})</div>
-              <Table
-                size="small"
-                pagination={false}
-                rowKey="roundId"
-                dataSource={ev.rounds}
-                columns={ROUND_RESULT_COLUMNS}
-                scroll={{ x: 'max-content' }}
-              />
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+function RoundCell({ round }) {
+  if (!round) return <span style={{ color: INK.faint }}>—</span>
+  return (
+    <Space size={SPACE.xs} wrap>
+      <span>{round.score ?? '—'}</span>
+      {round.result && <Tag color={RESULT_COLOR[round.result]}>{round.result}</Tag>}
+    </Space>
   )
 }
 
 function CandidateCompare({ candidates }) {
-  const [idA, setIdA] = useState()
-  const [idB, setIdB] = useState()
+  const [selectedIds, setSelectedIds] = useState([])
 
-  const candA = candidates.find(c => c.id === idA)
-  const candB = candidates.find(c => c.id === idB)
-
-  const { data: roundsA = [] } = useQuery({
-    queryKey: ['candidateRoundResults', idA],
-    queryFn: () => getCandidateRoundResults(idA).then(r => r.data),
-    enabled: !!idA,
-  })
-  const { data: roundsB = [] } = useQuery({
-    queryKey: ['candidateRoundResults', idB],
-    queryFn: () => getCandidateRoundResults(idB).then(r => r.data),
-    enabled: !!idB,
+  // One query per selected candidate. Keys match the single-candidate fetches
+  // elsewhere, so switching a candidate in or out usually hits the cache.
+  const roundQueries = useQueries({
+    queries: selectedIds.map(id => ({
+      queryKey: ['candidateRoundResults', id],
+      queryFn: () => getCandidateRoundResults(id).then(r => r.data),
+    })),
   })
 
-  const toOption = c => ({ value: c.id, label: `${c.name} — ${c.college?.name ?? ''}` })
-  const optionsForA = candidates.filter(c => c.id !== idB).map(toOption)
-  const optionsForB = candidates.filter(c => c.id !== idA).map(toOption)
+  const selected = selectedIds
+    .map(id => candidates.find(c => c.id === id))
+    .filter(Boolean)
+
+  const options = candidates.map(c => ({ value: c.id, label: `${c.name} — ${c.college?.name ?? ''}` }))
   const filterOption = (input, option) => option.label.toLowerCase().includes(input.toLowerCase())
 
+  const roundsById = selectedIds.map((id, i) => ({ id, events: roundQueries[i]?.data ?? [] }))
+
+  const profileRows = selected.length
+    ? PROFILE_CRITERIA.map(criterion => ({
+        key: criterion.key,
+        label: criterion.label,
+        type: 'profile',
+        values: Object.fromEntries(selected.map(c => [c.id, criterion.get(c)])),
+      }))
+    : []
+  const rows = [...profileRows, ...buildRoundComparisonRows(roundsById)]
+
+  const columns = [
+    {
+      title: 'Criterion',
+      dataIndex: 'label',
+      key: 'label',
+      width: 220,
+      fixed: 'left',
+      render: (label, row) => (
+        <span style={{ fontWeight: FONT_WEIGHT.semibold, color: row.type === 'round' ? INK.muted : INK.primary }}>
+          {label}
+        </span>
+      ),
+    },
+    ...selected.map(candidate => ({
+      title: candidate.name,
+      key: candidate.id,
+      width: 180,
+      render: (_, row) => {
+        const value = row.values[candidate.id]
+        if (row.type === 'round') return <RoundCell round={value} />
+        return value ?? <span style={{ color: INK.faint }}>—</span>
+      },
+    })),
+  ]
+
   return (
-    <Card title="Compare Candidates" bordered={false} style={{ borderRadius: RADIUS.card }}>
-      <Row gutter={GUTTER}>
-        <Col xs={24} sm={12}>
-          <Select
-            showSearch placeholder="Select candidate A" style={{ width: '100%', marginBottom: SPACE.md }}
-            options={optionsForA} value={idA} onChange={setIdA} filterOption={filterOption}
-          />
-          <CandidatePanel candidate={candA} rounds={roundsA} />
-        </Col>
-        <Col xs={24} sm={12}>
-          <Select
-            showSearch placeholder="Select candidate B" style={{ width: '100%', marginBottom: SPACE.md }}
-            options={optionsForB} value={idB} onChange={setIdB} filterOption={filterOption}
-          />
-          <CandidatePanel candidate={candB} rounds={roundsB} />
-        </Col>
-      </Row>
+    <Card
+      title="Compare Candidates"
+      bordered={false}
+      style={{ borderRadius: RADIUS.card }}
+      extra={selected.length > 0 && (
+        <span style={{ ...TEXT.label }}>{selected.length} selected</span>
+      )}
+    >
+      <Select
+        mode="multiple"
+        showSearch
+        allowClear
+        placeholder="Add candidates to compare"
+        style={{ width: '100%', marginBottom: SPACE.md }}
+        options={options}
+        value={selectedIds}
+        onChange={setSelectedIds}
+        filterOption={filterOption}
+        maxTagCount="responsive"
+      />
+
+      {rows.length ? (
+        <Table
+          size="small"
+          pagination={false}
+          rowKey="key"
+          dataSource={rows}
+          columns={columns}
+          scroll={{ x: 'max-content' }}
+        />
+      ) : <Empty description="Add candidates to compare them side by side" />}
     </Card>
   )
 }

@@ -43,6 +43,38 @@ export function groupAndAggregate(arr, getKey, aggregate) {
 }
 
 /**
+ * Merge any number of candidates' round results into one row per round for a
+ * side-by-side comparison table.
+ *
+ * Rows are keyed on event + round, so a round several candidates sat collapses onto a
+ * single row; `values` holds only the candidates who actually sat it, so a missing id
+ * means "did not attend". Row order follows first appearance, which keeps a candidate's
+ * rounds grouped instead of interleaving by id.
+ *
+ * @param candidateRounds `[{ id, events }]`, where events is the /round-results payload:
+ *   `[{ eventId, collegeName, recruitmentYear, rounds: [{ roundId, roundName, score, result }] }]`
+ * @returns `[{ key, label, type: 'round', values: { [candidateId]: round } }]`
+ */
+export function buildRoundComparisonRows(candidateRounds = []) {
+  const rows = new Map()
+  candidateRounds.forEach(({ id, events = [] }) => {
+    events.forEach(ev => (ev.rounds ?? []).forEach(round => {
+      const key = `${ev.eventId}-${round.roundId}`
+      if (!rows.has(key)) {
+        rows.set(key, {
+          key,
+          label: `${ev.collegeName} (${ev.recruitmentYear}) · ${round.roundName}`,
+          type: 'round',
+          values: {},
+        })
+      }
+      rows.get(key).values[id] = round
+    }))
+  })
+  return [...rows.values()]
+}
+
+/**
  * Average round-result score grouped by interview round type (e.g. GD, Technical, HR).
  */
 // Fixed display order for the "Average Score by Round Type" chart — round types

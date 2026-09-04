@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { tally, avg, computeAnalytics } from '../../utils/analyticsHelpers'
+import { tally, avg, computeAnalytics, buildRoundComparisonRows } from '../../utils/analyticsHelpers'
 
 // ── tally ─────────────────────────────────────────────────────────────────────
 
@@ -221,5 +221,62 @@ describe('computeAnalytics', () => {
       byLocation: expect.any(Array),
       byPosition: expect.any(Array),
     })
+  })
+})
+
+// ── buildRoundComparisonRows ──────────────────────────────────────────────────
+
+describe('buildRoundComparisonRows', () => {
+  const event = (eventId, rounds) => ({
+    eventId,
+    collegeName: 'NIT',
+    recruitmentYear: 2025,
+    rounds,
+  })
+  const round = (roundId, roundName, score, result) => ({ roundId, roundName, score, result })
+
+  it('collapses a round several candidates sat onto one row', () => {
+    const rows = buildRoundComparisonRows([
+      { id: 1, events: [event(1, [round(10, 'Technical', 8, 'PASS')])] },
+      { id: 2, events: [event(1, [round(10, 'Technical', 6, 'FAIL')])] },
+      { id: 3, events: [event(1, [round(10, 'Technical', 9, 'PASS')])] },
+    ])
+    expect(rows).toHaveLength(1)
+    expect(rows[0].values[1].score).toBe(8)
+    expect(rows[0].values[2].score).toBe(6)
+    expect(rows[0].values[3].score).toBe(9)
+    expect(rows[0].label).toBe('NIT (2025) \u00b7 Technical')
+  })
+
+  it('omits candidates who did not sit a round', () => {
+    const rows = buildRoundComparisonRows([
+      { id: 1, events: [event(1, [round(10, 'Technical', 8, 'PASS')])] },
+      { id: 2, events: [event(1, [round(11, 'HR', 7, 'PASS')])] },
+    ])
+    expect(rows).toHaveLength(2)
+    expect(rows.find(r => r.key === '1-10').values).toEqual({ 1: expect.any(Object) })
+    expect(rows.find(r => r.key === '1-11').values).toEqual({ 2: expect.any(Object) })
+  })
+
+  it('does not merge same round ids across different events', () => {
+    const rows = buildRoundComparisonRows([
+      { id: 1, events: [event(1, [round(10, 'Technical', 8, 'PASS')])] },
+      { id: 2, events: [event(2, [round(10, 'Technical', 5, 'FAIL')])] },
+    ])
+    expect(rows).toHaveLength(2)
+  })
+
+  it('scales past two candidates', () => {
+    const rows = buildRoundComparisonRows(
+      [1, 2, 3, 4, 5].map(id => ({ id, events: [event(1, [round(10, 'Technical', id, 'PASS')])] }))
+    )
+    expect(rows).toHaveLength(1)
+    expect(Object.keys(rows[0].values)).toHaveLength(5)
+  })
+
+  it('returns an empty list for no candidates or no rounds', () => {
+    expect(buildRoundComparisonRows([])).toEqual([])
+    expect(buildRoundComparisonRows()).toEqual([])
+    expect(buildRoundComparisonRows([{ id: 1, events: [] }])).toEqual([])
   })
 })
