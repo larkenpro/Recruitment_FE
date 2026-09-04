@@ -53,7 +53,10 @@ export default function Candidates() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['candidates'] }); closeModal(); message.success('Candidate updated!') },
     onError: (err) => {
       if (err.response?.status === 409) {
-        form.setFields([{ name: 'rollNo', errors: [err.response.data.message || 'A candidate with this roll number already exists in the college'] }])
+        // Note: don't name this `message` — it would shadow antd's message API.
+        const conflict = err.response.data?.message || 'That candidate conflicts with an existing one'
+        const field = conflict.toLowerCase().includes('email') ? 'email' : 'rollNo'
+        form.setFields([{ name: field, errors: [conflict] }])
       } else {
         message.error(err.response?.data?.message || 'Failed to update candidate')
       }

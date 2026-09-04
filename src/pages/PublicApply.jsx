@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
-import { Form, Input, Select, Button, Card, Row, Col, Typography, Divider, Upload, Alert, Steps, Result, DatePicker, Tag, Space } from 'antd'
+import { Form, Input, Select, Button, Card, Row, Col, Typography, Divider, Upload, Alert, Steps, Result, DatePicker, Tag, Space, Modal } from 'antd'
 import { UploadOutlined, UserOutlined, BookOutlined, AimOutlined, ArrowUpOutlined, ArrowDownOutlined, ThunderboltOutlined } from '@ant-design/icons'
-import { getApplyForm, submitApplication } from '../api/candidates'
+import { getApplyForm, submitApplication, checkApplication } from '../api/candidates'
 import { getEventPositions } from '../api/events'
 import { EMAIL_RULE, PHONE_RULE, URL_RULE, CGPA_RULE, SCORE_RULE, requiredRule } from '../components/validation/rules'
 import DevOnly from '../components/DevOnly'
@@ -29,6 +29,8 @@ export default function PublicApply() {
   const [loading, setLoading] = useState(false)
   const [resumeFile, setResumeFile] = useState(null)
   const [step, setStep] = useState(0)
+  const [checking, setChecking] = useState(false)
+  const [duplicate, setDuplicate] = useState(null)
 
   useEffect(() => {
     getApplyForm(token)
@@ -43,6 +45,44 @@ export default function PublicApply() {
   useEffect(() => {
     console.log(eventInfo)
   }, [eventInfo]);
+
+  /**
+   * Runs before the candidate leaves step 0. A repeat application is not blocked —
+   * submitting again overwrites the earlier details, so the point is to make that
+   * overwrite a conscious choice rather than something that happens silently.
+   */
+  const handleFirstStepNext = async () => {
+    const values = await form.validateFields(['name', 'email', 'branch'])
+    const rollNo = form.getFieldValue('rollNo')
+    if (!rollNo) { setStep(1); return }
+
+    setChecking(true)
+    try {
+      const { data } = await checkApplication(token, { rollNo, email: values.email })
+      const result = data.data
+      if (result.alreadyApplied || result.sameEmailNewRollNo) {
+        setDuplicate(result)
+        return
+      }
+      setStep(1)
+    } catch (err) {
+      // An expired link is the one hard stop; anything else shouldn't block applying.
+      const message = err.response?.data?.message
+      if (message?.toLowerCase().includes('expired')) setError(message)
+      else setStep(1)
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  const continueWithUpdate = () => {
+    if (duplicate?.prefill) {
+      const { email, ...rest } = duplicate.prefill
+      form.setFieldsValue(rest)
+    }
+    setDuplicate(null)
+    setStep(1)
+  }
 
   const handleSubmit = async (values) => {
     if (!resumeFile) {
@@ -73,7 +113,11 @@ export default function PublicApply() {
       setSubmitted(true)
     } catch (err) {
       if (err.response?.status === 409) {
-        form.setFields([{ name: 'rollNo', errors: [err.response.data.message || 'A candidate with this roll number already exists in the college'] }])
+        // A conflict is now either the roll number or the email — attribute it to the
+        // field the backend actually named, rather than always blaming rollNo.
+        const message = err.response.data?.message || 'That application conflicts with an existing one'
+        const field = message.toLowerCase().includes('email') ? 'email' : 'rollNo'
+        form.setFields([{ name: field, errors: [message] }])
         setStep(0)
       } else {
         setError(err.response?.data?.message || 'Submission failed. Please try again.')
@@ -125,6 +169,68 @@ export default function PublicApply() {
           </Text>
         </div>
 
+        <Modal
+          open={!!duplicate}
+          title={duplicate?.alreadyApplied ? 'You have already applied to this event' : 'Welcome back'}
+          onCancel={() => setDuplicate(null)}
+          footer={duplicate?.alreadyApplied ? [
+            <Button key="cancel" onClick={() => setDuplicate(null)}>Cancel</Button>,
+            <Button key="continue" type="primary" onClick={continueWithUpdate}>
+              Continue and update my application
+            </Button>,
+          ] : [
+            <Button key="cancel" onClick={() => setDuplicate(null)}>Go back</Button>,
+            <Button key="continue" type="primary" onClick={continueWithUpdate}>
+              Yes, that's me — continue
+            </Button>,
+          ]}
+        >
+          {duplicate?.alreadyApplied ? (
+            <>
+              <p>
+                An application for roll number <strong>{form.getFieldValue('rollNo')}</strong> already
+                exists for this event, registered to <strong>{duplicate.maskedEmail}</strong>.
+              </p>
+              {duplicate.emailMatches ? (
+                <p>
+                  Continuing will <strong>replace your previous details and resume</strong> with what you
+                  submit now. Your earlier answers have been filled in below so you only need to change
+                  what's different.
+                </p>
+              ) : (
+                <Alert
+                  type="warning"
+                  showIcon
+                  message="This isn't the email on that application"
+                  description={
+                    "For your privacy we can't show you the existing details. If this is your application, " +
+                    "go back and enter the email you originally applied with. Continuing will still replace " +
+                    "the previous submission."
+                  }
+                />
+              )}
+            </>
+          ) : (
+            <>
+              <p>
+                We already have you registered under roll number <strong>{duplicate?.knownRollNo}</strong> with
+                the email <strong>{duplicate?.maskedEmail}</strong>. Applying now with a new roll number —
+                for a PG intake, for example — updates that same record rather than creating a second one.
+              </p>
+              <Alert
+                type="info"
+                showIcon
+                message="Your details carry over"
+                description={
+                  "Your existing record keeps your earlier marks and history. Fill in the form with your " +
+                  "current details and anything you change will be saved against you. If this email isn't " +
+                  "yours, go back and use your own — it's where every update is sent."
+                }
+              />
+            </>
+          )}
+        </Modal>
+
         <Card bordered={false} style={{ borderRadius: 16, boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }}>
           <Steps current={step} items={steps} style={{ marginBottom: 32 }} />
 
@@ -160,7 +266,12 @@ export default function PublicApply() {
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12}>
-                  <Form.Item name="email" label="Email" rules={[requiredRule('Email is required'), EMAIL_RULE]}>
+                  <Form.Item
+                    name="email"
+                    label="Email"
+                    rules={[requiredRule('Email is required'), EMAIL_RULE]}
+                    extra="All updates about your application are sent here, and this is how you'll sign in later. Use an address you'll keep access to."
+                  >
                     <Input placeholder="john@example.com" size="large" />
                   </Form.Item>
                 </Col>
@@ -208,9 +319,7 @@ export default function PublicApply() {
                   </Form.Item>
                 </Col>
               </Row>
-              <Button type="primary" size="large" block onClick={() => {
-                form.validateFields(['name', 'email', 'branch']).then(() => setStep(1))
-              }}>Next →</Button>
+              <Button type="primary" size="large" block loading={checking} onClick={handleFirstStepNext}>Next →</Button>
             </div>
 
             {/* Step 1 - Academic */}

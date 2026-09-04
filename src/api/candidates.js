@@ -77,3 +77,10 @@ export const submitApplication = (token, data, file) => {
   if (file) form.append('resume', file)
   return axios.post(`${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/apply/${token}`, form)
 }
+
+/**
+ * Pre-flight duplicate check for the public apply form — public, no auth.
+ * Rejects an expired token before any lookup, so it doubles as a liveness check.
+ */
+export const checkApplication = (token, data) =>
+  axios.post(`${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/apply/${token}/check`, data)
