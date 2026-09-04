@@ -1,7 +1,7 @@
 import { Layout, Menu, Avatar, Badge } from 'antd'
 import {
   DashboardOutlined, BankOutlined, CalendarOutlined,
-  UserOutlined, BarChartOutlined, GiftOutlined, LogoutOutlined, BellOutlined, AuditOutlined, CheckCircleOutlined, TeamOutlined,
+  UserOutlined, BarChartOutlined, GiftOutlined, LogoutOutlined, BellOutlined, AuditOutlined, CheckCircleOutlined, TeamOutlined, SettingOutlined,
   ImportOutlined
 } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
@@ -9,13 +9,14 @@ import { useAuth } from '../context/AuthContext'
 
 const { Header, Sider, Content } = Layout
 
-const menuItems = [
-  { key: '/colleges', icon: <BankOutlined />, label: 'Colleges' },
-  { key: '/positions', icon: <AuditOutlined />, label: 'Positions' },
-  { key: '/events', icon: <CalendarOutlined />, label: 'Events' },
-  { key: '/candidates', icon: <TeamOutlined />, label: 'Candidates' },
-  { key: '/import', icon: <ImportOutlined />, label: 'Import' },
-  { key: '/analytics', icon: <BarChartOutlined />, label: 'Analytics' },
+const allMenuItems = [
+  { key: '/colleges', page: 'COLLEGES', icon: <BankOutlined />, label: 'Colleges' },
+  { key: '/positions', page: 'POSITIONS', icon: <AuditOutlined />, label: 'Positions' },
+  { key: '/events', page: 'EVENTS', icon: <CalendarOutlined />, label: 'Events' },
+  { key: '/candidates', page: 'CANDIDATES', icon: <TeamOutlined />, label: 'Candidates' },
+  { key: '/import', page: 'CANDIDATES', icon: <ImportOutlined />, label: 'Import' },
+  { key: '/analytics', page: 'ANALYTICS', icon: <BarChartOutlined />, label: 'Analytics' },
+  { key: '/users', page: 'USER_MANAGEMENT', icon: <SettingOutlined />, label: 'User Management' },
 ]
 
 export default function AppLayout({ children }) {
@@ -24,6 +25,10 @@ export default function AppLayout({ children }) {
   const { logout, user } = useAuth()
 
   const handleLogout = () => { logout(); navigate('/login') }
+
+  const menuItems = allMenuItems
+    .filter((item) => user?.pages?.includes(item.page))
+    .map(({ page, ...rest }) => rest)
 
   const activeMenuKey = menuItems.find((item) => location.pathname.startsWith(item.key))?.key ?? location.pathname
 

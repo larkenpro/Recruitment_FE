@@ -1,4 +1,4 @@
-import { Form, Input, Button, Card, Typography, Alert } from 'antd'
+import { Form, Input, Button, Card, Typography, message } from 'antd'
 import { UserOutlined, LockOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -8,20 +8,18 @@ import api from '../api/axios'
 const { Title, Text } = Typography
 
 export default function Login() {
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const { loginUser } = useAuth()
   const navigate = useNavigate()
 
   const handleSubmit = async (values) => {
     setLoading(true)
-    setError('')
     try {
       const res = await api.post('/auth/login', values)
       loginUser(res.data.data)
       navigate('/colleges')
-    } catch {
-      setError('Invalid username or password')
+    } catch (err) {
+      message.error(err.response?.data?.message || `Login failed (${err.response?.status ?? 'network error'})`)
     } finally {
       setLoading(false)
     }
@@ -35,7 +33,6 @@ export default function Login() {
           <Title level={3} style={{ margin: 0, color: '#4f46e5' }}>Recruitment App</Title>
           <Text type="secondary">Sign in to your account</Text>
         </div>
-        {error && <Alert message={error} type="error" showIcon style={{ marginBottom: 16 }} />}
         <Form layout="vertical" onFinish={handleSubmit}>
           <Form.Item name="username" rules={[{ required: true }]}>
             <Input prefix={<UserOutlined />} placeholder="Username" size="large" />
