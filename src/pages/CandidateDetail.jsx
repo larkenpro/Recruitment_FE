@@ -68,6 +68,7 @@ import {
 } from '../api/candidates'
 import { getEventPositions } from '../api/events'
 import { getErrorMessage } from '../utils/errorUtils'
+import { GUTTER, useLayoutMetrics } from '../theme'
 import { PIPELINE_STAGES, useStageDecision } from '../hooks/useStageDecision'
 import { SCORE_RULE } from '../components/validation/rules'
 
@@ -76,6 +77,7 @@ const STATUS_COLOR = { SHORTLISTED: 'green', HOLD: 'orange', REJECTED: 'red' }
 
 export default function CandidateDetail() {
   const { id } = useParams()
+  const { sectionGap } = useLayoutMetrics()
   const queryClient = useQueryClient()
 
   const [editingPrefs, setEditingPrefs] = useState(false)
@@ -739,7 +741,7 @@ export default function CandidateDetail() {
                   })
                 }
               >
-                <Row gutter={16}>
+                <Row gutter={GUTTER}>
                   <Col xs={24} sm={12}>
                     <Form.Item name="offerDate" label="Offer Date">
                       <DatePicker style={{ width: '100%' }} />
@@ -977,9 +979,9 @@ export default function CandidateDetail() {
   ].filter(Boolean)
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: sectionGap }}>
       {/* ── Top grid ── */}
-      <Row gutter={[16, 16]} align="stretch">
+      <Row gutter={GUTTER} align="stretch">
         {/* Profile card */}
         <Col xs={24} md={8}>
           <Card bordered={false} style={{ borderRadius: 12, height: '100%' }}>
@@ -1176,6 +1178,7 @@ export default function CandidateDetail() {
           rowKey="id"
           pagination={false}
           size="small"
+          scroll={{ x: 'max-content' }}
           locale={{ emptyText: 'No documents uploaded' }}
           columns={[
             {

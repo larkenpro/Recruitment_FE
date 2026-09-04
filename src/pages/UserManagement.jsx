@@ -108,7 +108,7 @@ function UsersTab() {
       extra={<Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>Add User</Button>}
       bordered={false} style={{ borderRadius: 12 }}
     >
-      <Table dataSource={users} columns={columns} rowKey="id" loading={usersLoading} />
+      <Table dataSource={users} columns={columns} rowKey="id" loading={usersLoading} scroll={{ x: 'max-content' }} />
 
       <Modal
         title={editingUser ? 'Edit User' : 'Add User'}
@@ -228,7 +228,7 @@ function RolesTab() {
       extra={<Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>Add Role</Button>}
       bordered={false} style={{ borderRadius: 12 }}
     >
-      <Table dataSource={roles} columns={columns} rowKey="id" loading={rolesLoading} />
+      <Table dataSource={roles} columns={columns} rowKey="id" loading={rolesLoading} scroll={{ x: 'max-content' }} />
 
       <Modal
         title={editingRole ? 'Edit Role' : 'Add Role'}

@@ -230,6 +230,7 @@ export default function ImportCandidates() {
             rowKey="header"
             columns={mappingColumns}
             dataSource={headers.map((header, index) => ({ header, index }))}
+            scroll={{ x: 'max-content' }}
           />
           <Space style={{ marginTop: 16 }} align="center">
             <Text>Percentage → CGPA divisor</Text>
@@ -338,6 +339,7 @@ export default function ImportCandidates() {
                 columns={[...failureColumns.slice(0, 2), { title: 'Correction', dataIndex: 'reason' }]}
                 dataSource={corrections}
                 pagination={{ pageSize: 5 }}
+                scroll={{ x: 'max-content' }}
               />
             </>
           )}
@@ -355,6 +357,7 @@ export default function ImportCandidates() {
                 columns={failureColumns}
                 dataSource={failures}
                 pagination={{ pageSize: 10 }}
+                scroll={{ x: 'max-content' }}
               />
             </>
           )}

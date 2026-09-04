@@ -1,16 +1,67 @@
 import { useMemo, useState } from 'react'
-import { Card, Col, Row, Statistic, Empty, Spin, Select, Descriptions, Table } from 'antd'
+import { Card, Col, Row, Statistic, Empty, Spin, Select, Descriptions, Table, Button } from 'antd'
 import { UserOutlined, TrophyOutlined, BookOutlined, AimOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   PieChart, Pie, Cell, Legend,
 } from 'recharts'
 import { getCandidates, getCandidateRoundResults } from '../api/candidates'
 import { getAllRoundResults } from '../api/roundResults'
 import { computeAnalytics, computeScoreByRoundType, groupAndAggregate, avg } from '../utils/analyticsHelpers'
+import { SPACE, GUTTER, RADIUS, FONT_SIZE, INK, useLayoutMetrics } from '../theme'
 
 const COLORS = ['#4f46e5', '#7c3aed', '#2563eb', '#0891b2', '#059669', '#d97706', '#dc2626', '#db2777']
+
+// One hue for every bar: these are single-series charts, so a per-bar colour would
+// encode rank rather than identity — noise that gets worse the more bars there are.
+const BAR_COLOR = INK.brand
+const ROW_HEIGHT = 26
+const TOP_N = 12
+
+const truncateLabel = (s, max = 24) => (s.length > max ? `${s.slice(0, max - 1)}…` : s)
+
+/**
+ * Horizontal bar chart that stays readable from 3 to 50+ categories: the plot grows
+ * with the row count instead of squeezing bars into a fixed height, and long lists
+ * collapse to the top N until expanded. Data is expected pre-sorted descending.
+ */
+function CategoryBarChart({ data, seriesName, labelWidth = 170, allowDecimals = true, empty }) {
+  const [showAll, setShowAll] = useState(false)
+  const { isNarrow: isMobile } = useLayoutMetrics()
+
+  if (!data.length) return empty ?? <Empty />
+
+  const collapsed = data.length > TOP_N && !showAll
+  const shown = collapsed ? data.slice(0, TOP_N) : data
+  // A 170px label gutter eats half a phone screen, so shrink the axis and
+  // truncate harder rather than leaving no room for the bars themselves.
+  const axisWidth = isMobile ? 92 : labelWidth
+  const maxLabel = isMobile ? 12 : 24
+
+  return (
+    <>
+      <ResponsiveContainer width="100%" height={shown.length * ROW_HEIGHT + 44}>
+        <BarChart data={shown} layout="vertical" margin={{ left: 0, right: isMobile ? 12 : 32, top: 4, bottom: 4 }}>
+          <CartesianGrid horizontal={false} stroke="#eef0f4" />
+          <XAxis type="number" allowDecimals={allowDecimals} tick={{ fontSize: FONT_SIZE.caption, fill: INK.faint }} />
+          <YAxis
+            type="category" dataKey="name" width={axisWidth}
+            tick={{ fontSize: isMobile ? FONT_SIZE.caption : FONT_SIZE.small, fill: INK.secondary }} tickLine={false} axisLine={false}
+            tickFormatter={(v) => truncateLabel(v, maxLabel)}
+          />
+          <Tooltip cursor={{ fill: 'rgba(79, 70, 229, 0.06)' }} />
+          <Bar dataKey="value" name={seriesName} fill={BAR_COLOR} radius={[0, 4, 4, 0]} barSize={14} />
+        </BarChart>
+      </ResponsiveContainer>
+      {data.length > TOP_N && (
+        <Button type="link" size="small" style={{ paddingLeft: 0 }} onClick={() => setShowAll(!showAll)}>
+          {collapsed ? `Show all ${data.length}` : `Show top ${TOP_N}`}
+        </Button>
+      )}
+    </>
+  )
+}
 
 const DATA_SOURCES = {
   candidates: {
@@ -49,6 +100,8 @@ function ConfigurableChart({ candidates, roundResults }) {
   const [source, setSource] = useState('candidates')
   const [dimKey, setDimKey] = useState('branch')
   const [metricKey, setMetricKey] = useState('count')
+  const { isNarrow } = useLayoutMetrics()
+  const selectWidth = isNarrow ? '100%' : 180
 
   const config = DATA_SOURCES[source]
   const data = source === 'candidates' ? candidates : roundResults
@@ -71,33 +124,26 @@ function ConfigurableChart({ candidates, roundResults }) {
   }
 
   return (
-    <Card title="Custom Chart" bordered={false} style={{ borderRadius: 12 }}>
-      <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+    <Card title="Custom Chart" bordered={false} style={{ borderRadius: RADIUS.card }}>
+      <div style={{ display: 'flex', gap: SPACE.sm, marginBottom: SPACE.md, flexWrap: 'wrap' }}>
         <Select
-          value={source} onChange={handleSourceChange} style={{ width: 180 }}
+          value={source} onChange={handleSourceChange} style={{ width: selectWidth }}
           options={Object.entries(DATA_SOURCES).map(([key, c]) => ({ value: key, label: c.label }))}
         />
         <Select
-          value={dimension.key} onChange={setDimKey} style={{ width: 180 }}
+          value={dimension.key} onChange={setDimKey} style={{ width: selectWidth }}
           options={config.dimensions.map(d => ({ value: d.key, label: d.label }))}
         />
         <Select
-          value={metric.key} onChange={setMetricKey} style={{ width: 180 }}
+          value={metric.key} onChange={setMetricKey} style={{ width: selectWidth }}
           options={config.metrics.map(m => ({ value: m.key, label: m.label }))}
         />
       </div>
-      {chartData.length ? (
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={chartData} layout="vertical" margin={{ left: 160, right: 24 }}>
-            <XAxis type="number" />
-            <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 12 }} />
-            <Tooltip />
-            <Bar dataKey="value" name={metric.label} radius={[0, 4, 4, 0]}>
-              {chartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      ) : <Empty description="No data for this combination" />}
+      <CategoryBarChart
+        data={chartData}
+        seriesName={metric.label}
+        empty={<Empty description="No data for this combination" />}
+      />
     </Card>
   )
 }
@@ -124,7 +170,7 @@ function CandidatePanel({ candidate, rounds }) {
       </Descriptions>
 
       {rounds.length > 0 && (
-        <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ marginTop: SPACE.md, display: 'flex', flexDirection: 'column', gap: SPACE.md }}>
           {rounds.map(ev => (
             <div key={ev.eventId}>
               <div style={{ fontWeight: 600, marginBottom: 6 }}>{ev.collegeName} ({ev.recruitmentYear})</div>
@@ -134,6 +180,7 @@ function CandidatePanel({ candidate, rounds }) {
                 rowKey="roundId"
                 dataSource={ev.rounds}
                 columns={ROUND_RESULT_COLUMNS}
+                scroll={{ x: 'max-content' }}
               />
             </div>
           ))}
@@ -167,18 +214,18 @@ function CandidateCompare({ candidates }) {
   const filterOption = (input, option) => option.label.toLowerCase().includes(input.toLowerCase())
 
   return (
-    <Card title="Compare Candidates" bordered={false} style={{ borderRadius: 12 }}>
-      <Row gutter={16}>
+    <Card title="Compare Candidates" bordered={false} style={{ borderRadius: RADIUS.card }}>
+      <Row gutter={GUTTER}>
         <Col xs={24} sm={12}>
           <Select
-            showSearch placeholder="Select candidate A" style={{ width: '100%', marginBottom: 16 }}
+            showSearch placeholder="Select candidate A" style={{ width: '100%', marginBottom: SPACE.md }}
             options={optionsForA} value={idA} onChange={setIdA} filterOption={filterOption}
           />
           <CandidatePanel candidate={candA} rounds={roundsA} />
         </Col>
         <Col xs={24} sm={12}>
           <Select
-            showSearch placeholder="Select candidate B" style={{ width: '100%', marginBottom: 16 }}
+            showSearch placeholder="Select candidate B" style={{ width: '100%', marginBottom: SPACE.md }}
             options={optionsForB} value={idB} onChange={setIdB} filterOption={filterOption}
           />
           <CandidatePanel candidate={candB} rounds={roundsB} />
@@ -201,15 +248,16 @@ export default function Analytics() {
 
   const stats = useMemo(() => computeAnalytics(candidates), [candidates])
   const scoreByRoundType = useMemo(() => computeScoreByRoundType(roundResults), [roundResults])
+  const { sectionGap } = useLayoutMetrics()
 
   if (isLoading) return <Spin size="large" style={{ display: 'block', marginTop: 80, textAlign: 'center' }} />
   if (!stats) return <Empty description="No candidate data available" style={{ marginTop: 80 }} />
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: sectionGap }}>
 
       {/* Summary cards */}
-      <Row gutter={16}>
+      <Row gutter={GUTTER}>
         {[
           { title: 'Total Candidates', value: stats.total, icon: <UserOutlined />, color: '#4f46e5' },
           { title: 'Avg UG CGPA', value: stats.avgCgpa, icon: <BookOutlined />, color: '#7c3aed' },
@@ -218,7 +266,7 @@ export default function Analytics() {
           { title: 'Total Backlogs', value: `${stats.withTotalBacklogs} / ${stats.total}`, icon: <TrophyOutlined />, color: '#dc2626' },
         ].map(({ title, value, icon, color }) => (
           <Col xs={24} sm={12} lg={6} key={title}>
-            <Card bordered={false} style={{ borderRadius: 12 }}>
+            <Card bordered={false} style={{ borderRadius: RADIUS.card }}>
               <Statistic title={title} value={value} prefix={<span style={{ color }}>{icon}</span>} />
             </Card>
           </Col>
@@ -226,63 +274,33 @@ export default function Analytics() {
       </Row>
 
       {/* Branch distribution | Position preferences */}
-      <Row gutter={16}>
+      <Row gutter={GUTTER}>
         <Col xs={24} lg={14}>
-          <Card title="Candidates by Branch" bordered={false} style={{ borderRadius: 12 }}>
-            {stats.byBranch.length ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={stats.byBranch} layout="vertical" margin={{ left: 160, right: 24 }}>
-                  <XAxis type="number" allowDecimals={false} />
-                  <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 12 }} />
-                  <Tooltip />
-                  <Bar dataKey="value" name="Candidates" radius={[0, 4, 4, 0]}>
-                    {stats.byBranch.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : <Empty />}
+          <Card title="Candidates by Branch" bordered={false} style={{ borderRadius: RADIUS.card }}>
+            <CategoryBarChart data={stats.byBranch} seriesName="Candidates" allowDecimals={false} />
           </Card>
         </Col>
 
         <Col xs={24} lg={10}>
-          <Card title={<span><AimOutlined style={{ marginRight: 6 }} />Position Preferences</span>} bordered={false} style={{ borderRadius: 12 }}>
-            {stats.byPosition.length ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={stats.byPosition} layout="vertical" margin={{ left: 120, right: 24 }}>
-                  <XAxis type="number" allowDecimals={false} />
-                  <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 12 }} />
-                  <Tooltip />
-                  <Bar dataKey="value" name="Selections" radius={[0, 4, 4, 0]}>
-                    {stats.byPosition.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : <Empty description="No preference data" />}
+          <Card title={<span><AimOutlined style={{ marginRight: 6 }} />Position Preferences</span>} bordered={false} style={{ borderRadius: RADIUS.card }}>
+            <CategoryBarChart
+              data={stats.byPosition} seriesName="Selections" labelWidth={130} allowDecimals={false}
+              empty={<Empty description="No preference data" />}
+            />
           </Card>
         </Col>
       </Row>
 
       {/* College distribution | Location preference */}
-      <Row gutter={16}>
+      <Row gutter={GUTTER}>
         <Col xs={24} lg={14}>
-          <Card title="Candidates by College" bordered={false} style={{ borderRadius: 12 }}>
-            {stats.byCollege.length ? (
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={stats.byCollege} layout="vertical" margin={{ left: 160, right: 24 }}>
-                  <XAxis type="number" allowDecimals={false} />
-                  <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 12 }} />
-                  <Tooltip />
-                  <Bar dataKey="value" name="Candidates" radius={[0, 4, 4, 0]}>
-                    {stats.byCollege.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : <Empty />}
+          <Card title="Candidates by College" bordered={false} style={{ borderRadius: RADIUS.card }}>
+            <CategoryBarChart data={stats.byCollege} seriesName="Candidates" allowDecimals={false} />
           </Card>
         </Col>
 
         <Col xs={24} lg={10}>
-          <Card title="Job Location Preference" bordered={false} style={{ borderRadius: 12 }}>
+          <Card title="Job Location Preference" bordered={false} style={{ borderRadius: RADIUS.card }}>
             {stats.byLocation.length ? (
               <ResponsiveContainer width="100%" height={260}>
                 <PieChart>
@@ -307,34 +325,26 @@ export default function Analytics() {
       </Row>
 
       {/* Exam / round scores */}
-      <Row gutter={16}>
+      <Row gutter={GUTTER}>
         <Col xs={24}>
-          <Card title="Average Score by Round Type" bordered={false} style={{ borderRadius: 12 }}>
-            {scoreByRoundType.length ? (
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={scoreByRoundType} layout="vertical" margin={{ left: 160, right: 24 }}>
-                  <XAxis type="number" />
-                  <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 12 }} />
-                  <Tooltip />
-                  <Bar dataKey="value" name="Avg Score" radius={[0, 4, 4, 0]}>
-                    {scoreByRoundType.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : <Empty description="No round scores recorded yet" />}
+          <Card title="Average Score by Round Type" bordered={false} style={{ borderRadius: RADIUS.card }}>
+            <CategoryBarChart
+              data={scoreByRoundType} seriesName="Avg Score"
+              empty={<Empty description="No round scores recorded yet" />}
+            />
           </Card>
         </Col>
       </Row>
 
       {/* Configurable graph */}
-      <Row gutter={16}>
+      <Row gutter={GUTTER}>
         <Col xs={24}>
           <ConfigurableChart candidates={candidates} roundResults={roundResults} />
         </Col>
       </Row>
 
       {/* Candidate comparison */}
-      <Row gutter={16}>
+      <Row gutter={GUTTER}>
         <Col xs={24}>
           <CandidateCompare candidates={candidates} />
         </Col>

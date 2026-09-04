@@ -6,6 +6,8 @@ import { getColleges, createCollege, updateCollege } from '../api/colleges'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
 import { EMAIL_RULE, PHONE_RULE } from '../components/validation/rules'
+import DevOnly from '../components/DevOnly'
+import { SPACE } from '../theme'
 
 const FILTER_KEYS = [
   { key: 'city',  label: 'City',  getVal: r => r.city },
@@ -145,7 +147,7 @@ export default function Colleges() {
         setFilter={setFilter}
         removeFilter={removeFilter}
       />
-      <Table dataSource={filteredData} columns={columns} rowKey="id" loading={isLoading} />
+      <Table dataSource={filteredData} columns={columns} rowKey="id" loading={isLoading} scroll={{ x: 'max-content' }} />
 
       <Modal
         title={editingCollege ? 'Edit College' : 'Add College'}
@@ -155,9 +157,11 @@ export default function Colleges() {
         okText="Save"
         confirmLoading={createMutation.isPending || updateMutation.isPending}
       >
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-          <Button icon={<ExperimentOutlined />} size="small" onClick={fillTestData}>Fill Test Data</Button>
-        </div>
+        <DevOnly>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: SPACE.sm }}>
+            <Button icon={<ExperimentOutlined />} size="small" onClick={fillTestData}>Fill Test Data</Button>
+          </div>
+        </DevOnly>
         <Form form={form} layout="vertical">
           <Form.Item name="name" label="College Name" rules={[{ required: true }]}>
             <Input />

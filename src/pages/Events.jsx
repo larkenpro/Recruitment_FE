@@ -6,6 +6,8 @@ import { useNavigate } from 'react-router-dom'
 import { getEvents, createEvent, updateEventStatus } from '../api/events'
 import { getColleges } from '../api/colleges'
 import { getPositions } from '../api/positions'
+import DevOnly from '../components/DevOnly'
+import { SPACE } from '../theme'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
 import { getErrorMessage } from '../utils/errorUtils'
@@ -101,7 +103,7 @@ export default function Events() {
           setFilter={setFilter}
           removeFilter={removeFilter}
         />
-        <Table dataSource={filteredData} columns={columns} rowKey="id" loading={isLoading} />
+        <Table dataSource={filteredData} columns={columns} rowKey="id" loading={isLoading} scroll={{ x: 'max-content' }} />
       </Card>
 
       {/* Create Event Modal */}
@@ -109,9 +111,11 @@ export default function Events() {
         onOk={() => form.validateFields().then(v => createMutation.mutate({
           ...v, collegeId: Number(v.collegeId), recruitmentYear: Number(v.recruitmentYear)
         }))} okText="Save">
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-          <Button icon={<ExperimentOutlined />} size="small" onClick={fillEventTestData}>Fill Test Data</Button>
-        </div>
+        <DevOnly>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: SPACE.sm }}>
+            <Button icon={<ExperimentOutlined />} size="small" onClick={fillEventTestData}>Fill Test Data</Button>
+          </div>
+        </DevOnly>
         <Form form={form} layout="vertical">
           <Form.Item name="collegeId" label="College" rules={[{ required: true }]}>
             <Select options={colleges?.map(c => ({ value: c.id, label: c.name })) ?? []} />

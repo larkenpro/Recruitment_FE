@@ -8,3 +8,74 @@ body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   background: #f5f6fa;
 }
+
+/*
+ * Mobile adjustments.
+ *
+ * These live here rather than in each page because they target antd internals that
+ * every page shares — modals, tables, form controls. Breakpoint matches antd's `lg`
+ * (992px), the same one Layout.jsx uses to swap the sidebar for a drawer.
+ */
+@media (max-width: 991px) {
+  /* Modals default to a fixed 520px, which overflows a phone viewport.
+     max-width beats the inline width antd sets, so no !important needed. */
+  .ant-modal {
+    max-width: calc(100vw - 16px);
+    top: 12px;
+    padding-bottom: 12px;
+  }
+
+  /* Keep long forms scrollable inside the modal instead of pushing the
+     footer buttons off-screen. */
+  .ant-modal-body {
+    max-height: calc(100vh - 180px);
+    overflow-y: auto;
+  }
+
+  /* Reclaim the horizontal space card padding eats on a narrow screen. */
+  .ant-card-body {
+    padding: 16px 12px;
+  }
+  .ant-card-head {
+    padding: 0 12px;
+  }
+
+  /* Let a card's action button drop below the title instead of the two
+     fighting over one cramped row. */
+  .ant-card-head-wrapper {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 0;
+  }
+  .ant-card-extra {
+    margin-inline-start: 0;
+  }
+
+  /* Denser table cells fit more columns before horizontal scrolling kicks in. */
+  .ant-table {
+    font-size: 13px;
+  }
+  .ant-table-cell {
+    padding: 8px !important;
+  }
+
+  /* Tab bars scroll horizontally rather than compressing their labels. */
+  .ant-tabs-nav {
+    margin-bottom: 12px;
+  }
+}
+
+/*
+ * iOS Safari zooms the whole page when focusing an input under 16px. Forcing
+ * 16px on the actual text fields keeps tapping a form from jerking the layout
+ * around — but only on real touch devices: a narrow desktop window has no zoom
+ * problem, and bumping only some controls made them mismatch their neighbours.
+ */
+@media (max-width: 991px) and (pointer: coarse) {
+  .ant-input,
+  .ant-input-number-input,
+  .ant-select,
+  .ant-picker-input > input {
+    font-size: 16px !important;
+  }
+}

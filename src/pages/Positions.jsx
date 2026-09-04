@@ -5,6 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getPositions, createPosition, updatePosition, deletePosition } from '../api/positions'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
+import DevOnly from '../components/DevOnly'
+import { SPACE } from '../theme'
 
 const TYPE_COLORS = { 'Full-Time': 'green', 'Part-Time': 'blue', 'Internship': 'orange', 'Contract': 'purple' }
 const TYPE_OPTIONS = ['Full-Time', 'Part-Time', 'Internship', 'Contract'].map(v => ({ value: v }))
@@ -102,7 +104,7 @@ export default function Positions() {
         setFilter={setFilter}
         removeFilter={removeFilter}
       />
-      <Table dataSource={filteredData} columns={columns} rowKey="id" loading={isLoading} />
+      <Table dataSource={filteredData} columns={columns} rowKey="id" loading={isLoading} scroll={{ x: 'max-content' }} />
 
       <Modal
         title={editing ? 'Edit Position' : 'Add Position'}
@@ -112,9 +114,11 @@ export default function Positions() {
         okText="Save"
         confirmLoading={createMutation.isPending || updateMutation.isPending}
       >
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-          <Button icon={<ExperimentOutlined />} size="small" onClick={fillTestData}>Fill Test Data</Button>
-        </div>
+        <DevOnly>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: SPACE.sm }}>
+            <Button icon={<ExperimentOutlined />} size="small" onClick={fillTestData}>Fill Test Data</Button>
+          </div>
+        </DevOnly>
         <Form form={form} layout="vertical">
           <Form.Item name="title" label="Title" rules={[{ required: true }]}>
             <Input placeholder="Software Engineer" />

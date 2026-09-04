@@ -5,6 +5,8 @@ import { UploadOutlined, UserOutlined, BookOutlined, AimOutlined, ArrowUpOutline
 import { getApplyForm, submitApplication } from '../api/candidates'
 import { getEventPositions } from '../api/events'
 import { EMAIL_RULE, PHONE_RULE, URL_RULE, CGPA_RULE, SCORE_RULE, requiredRule } from '../components/validation/rules'
+import DevOnly from '../components/DevOnly'
+import { SPACE, GUTTER } from '../theme'
 
 const { Title, Text } = Typography
 
@@ -134,22 +136,24 @@ export default function PublicApply() {
             <div style={{ display: step === 0 ? 'block' : 'none' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Divider orientation="left" style={{ flex: 1 }}>Personal Information</Divider>
-                <Button
-                  size="small"
-                  icon={<ThunderboltOutlined />}
-                  style={{ marginLeft: 12, flexShrink: 0 }}
-                  onClick={() => form.setFieldsValue({
-                    name: 'Arun Kumar',
-                    email: 'arun.kumar@example.com',
-                    phone: '9876543210',
-                    rollNo: 'CS2021001',
-                    branch: 'Computer Science & Engineering',
-                  })}
-                >
-                  Fill Test Data
-                </Button>
+                <DevOnly>
+                  <Button
+                    size="small"
+                    icon={<ThunderboltOutlined />}
+                    style={{ marginLeft: SPACE.sm, flexShrink: 0 }}
+                    onClick={() => form.setFieldsValue({
+                      name: 'Arun Kumar',
+                      email: 'arun.kumar@example.com',
+                      phone: '9876543210',
+                      rollNo: 'CS2021001',
+                      branch: 'Computer Science & Engineering',
+                    })}
+                  >
+                    Fill Test Data
+                  </Button>
+                </DevOnly>
               </div>
-              <Row gutter={16}>
+              <Row gutter={GUTTER}>
                 <Col xs={24} sm={12}>
                   <Form.Item name="name" label="Full Name" rules={[{ required: true }]}>
                     <Input placeholder="John Doe" size="large" />
@@ -213,23 +217,25 @@ export default function PublicApply() {
             <div style={{ display: step === 1 ? 'block' : 'none' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Divider orientation="left" style={{ flex: 1 }}>Academic Details</Divider>
-                <Button
-                  size="small"
-                  icon={<ThunderboltOutlined />}
-                  style={{ marginLeft: 12, flexShrink: 0 }}
-                  onClick={() => form.setFieldsValue({
-                    tenthMark: '92.5',
-                    twelfthMark: '88.0',
-                    ugDegree: 'B.Tech Computer Science',
-                    ugCgpa: '8.5',
-                    arrears: '0',
-                    backlogs: '0',
-                  })}
-                >
-                  Fill Test Data
-                </Button>
+                <DevOnly>
+                  <Button
+                    size="small"
+                    icon={<ThunderboltOutlined />}
+                    style={{ marginLeft: SPACE.sm, flexShrink: 0 }}
+                    onClick={() => form.setFieldsValue({
+                      tenthMark: '92.5',
+                      twelfthMark: '88.0',
+                      ugDegree: 'B.Tech Computer Science',
+                      ugCgpa: '8.5',
+                      arrears: '0',
+                      backlogs: '0',
+                    })}
+                  >
+                    Fill Test Data
+                  </Button>
+                </DevOnly>
               </div>
-              <Row gutter={16}>
+              <Row gutter={GUTTER}>
                 <Col xs={24} sm={12}>
                   <Form.Item name="tenthMark" label="10th Mark %" rules={[SCORE_RULE]}>
                     <Input type="number" step="0.01" placeholder="92.5" size="large" />
@@ -294,7 +300,7 @@ export default function PublicApply() {
             {/* Step 2 - Preferences */}
             <div style={{ display: step === 2 ? 'block' : 'none' }}>
               <Divider orientation="left">Role Preferences</Divider>
-              <Row gutter={16}>
+              <Row gutter={GUTTER}>
                 <Col xs={24}>
                   <div style={{ marginBottom: 16 }}>
                     <div style={{ fontWeight: 600, marginBottom: 6, color: '#1e1b4b' }}>

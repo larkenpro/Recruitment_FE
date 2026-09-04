@@ -6,6 +6,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { getCandidates, getCandidate, getCandidateEvent, updateCandidate, deleteCandidate } from '../api/candidates'
 import { getColleges } from '../api/colleges'
+import DevOnly from '../components/DevOnly'
+import { SPACE, GUTTER } from '../theme'
 import { getEventPositions } from '../api/events'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
@@ -185,24 +187,26 @@ export default function Candidates() {
         confirmLoading={updateMutation.isPending}
         width={720}
       >
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-          <Button icon={<ExperimentOutlined />} size="small" onClick={fillTestData}>Fill Test Data</Button>
-        </div>
+        <DevOnly>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: SPACE.sm }}>
+            <Button icon={<ExperimentOutlined />} size="small" onClick={fillTestData}>Fill Test Data</Button>
+          </div>
+        </DevOnly>
         <Form form={form} layout="vertical" style={{ marginTop: 8 }}>
 
           {/* ── Required fields ── */}
-          <Row gutter={16}>
-            <Col span={12}>
+          <Row gutter={GUTTER}>
+            <Col xs={24} sm={12}>
               <Form.Item name="name" label="Full Name" rules={[{ required: true }]}>
                 <Input />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item name="email" label="Email" rules={[requiredRule('Email is required'), EMAIL_RULE]}>
                 <Input />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item name="collegeId" label="College" rules={[{ required: true }]}>
                 <Select showSearch optionFilterProp="label" options={colleges.map(c => ({ value: c.id, label: c.name }))} />
               </Form.Item>
@@ -210,43 +214,43 @@ export default function Candidates() {
           </Row>
 
           {/* ── Contact & basic ── */}
-          <Row gutter={16}>
-            <Col span={8}>
+          <Row gutter={GUTTER}>
+            <Col xs={24} sm={12} md={8}>
               <Form.Item name="phone" label="Phone" rules={[PHONE_RULE]}>
                 <Input />
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col xs={24} sm={12} md={8}>
               <Form.Item name="branch" label="Branch">
                 <Input />
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col xs={24} sm={12} md={8}>
               <Form.Item name="rollNo" label="Roll No">
                 <Input />
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col xs={24} sm={12} md={8}>
               <Form.Item name="jobLocation" label="Job Location">
                 <Input />
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col xs={24} sm={12} md={8}>
               <Form.Item name="internshipAvailability" label="Internship Availability">
                 <DatePicker.RangePicker picker="month" style={{ width: '100%' }} format="MMMM YYYY" />
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col xs={24} sm={12} md={8}>
               <Form.Item name="leadershipPositions" label="Leadership Positions">
                 <Input />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item name="githubLink" label="GitHub Link" rules={[URL_RULE]}>
                 <Input />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col xs={24} sm={12}>
               <Form.Item name="linkedinLink" label="LinkedIn Profile URL" rules={[URL_RULE]}>
                 <Input />
               </Form.Item>
@@ -254,53 +258,53 @@ export default function Candidates() {
           </Row>
 
           {/* ── Academic ── */}
-          <Row gutter={16}>
-            <Col span={8}>
+          <Row gutter={GUTTER}>
+            <Col xs={24} sm={12} md={8}>
               <Form.Item name="tenthMark" label="10th Mark %" rules={[SCORE_RULE]}>
                 <InputNumber style={{ width: '100%' }} min={0} max={100} step={0.01} />
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col xs={24} sm={12} md={8}>
               <Form.Item name="twelfthMark" label="12th Mark %" rules={[SCORE_RULE]}>
                 <InputNumber style={{ width: '100%' }} min={0} max={100} step={0.01} />
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col xs={24} sm={12} md={8}>
               <Form.Item name="diplomaMark" label="Diploma Mark %" rules={[SCORE_RULE]}>
                 <InputNumber style={{ width: '100%' }} min={0} max={100} step={0.01} />
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col xs={24} sm={12} md={8}>
               <Form.Item name="ugDegree" label="UG Degree">
                 <Input />
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col xs={24} sm={12} md={8}>
               <Form.Item name="ugCgpa" label="UG CGPA" rules={[CGPA_RULE]}>
                 <InputNumber style={{ width: '100%' }} min={0} max={10} step={0.01} />
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col xs={24} sm={12} md={8}>
               <Form.Item name="keamRank" label="KEAM Rank">
                 <InputNumber style={{ width: '100%' }} min={0} />
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col xs={24} sm={12} md={8}>
               <Form.Item name="pgDegree" label="PG Degree">
                 <Input />
               </Form.Item>
             </Col>
-            <Col span={8}>
+            <Col xs={24} sm={12} md={8}>
               <Form.Item name="pgCgpa" label="PG CGPA" rules={[CGPA_RULE]}>
                 <InputNumber style={{ width: '100%' }} min={0} max={10} step={0.01} />
               </Form.Item>
             </Col>
-            <Col span={4}>
+            <Col xs={12} sm={8} md={4}>
               <Form.Item name="backlogs" label="Total Backlogs">
                 <InputNumber style={{ width: '100%' }} min={0} />
               </Form.Item>
             </Col>
-            <Col span={4}>
+            <Col xs={12} sm={8} md={4}>
               <Form.Item name="arrears" label="Active Backlogs">
                 <InputNumber style={{ width: '100%' }} min={0} />
               </Form.Item>

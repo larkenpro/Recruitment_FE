@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ConfigProvider } from 'antd'
+import { antdTheme } from './theme'
 import { AuthProvider } from './context/AuthContext'
 import ProtectedRoute from './routes/ProtectedRoute'
 import PageGuard from './routes/PageGuard'
@@ -19,21 +20,13 @@ import UserManagement from './pages/UserManagement'
 
 const queryClient = new QueryClient()
 
-const theme = {
-  token: {
-    colorPrimary: '#4f46e5',
-    borderRadius: 8,
-    fontFamily: 'Inter, sans-serif',
-  }
-}
-
 const P = ({ page, children }) => (
   <ProtectedRoute><AppLayout><PageGuard page={page}>{children}</PageGuard></AppLayout></ProtectedRoute>
 )
 
 export default function App() {
   return (
-    <ConfigProvider theme={theme}>
+    <ConfigProvider theme={antdTheme}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <BrowserRouter>

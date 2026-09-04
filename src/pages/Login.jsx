@@ -26,8 +26,8 @@ export default function Login() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f5f6fa', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <Card style={{ width: 400, borderRadius: 16, boxShadow: '0 4px 24px rgba(0,0,0,0.08)' }} bordered={false}>
+    <div style={{ minHeight: '100vh', background: '#f5f6fa', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <Card style={{ width: '100%', maxWidth: 400, borderRadius: 16, boxShadow: '0 4px 24px rgba(0,0,0,0.08)' }} bordered={false}>
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <div style={{ fontSize: 36, marginBottom: 8 }}>🎯</div>
           <Title level={3} style={{ margin: 0, color: '#4f46e5' }}>Recruitment App</Title>

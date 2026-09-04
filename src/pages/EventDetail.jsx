@@ -63,6 +63,7 @@ import {
 import { getPositions } from '../api/positions'
 import { getCandidateResume, getResumeFile, updateRoundResult, addStageEntry, updateStageStatusByName } from '../api/candidates'
 import { getErrorMessage } from '../utils/errorUtils'
+import { GUTTER, useLayoutMetrics } from '../theme'
 import { useStageDecision } from '../hooks/useStageDecision'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
@@ -106,6 +107,7 @@ const ROUND_TYPE_COLOR = { WRITTEN: 'purple', TECHNICAL: 'blue', HR: 'green', GR
 
 export default function EventDetail() {
   const { id } = useParams()
+  const { sectionGap } = useLayoutMetrics()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
@@ -536,6 +538,7 @@ export default function EventDetail() {
           rowKey="key"
           size="small"
           pagination={{ pageSize: 10 }}
+          scroll={{ x: 'max-content' }}
           columns={[
             {
               title: 'Name',
@@ -834,7 +837,7 @@ export default function EventDetail() {
                 ) : (groups?.length ?? 0) === 0 ? (
                   <Empty description="No groups generated yet" />
                 ) : (
-                  <Row gutter={[16, 16]}>
+                  <Row gutter={GUTTER}>
                     {groups.map((g) => (
                       <Col key={g.id} xs={24} sm={12} lg={8}>
                         <Card
@@ -1110,6 +1113,7 @@ export default function EventDetail() {
                     size="small"
                     pagination={false}
                     columns={roundColumns}
+                    scroll={{ x: 'max-content' }}
                   />
                 )}
               </Card>
@@ -1127,6 +1131,7 @@ export default function EventDetail() {
                 size="small"
                 pagination={false}
                 columns={roundColumns}
+                scroll={{ x: 'max-content' }}
               />
             </Card>
           )}
@@ -1146,6 +1151,7 @@ export default function EventDetail() {
           size="small"
           pagination={{ pageSize: 10 }}
           columns={roundColumns}
+          scroll={{ x: 'max-content' }}
         />
       </>
     )
@@ -1180,6 +1186,7 @@ export default function EventDetail() {
             rowKey="id"
             size="small"
             pagination={{ pageSize: 10 }}
+            scroll={{ x: 'max-content' }}
             locale={{ emptyText: 'No candidates have applied yet' }}
             columns={[
               {
@@ -1268,7 +1275,7 @@ export default function EventDetail() {
   const missingRounds = sortedRounds.length === 0
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: sectionGap }}>
       {(missingPositions || missingRounds) && (
         <Alert
           type="warning"
@@ -1284,7 +1291,7 @@ export default function EventDetail() {
       )}
 
       {/* Top row */}
-      <Row gutter={[16, 16]} align="stretch">
+      <Row gutter={GUTTER} align="stretch">
         {/* Event info card */}
         <Col xs={24} md={10}>
           <Card bordered={false} style={{ borderRadius: 12, height: '100%' }}>
