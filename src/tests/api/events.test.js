@@ -298,8 +298,8 @@ describe('Events API', () => {
       expect(Array.isArray(res.data.data)).toBe(true)
     })
 
-    // ── POST generate — no candidates ─────────────────────────────────────
-    it('POST /events/:id/groups — returns 400 when no candidates in event', async () => {
+    // ── POST generate — nothing to group ──────────────────────────────────
+    it('POST /events/:id/groups — returns 400 when the event has no GD round / eligible candidates', async () => {
       if (!createdId) return
       await expect(generateGroups(createdId, 2)).rejects.toMatchObject({
         response: { status: 400 },

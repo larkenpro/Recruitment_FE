@@ -134,6 +134,7 @@ export default function Candidates() {
       title: 'Name', dataIndex: 'name',
       render: (t, r) => <a onClick={() => navigate(`/candidates/${r.id}`)}><strong>{t}</strong></a>,
     },
+    { title: 'Roll No', dataIndex: 'rollNo', render: v => v || '—' },
     { title: 'Email', dataIndex: 'email' },
     { title: 'Phone', dataIndex: 'phone', render: v => v || '—' },
     { title: 'College', render: (_, r) => r.college?.name ?? '—' },

@@ -511,6 +511,17 @@ export default function EventDetail() {
 
   const sortedRounds = [...(rounds ?? [])].sort((a, b) => a.sequence - b.sequence)
   const hasGroupDiscussion = sortedRounds.some((r) => r.roundType === 'GROUP_DISCUSSION')
+
+  // Candidates who reached a round: PASSed every round sequenced before it.
+  const candidatesReachingRound = (base, round) => {
+    const priorRounds = sortedRounds.filter((r) => r.sequence < round.sequence)
+    return priorRounds.length === 0
+      ? base
+      : base.filter((c) => priorRounds.every((pr) => roundResultMap[pr.id]?.[c.id]?.result === 'PASS'))
+  }
+
+  const gdRound = sortedRounds.find((r) => r.roundType === 'GROUP_DISCUSSION')
+  const gdEligible = gdRound ? candidatesReachingRound(shortlistedCandidates, gdRound) : []
   const availablePositions = (allPositions ?? []).filter(
     (p) => !(eventPositions ?? []).some((ep) => ep.id === p.id)
   )
@@ -549,6 +560,7 @@ export default function EventDetail() {
                 </a>
               ),
             },
+            { title: 'Roll No', dataIndex: 'rollNo', render: (v) => v || '—' },
             { title: 'Email', dataIndex: 'email' },
             { title: 'Branch', dataIndex: 'branch', render: (v) => v || '—' },
             { title: 'UG CGPA', dataIndex: 'ugCgpa', render: (v) => v ?? '—' },
@@ -792,15 +804,15 @@ export default function EventDetail() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
                   <InputNumber
                     min={1}
-                    max={candidates?.length || undefined}
+                    max={gdEligible.length || undefined}
                     placeholder="Number of groups"
                     value={groupCount}
                     onChange={setGroupCount}
                     style={{ width: 160 }}
                   />
-                  {candidates?.length > 0 && (
+                  {gdEligible.length > 0 && (
                     <Text type="secondary" style={{ fontSize: 12 }}>
-                      Max {candidates.length} group{candidates.length === 1 ? '' : 's'} ({candidates.length} candidate{candidates.length === 1 ? '' : 's'} in this event)
+                      Max {gdEligible.length} group{gdEligible.length === 1 ? '' : 's'} ({gdEligible.length} candidate{gdEligible.length === 1 ? '' : 's'} in the Group Discussion round)
                     </Text>
                   )}
                   {(groups?.length ?? 0) > 0 ? (
@@ -811,12 +823,12 @@ export default function EventDetail() {
                       okText="Regenerate"
                       cancelText="Cancel"
                       okButtonProps={{ danger: true }}
-                      disabled={!groupCount || !candidates?.length}
+                      disabled={!groupCount || !gdEligible.length}
                     >
                       <Button
                         type="primary"
                         loading={generateGroupsMutation.isPending}
-                        disabled={!groupCount || !candidates?.length}
+                        disabled={!groupCount || !gdEligible.length}
                       >
                         Regenerate Groups
                       </Button>
@@ -826,14 +838,14 @@ export default function EventDetail() {
                       type="primary"
                       onClick={() => generateGroupsMutation.mutate(groupCount)}
                       loading={generateGroupsMutation.isPending}
-                      disabled={!groupCount || !candidates?.length}
+                      disabled={!groupCount || !gdEligible.length}
                     >
                       Generate Groups
                     </Button>
                   )}
                 </div>
-                {!candidates?.length ? (
-                  <Empty description="No candidates in this event yet — add candidates before generating groups" />
+                {!gdEligible.length ? (
+                  <Empty description="No candidates have reached the Group Discussion round yet" />
                 ) : (groups?.length ?? 0) === 0 ? (
                   <Empty description="No groups generated yet" />
                 ) : (
@@ -919,12 +931,7 @@ export default function EventDetail() {
       ? ROUND_FILTER_KEYS
       : ROUND_FILTER_KEYS.filter((k) => k.key !== 'roundsDecision')
 
-    const priorRounds = sortedRounds.filter((r) => r.sequence < round.sequence)
-    const displayCandidates = priorRounds.length === 0
-      ? filteredShortlisted
-      : filteredShortlisted.filter((c) =>
-          priorRounds.every((pr) => roundResultMap[pr.id]?.[c.id]?.result === 'PASS')
-        )
+    const displayCandidates = candidatesReachingRound(filteredShortlisted, round)
 
     const isEditing = editingRoundId === round.id
 
@@ -979,6 +986,7 @@ export default function EventDetail() {
           </a>
         ),
       },
+      { title: 'Roll No', dataIndex: 'rollNo', render: (v) => v || '—' },
       { title: 'Branch', dataIndex: 'branch', render: (v) => v || '—' },
       { title: 'UG CGPA', dataIndex: 'ugCgpa', render: (v) => v ?? '—' },
       {
@@ -1086,6 +1094,7 @@ export default function EventDetail() {
                 ...(candidateMap[m.id] ?? {}),
                 id: m.id,
                 name: m.name,
+                rollNo: m.rollNo,
                 branch: m.branch,
                 key: m.id,
               }))
@@ -1198,6 +1207,7 @@ export default function EventDetail() {
                   </a>
                 ),
               },
+              { title: 'Roll No', dataIndex: 'rollNo', render: (v) => v || '—' },
               { title: 'Email', dataIndex: 'email' },
               { title: 'Phone', dataIndex: 'phone', render: (v) => v || '—' },
               { title: 'Branch', dataIndex: 'branch', render: (v) => v || '—' },
