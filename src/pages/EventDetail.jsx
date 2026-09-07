@@ -56,6 +56,7 @@ import {
   getGroups,
   generateGroups,
   updateGroup,
+  moveGroupMember,
   getRounds,
   removeEventPosition,
   updateEventStatus,
@@ -121,6 +122,8 @@ export default function EventDetail() {
   const [pendingCandidateId, setPendingCandidateId] = useState(null)
   const [groupCount, setGroupCount] = useState(null)
   const [editingGroup, setEditingGroup] = useState(null)
+  const [draggingMember, setDraggingMember] = useState(null)
+  const [dragOverGroupId, setDragOverGroupId] = useState(null)
   const [groupForm] = Form.useForm()
   const [editingRoundId, setEditingRoundId] = useState(null)
   const [roundTableEdits, setRoundTableEdits] = useState({})
@@ -386,6 +389,13 @@ export default function EventDetail() {
       queryClient.invalidateQueries({ queryKey: ['eventGroups', id] })
       message.success('Groups generated!')
     },
+    onError: (err) => message.error(getErrorMessage(err)),
+  })
+
+  const moveMemberMutation = useMutation({
+    mutationFn: ({ groupId, candidateId }) => moveGroupMember(id, groupId, candidateId),
+    // The endpoint returns every group, so drop it straight into the cache — no refetch.
+    onSuccess: (res) => queryClient.setQueryData(['eventGroups', id], res.data.data),
     onError: (err) => message.error(getErrorMessage(err)),
   })
 
@@ -849,9 +859,30 @@ export default function EventDetail() {
                 ) : (groups?.length ?? 0) === 0 ? (
                   <Empty description="No groups generated yet" />
                 ) : (
+                  <>
+                  <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 10 }}>
+                    Drag a candidate onto another group to move them, or use the group picker on their row.
+                  </Text>
                   <Row gutter={GUTTER}>
                     {groups.map((g) => (
                       <Col key={g.id} xs={24} sm={12} lg={8}>
+                        <div
+                          style={{ height: '100%' }}
+                          onDragOver={(e) => {
+                            e.preventDefault()
+                            e.dataTransfer.dropEffect = 'move'
+                            setDragOverGroupId(g.id)
+                          }}
+                          onDragLeave={() => setDragOverGroupId((cur) => (cur === g.id ? null : cur))}
+                          onDrop={(e) => {
+                            e.preventDefault()
+                            setDragOverGroupId(null)
+                            if (draggingMember && draggingMember.fromGroupId !== g.id) {
+                              moveMemberMutation.mutate({ groupId: g.id, candidateId: draggingMember.candidateId })
+                            }
+                            setDraggingMember(null)
+                          }}
+                        >
                         <Card
                           size="small"
                           title={<Text strong>Group {g.name}</Text>}
@@ -867,7 +898,10 @@ export default function EventDetail() {
                               Edit
                             </Button>
                           }
-                          style={{ height: '100%' }}
+                          style={{
+                            height: '100%',
+                            outline: dragOverGroupId === g.id ? '2px dashed #1677ff' : undefined,
+                          }}
                         >
                           <div style={{ marginBottom: 10 }}>
                             <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 2 }}>
@@ -897,12 +931,48 @@ export default function EventDetail() {
                                   visibleMembers.map((m) => (
                                     <div
                                       key={m.id}
-                                      style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}
+                                      draggable
+                                      onDragStart={(e) => {
+                                        e.dataTransfer.effectAllowed = 'move'
+                                        e.dataTransfer.setData('text/plain', String(m.id))
+                                        setDraggingMember({ candidateId: m.id, fromGroupId: g.id })
+                                      }}
+                                      onDragEnd={() => {
+                                        setDraggingMember(null)
+                                        setDragOverGroupId(null)
+                                      }}
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        marginBottom: 4,
+                                        cursor: 'grab',
+                                        opacity: draggingMember?.candidateId === m.id ? 0.4 : 1,
+                                      }}
                                     >
-                                      <Text style={{ fontSize: 13, flex: 1 }}>{m.name}</Text>
+                                      <Text style={{ fontSize: 13, flex: 1 }}>
+                                        {m.name}
+                                        {m.rollNo && (
+                                          <Text type="secondary" style={{ fontSize: 11, marginLeft: 6 }}>
+                                            {m.rollNo}
+                                          </Text>
+                                        )}
+                                      </Text>
                                       {m.branch && (
                                         <Tag style={{ fontSize: 11, margin: 0 }}>{m.branch}</Tag>
                                       )}
+                                      {/* Keyboard-reachable equivalent of dragging the row. */}
+                                      <Select
+                                        size="small"
+                                        variant="borderless"
+                                        value={g.id}
+                                        options={groups.map((x) => ({ value: x.id, label: x.name }))}
+                                        onChange={(toGroupId) =>
+                                          moveMemberMutation.mutate({ groupId: toGroupId, candidateId: m.id })
+                                        }
+                                        style={{ width: 62 }}
+                                        aria-label={`Group for ${m.name}`}
+                                      />
                                     </div>
                                   ))
                                 )}
@@ -910,9 +980,11 @@ export default function EventDetail() {
                             )
                           })()}
                         </Card>
+                        </div>
                       </Col>
                     ))}
                   </Row>
+                  </>
                 )}
               </div>
             ),

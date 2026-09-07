@@ -20,4 +20,5 @@ export const getEventRoundResults = (eventId) => api.get(`/events/${eventId}/rou
 export const getGroups = (eventId) => api.get(`/events/${eventId}/groups`)
 export const generateGroups = (eventId, count) => api.post(`/events/${eventId}/groups`, { count })
 export const updateGroup = (eventId, groupId, data) => api.put(`/events/${eventId}/groups/${groupId}`, data)
+export const moveGroupMember = (eventId, groupId, candidateId) => api.put(`/events/${eventId}/groups/${groupId}/members/${candidateId}`)
 export const deleteAllGroups = (eventId) => api.delete(`/events/${eventId}/groups`)
