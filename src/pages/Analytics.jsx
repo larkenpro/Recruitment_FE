@@ -8,7 +8,7 @@ import {
 } from 'recharts'
 import { getCandidates, getCandidateRoundResults } from '../api/candidates'
 import { getAllRoundResults } from '../api/roundResults'
-import { getEvents, getEventStageSummary } from '../api/events'
+import { getStageSummaries } from '../api/analytics'
 import { computeAnalytics, computeScoreByRoundType, groupAndAggregate, avg, buildRoundComparisonRows, buildFunnel, buildCampusRows, FUNNEL_STAGES } from '../utils/analyticsHelpers'
 import { SPACE, GUTTER, RADIUS, FONT_SIZE, FONT_WEIGHT, INK, TEXT, useLayoutMetrics } from '../theme'
 
@@ -153,8 +153,8 @@ function ConfigurableChart({ candidates, roundResults }) {
  * Columns of the campus table, in display order. `stage` counts distinct candidates from
  * the college who reached that stage; `status` narrows it to one decision; a metric with
  * neither just counts candidates. Adding early attrition is one more entry here — nothing
- * else on this page needs to change, since useStageSummaries fetches whatever stages the
- * metrics name.
+ * else changes, front or back, since /analytics/stage-summary already returns every stage a
+ * candidate reached, Exit included.
  */
 const CAMPUS_METRICS = [
   { key: 'applications', label: 'Applications' },
@@ -163,10 +163,8 @@ const CAMPUS_METRICS = [
   { key: 'joined', label: 'Joined', stage: 'Joining' },
 ]
 
-const CAMPUS_STAGES = [...new Set(CAMPUS_METRICS.map(m => m.stage).filter(Boolean))]
-
 function CampusEffectiveness({ candidates }) {
-  const { byStage, isPending } = useStageSummaries(CAMPUS_STAGES)
+  const { byStage, isPending } = useStageSummaries()
   const rows = buildCampusRows(candidates, byStage, CAMPUS_METRICS)
 
   const columns = [
@@ -330,37 +328,25 @@ const FUNNEL_SEGMENTS = [
 
 const pct = (v) => (v == null ? '—' : `${v.toFixed(1)}%`)
 
-/**
- * Stage rows for the given stages, merged across every event.
- *
- * Nothing returns stage history for all events at once, so this fans out over
- * event × stage. Keys match EventDetail's, so an already-visited event costs nothing,
- * and two callers asking for the same stage share one request rather than two.
- */
-function useStageSummaries(stages) {
-  const { data: events = [] } = useQuery({
-    queryKey: ['events'],
-    queryFn: () => getEvents().then(r => r.data.data),
+/** Stage rows for the whole pipeline, grouped by stage name. */
+function useStageSummaries() {
+  const { data = [], isPending } = useQuery({
+    queryKey: ['analyticsStageSummary'],
+    queryFn: () => getStageSummaries().then(r => r.data),
   })
 
-  const queries = useQueries({
-    queries: events.flatMap(event => stages.map(stage => ({
-      queryKey: ['eventStageSummary', String(event.id), stage],
-      queryFn: () => getEventStageSummary(event.id, stage).then(r => r.data.data),
-    }))),
-  })
+  const byStage = useMemo(() => {
+    const map = {}
+    data.forEach(row => (map[row.stageName] ??= []).push(row))
+    return map
+  }, [data])
 
-  const byStage = {}
-  events.forEach((_, ei) => stages.forEach((stage, si) => {
-    ;(byStage[stage] ??= []).push(...(queries[ei * stages.length + si]?.data ?? []))
-  }))
-
-  return { byStage, isPending: queries.some(q => q.isPending) }
+  return { byStage, isPending }
 }
 
 function RecruitmentFunnel({ candidates }) {
   const { isNarrow } = useLayoutMetrics()
-  const { byStage, isPending } = useStageSummaries(FUNNEL_STAGES)
+  const { byStage, isPending } = useStageSummaries()
 
   const funnel = buildFunnel(new Set(candidates.map(c => c.id)), byStage)
   const joined = funnel[funnel.length - 1]
