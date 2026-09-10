@@ -9,7 +9,7 @@ import {
 import { getCandidates, getCandidateRoundResults } from '../api/candidates'
 import { getAllRoundResults } from '../api/roundResults'
 import { getStageSummaries } from '../api/analytics'
-import { computeAnalytics, computeScoreByRoundType, groupAndAggregate, avg, buildRoundComparisonRows, buildFunnel, buildCampusRows, FUNNEL_STAGES } from '../utils/analyticsHelpers'
+import { computeAnalytics, computeScoreByRoundType, groupAndAggregate, avg, buildRoundComparisonRows, buildFunnel, buildCampusRows, buildPositionPreferenceTable } from '../utils/analyticsHelpers'
 import { SPACE, GUTTER, RADIUS, FONT_SIZE, FONT_WEIGHT, INK, TEXT, useLayoutMetrics } from '../theme'
 
 const COLORS = ['#4f46e5', '#7c3aed', '#2563eb', '#0891b2', '#059669', '#d97706', '#dc2626', '#db2777']
@@ -201,6 +201,57 @@ function CampusEffectiveness({ candidates }) {
           locale={{ emptyText: <Empty description="No college data" /> }}
         />
       )}
+    </Card>
+  )
+}
+
+function PositionPreferences({ candidates }) {
+  const { positions, rows } = buildPositionPreferenceTable(candidates)
+
+  const columns = [
+    {
+      title: 'Rank',
+      dataIndex: 'label',
+      key: 'label',
+      fixed: 'left',
+      width: 130,
+      render: (label) => <span style={{ fontWeight: FONT_WEIGHT.medium }}>{label}</span>,
+    },
+    ...positions.map(title => ({
+      title,
+      dataIndex: title,
+      key: title,
+      align: 'right',
+      width: 130,
+      sorter: (a, b) => a[title] - b[title],
+      render: (value) => (value === 0 ? <span style={{ color: INK.faint }}>0</span> : value),
+    })),
+    {
+      title: 'Total',
+      dataIndex: 'total',
+      key: 'total',
+      align: 'right',
+      width: 90,
+      sorter: (a, b) => a.total - b.total,
+      render: (value) => <span style={{ fontWeight: FONT_WEIGHT.semibold }}>{value}</span>,
+    },
+  ]
+
+  return (
+    <Card
+      title={<span><AimOutlined style={{ marginRight: 6 }} />Position Preferences</span>}
+      bordered={false}
+      style={{ borderRadius: RADIUS.card }}
+    >
+      <Table
+        size="small"
+        pagination={false}
+        rowKey="key"
+        dataSource={rows}
+        columns={columns}
+        scroll={{ x: 'max-content' }}
+        locale={{ emptyText: <Empty description="No preference data" /> }}
+      />
     </Card>
   )
 }
@@ -473,21 +524,19 @@ export default function Analytics() {
         </Col>
       </Row>
 
-      {/* Branch distribution | Position preferences */}
+      {/* Branch distribution */}
       <Row gutter={GUTTER}>
-        <Col xs={24} lg={14}>
+        <Col xs={24}>
           <Card title="Candidates by Branch" bordered={false} style={{ borderRadius: RADIUS.card }}>
             <CategoryBarChart data={stats.byBranch} seriesName="Candidates" allowDecimals={false} />
           </Card>
         </Col>
+      </Row>
 
-        <Col xs={24} lg={10}>
-          <Card title={<span><AimOutlined style={{ marginRight: 6 }} />Position Preferences</span>} bordered={false} style={{ borderRadius: RADIUS.card }}>
-            <CategoryBarChart
-              data={stats.byPosition} seriesName="Selections" labelWidth={130} allowDecimals={false}
-              empty={<Empty description="No preference data" />}
-            />
-          </Card>
+      {/* Position preferences by rank */}
+      <Row gutter={GUTTER}>
+        <Col xs={24}>
+          <PositionPreferences candidates={candidates} />
         </Col>
       </Row>
 

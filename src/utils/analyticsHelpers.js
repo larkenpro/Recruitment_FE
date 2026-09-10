@@ -111,18 +111,55 @@ export function computeAnalytics(candidates) {
   const byCollege = tally(candidates, c => c.college?.name)
   const byLocation = tally(candidates, c => c.jobLocation)
 
-  const positionCounts = {}
-  candidates.forEach(c => {
-    const p1 = c.preferredPosition1?.title
-    const p2 = c.preferredPosition2?.title
-    if (p1) positionCounts[p1] = (positionCounts[p1] ?? 0) + 1
-    if (p2) positionCounts[p2] = (positionCounts[p2] ?? 0) + 1
-  })
-  const byPosition = Object.entries(positionCounts)
-    .map(([name, value]) => ({ name, value }))
-    .sort((a, b) => b.value - a.value)
+  return { total, withActiveBacklogs, withTotalBacklogs, avgCgpa, avg10th, avg12th, byBranch, byCollege, byLocation }
+}
 
-  return { total, withActiveBacklogs, withTotalBacklogs, avgCgpa, avg10th, avg12th, byBranch, byCollege, byLocation, byPosition }
+/**
+ * Cross-tabulate position preferences: one row per preference rank, one column per position.
+ *
+ * `preferredPositions` is ordered by the candidate's own ranking (index 0 = top choice), so
+ * the array index *is* the rank. The list is variable-length, which is why this is a matrix
+ * rather than the single-series bar chart it replaced — that chart could only show a total
+ * per position, and was reading `preferredPosition1`/`preferredPosition2`, fields V11 dropped.
+ *
+ * Columns come back ordered by total count descending, so the table opens already sorted by
+ * popularity. Every column is zero-filled on every row, so no cell is missing and a sorter
+ * always compares numbers.
+ *
+ * @param candidates flat candidate array, each with `preferredPositions: [{ title }]`
+ * @returns `{ positions: string[], rows: [{ key, label, total, [title]: count }] }`
+ */
+export function buildPositionPreferenceTable(candidates) {
+  const countsByRank = new Map()
+  const totalByPosition = new Map()
+
+  candidates.forEach(c => {
+    ;(c.preferredPositions ?? []).forEach((position, rank) => {
+      const title = position?.title
+      if (!title) return
+      if (!countsByRank.has(rank)) countsByRank.set(rank, new Map())
+      const atRank = countsByRank.get(rank)
+      atRank.set(title, (atRank.get(title) ?? 0) + 1)
+      totalByPosition.set(title, (totalByPosition.get(title) ?? 0) + 1)
+    })
+  })
+
+  const positions = [...totalByPosition.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([title]) => title)
+
+  const rows = [...countsByRank.keys()].sort((a, b) => a - b).map(rank => {
+    const atRank = countsByRank.get(rank)
+    const counts = Object.fromEntries(positions.map(title => [title, atRank.get(title) ?? 0]))
+    return {
+      key: `rank-${rank}`,
+      label: `Preference ${rank + 1}`,
+      ...counts,
+      total: [...atRank.values()].reduce((sum, n) => sum + n, 0),
+    }
+  })
+
+  return { positions, rows }
 }
 
 /**

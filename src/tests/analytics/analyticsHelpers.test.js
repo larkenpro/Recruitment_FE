@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { tally, avg, computeAnalytics, buildRoundComparisonRows, buildFunnel, buildCampusRows } from '../../utils/analyticsHelpers'
+import { tally, avg, computeAnalytics, buildRoundComparisonRows, buildFunnel, buildCampusRows, buildPositionPreferenceTable } from '../../utils/analyticsHelpers'
 
 // ── tally ─────────────────────────────────────────────────────────────────────
 
@@ -120,8 +120,7 @@ describe('computeAnalytics', () => {
     tenthMark: 90,
     twelfthMark: 85,
     backlogs: 0,
-    preferredPosition1: { title: 'Software Engineer' },
-    preferredPosition2: null,
+    preferredPositions: [{ title: 'Software Engineer' }],
   }
 
   it('returns null for an empty array', () => {
@@ -183,30 +182,6 @@ describe('computeAnalytics', () => {
     expect(result.byLocation).toEqual([{ name: 'Gurugram NCR', value: 1 }])
   })
 
-  it('counts byPosition from both pref1 and pref2', () => {
-    const c1 = {
-      ...base,
-      preferredPosition1: { title: 'SDE' },
-      preferredPosition2: { title: 'BA' },
-    }
-    const c2 = {
-      ...base,
-      preferredPosition1: { title: 'SDE' },
-      preferredPosition2: null,
-    }
-    const result = computeAnalytics([c1, c2])
-    const sde = result.byPosition.find(p => p.name === 'SDE')
-    const ba = result.byPosition.find(p => p.name === 'BA')
-    expect(sde?.value).toBe(2)
-    expect(ba?.value).toBe(1)
-  })
-
-  it('excludes null preferences from byPosition', () => {
-    const noPrefs = { ...base, preferredPosition1: null, preferredPosition2: null }
-    const result = computeAnalytics([noPrefs])
-    expect(result.byPosition).toEqual([])
-  })
-
   it('returns all expected keys', () => {
     const result = computeAnalytics([base])
     expect(result).toMatchObject({
@@ -219,7 +194,6 @@ describe('computeAnalytics', () => {
       byBranch: expect.any(Array),
       byCollege: expect.any(Array),
       byLocation: expect.any(Array),
-      byPosition: expect.any(Array),
     })
   })
 })
@@ -372,5 +346,51 @@ describe('buildCampusRows', () => {
     const withAttrition = [...METRICS, { key: 'attrition', label: 'Early Attrition', stage: 'Exit' }]
 
     expect(buildCampusRows(candidates, summaries, withAttrition)[0].attrition).toBe(0)
+  })
+})
+
+// V11 replaced preferredPosition1/2 with an ordered, variable-length list. The chart these
+// counts feed kept reading the dropped fields, so it rendered empty on every dataset.
+describe('buildPositionPreferenceTable', () => {
+  const candidates = [
+    { preferredPositions: [{ title: 'SDE' }, { title: 'BA' }] },
+    { preferredPositions: [{ title: 'SDE' }, { title: 'QA' }, { title: 'BA' }] },
+    { preferredPositions: [{ title: 'BA' }] },
+  ]
+
+  it('cross-tabulates counts by rank, ordering columns by total descending', () => {
+    const { positions, rows } = buildPositionPreferenceTable(candidates)
+
+    expect(positions).toEqual(['BA', 'SDE', 'QA']) // 3, 2, 1
+    expect(rows.map(r => r.label)).toEqual(['Preference 1', 'Preference 2', 'Preference 3'])
+    expect(rows[0]).toMatchObject({ label: 'Preference 1', SDE: 2, BA: 1, QA: 0, total: 3 })
+    expect(rows[1]).toMatchObject({ label: 'Preference 2', SDE: 0, BA: 1, QA: 1, total: 2 })
+    expect(rows[2]).toMatchObject({ label: 'Preference 3', SDE: 0, BA: 1, QA: 0, total: 1 })
+  })
+
+  it('gives a rank past the old two-slot limit its own row', () => {
+    const { rows } = buildPositionPreferenceTable([
+      { preferredPositions: [{ title: 'A' }, { title: 'B' }, { title: 'C' }, { title: 'D' }] },
+    ])
+
+    expect(rows).toHaveLength(4)
+    expect(rows[3]).toMatchObject({ label: 'Preference 4', D: 1, total: 1 })
+  })
+
+  it('ignores candidates with no preferences and entries with no title', () => {
+    const { positions, rows } = buildPositionPreferenceTable([
+      {},
+      { preferredPositions: [] },
+      { preferredPositions: [null, { title: '' }, { title: 'SDE' }] },
+    ])
+
+    expect(positions).toEqual(['SDE'])
+    expect(rows).toEqual([{ key: 'rank-2', label: 'Preference 3', SDE: 1, total: 1 }])
+  })
+
+  it('zero-fills every column so sorters always compare numbers', () => {
+    const { positions, rows } = buildPositionPreferenceTable(candidates)
+
+    rows.forEach(row => positions.forEach(title => expect(typeof row[title]).toBe('number')))
   })
 })
