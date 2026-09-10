@@ -124,3 +124,103 @@ export function computeAnalytics(candidates) {
 
   return { total, withActiveBacklogs, withTotalBacklogs, avgCgpa, avg10th, avg12th, byBranch, byCollege, byLocation, byPosition }
 }
+
+/**
+ * The recruitment funnel proper — the tail of PIPELINE_STAGES (6 Month Review onwards)
+ * is post-hire retention, not hiring, so it is left out.
+ */
+export const FUNNEL_STAGES = ['Resume', 'Rounds', 'Offer', 'Joining']
+
+/**
+ * Roll per-event stage summaries into one funnel across every event.
+ *
+ * Counts are distinct candidates, not (event, candidate) rows: someone who sits two
+ * college drives is one person in the funnel, which is what the conversion rates mean.
+ * `advanced` is defined as "reached the next step" rather than read off a status, so
+ * the three segments always add back up to the step's own total.
+ *
+ * Stage rows are filtered through `candidateIds`, which is what makes `reached` a subset
+ * of `applied` by construction — without it a stale history row for a deleted candidate
+ * pushes a step above the one before it and the conversion reads over 100%.
+ *
+ * @param candidateIds `Set` of live candidate ids; its size is the entry step
+ * @param summariesByStage `{ [stageName]: [{ candidateId, status }] }`, merged across events
+ * @returns `[{ name, reached, rejected, advanced, inProgress, from, conversion }]`,
+ *   where `conversion` is the percentage of the previous step that reached this one
+ *   (null on the first step).
+ */
+export function buildFunnel(candidateIds, summariesByStage) {
+  const steps = [
+    { name: 'Applied', reached: candidateIds.size, rejected: 0 },
+    ...FUNNEL_STAGES.map(stage => {
+      const rows = (summariesByStage[stage] ?? []).filter(r => candidateIds.has(r.candidateId))
+      return {
+        name: stage,
+        reached: new Set(rows.map(r => r.candidateId)).size,
+        rejected: new Set(rows.filter(r => r.status === 'REJECTED').map(r => r.candidateId)).size,
+      }
+    }),
+  ]
+
+  return steps.map((step, i) => {
+    const advanced = steps[i + 1]?.reached ?? 0
+    const prev = steps[i - 1]
+    return {
+      ...step,
+      advanced,
+      inProgress: Math.max(0, step.reached - advanced - step.rejected),
+      from: prev?.name ?? null,
+      conversion: prev && prev.reached ? (step.reached / prev.reached) * 100 : null,
+    }
+  })
+}
+
+/**
+ * Per-college counts for the campus effectiveness table.
+ *
+ * Metrics are declarative so the table can grow without touching this function: each one
+ * is either a plain candidate count (no `stage`) or the distinct candidates from that
+ * college who reached `stage`, optionally narrowed to a `status`. Early attrition drops in
+ * as one more entry once there is a stage to count it from.
+ *
+ * Counts are distinct candidates, so someone who sat two drives for the same college is
+ * one person. A stage row whose candidate is unknown is ignored, which keeps a stale
+ * history row from inflating a college the same way it once inflated the funnel.
+ *
+ * @param candidates flat candidate array, each with `college.name`
+ * @param summariesByStage `{ [stageName]: [{ candidateId, status }] }`, merged across events
+ * @param metrics `[{ key, label, stage?, status? }]`
+ * @returns `[{ college, [metric.key]: count }]`, sorted by the first metric descending
+ */
+export function buildCampusRows(candidates, summariesByStage, metrics) {
+  const collegeOf = new Map(candidates.map(c => [c.id, c.college?.name]))
+  const zeroed = Object.fromEntries(metrics.map(m => [m.key, 0]))
+
+  const rows = new Map()
+  candidates.forEach(c => {
+    const college = c.college?.name
+    if (college && !rows.has(college)) rows.set(college, { college, ...zeroed })
+  })
+
+  metrics.forEach(metric => {
+    if (!metric.stage) {
+      candidates.forEach(c => {
+        const row = rows.get(c.college?.name)
+        if (row) row[metric.key] += 1
+      })
+      return
+    }
+    const counted = new Set()
+    ;(summariesByStage[metric.stage] ?? []).forEach(({ candidateId, status }) => {
+      if (metric.status && status !== metric.status) return
+      if (counted.has(candidateId)) return
+      const row = rows.get(collegeOf.get(candidateId))
+      if (!row) return
+      counted.add(candidateId)
+      row[metric.key] += 1
+    })
+  })
+
+  const [first] = metrics
+  return [...rows.values()].sort((a, b) => b[first.key] - a[first.key])
+}

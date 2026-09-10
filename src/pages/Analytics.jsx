@@ -8,7 +8,8 @@ import {
 } from 'recharts'
 import { getCandidates, getCandidateRoundResults } from '../api/candidates'
 import { getAllRoundResults } from '../api/roundResults'
-import { computeAnalytics, computeScoreByRoundType, groupAndAggregate, avg, buildRoundComparisonRows } from '../utils/analyticsHelpers'
+import { getEvents, getEventStageSummary } from '../api/events'
+import { computeAnalytics, computeScoreByRoundType, groupAndAggregate, avg, buildRoundComparisonRows, buildFunnel, buildCampusRows, FUNNEL_STAGES } from '../utils/analyticsHelpers'
 import { SPACE, GUTTER, RADIUS, FONT_SIZE, FONT_WEIGHT, INK, TEXT, useLayoutMetrics } from '../theme'
 
 const COLORS = ['#4f46e5', '#7c3aed', '#2563eb', '#0891b2', '#059669', '#d97706', '#dc2626', '#db2777']
@@ -148,6 +149,64 @@ function ConfigurableChart({ candidates, roundResults }) {
   )
 }
 
+/**
+ * Columns of the campus table, in display order. `stage` counts distinct candidates from
+ * the college who reached that stage; `status` narrows it to one decision; a metric with
+ * neither just counts candidates. Adding early attrition is one more entry here — nothing
+ * else on this page needs to change, since useStageSummaries fetches whatever stages the
+ * metrics name.
+ */
+const CAMPUS_METRICS = [
+  { key: 'applications', label: 'Applications' },
+  { key: 'shortlists', label: 'Shortlists', stage: 'Resume', status: 'SHORTLISTED' },
+  { key: 'offered', label: 'Offered', stage: 'Offer' },
+  { key: 'joined', label: 'Joined', stage: 'Joining' },
+]
+
+const CAMPUS_STAGES = [...new Set(CAMPUS_METRICS.map(m => m.stage).filter(Boolean))]
+
+function CampusEffectiveness({ candidates }) {
+  const { byStage, isPending } = useStageSummaries(CAMPUS_STAGES)
+  const rows = buildCampusRows(candidates, byStage, CAMPUS_METRICS)
+
+  const columns = [
+    {
+      title: 'College',
+      dataIndex: 'college',
+      key: 'college',
+      fixed: 'left',
+      width: 240,
+      sorter: (a, b) => a.college.localeCompare(b.college),
+      render: (college) => <span style={{ fontWeight: FONT_WEIGHT.medium }}>{college}</span>,
+    },
+    ...CAMPUS_METRICS.map(metric => ({
+      title: metric.label,
+      dataIndex: metric.key,
+      key: metric.key,
+      align: 'right',
+      width: 130,
+      sorter: (a, b) => a[metric.key] - b[metric.key],
+      render: (value) => (value === 0 ? <span style={{ color: INK.faint }}>0</span> : value),
+    })),
+  ]
+
+  return (
+    <Card title="Campus Effectiveness" bordered={false} style={{ borderRadius: RADIUS.card }}>
+      {isPending ? <Spin style={{ display: 'block', margin: `${SPACE.xl}px auto` }} /> : (
+        <Table
+          size="small"
+          pagination={false}
+          rowKey="college"
+          dataSource={rows}
+          columns={columns}
+          scroll={{ x: 'max-content' }}
+          locale={{ emptyText: <Empty description="No college data" /> }}
+        />
+      )}
+    </Card>
+  )
+}
+
 const PROFILE_CRITERIA = [
   { key: 'branch', label: 'Branch', get: c => c.branch },
   { key: 'college', label: 'College', get: c => c.college?.name },
@@ -261,6 +320,121 @@ function CandidateCompare({ candidates }) {
   )
 }
 
+// Ordered bottom-up so the stack reads left-to-right as "got through" → "still moving"
+// → "stopped here", which is also the order the eye scans the shrinking funnel.
+const FUNNEL_SEGMENTS = [
+  { key: 'advanced', label: 'Advanced', color: '#059669' },
+  { key: 'inProgress', label: 'In pipeline', color: '#d97706' },
+  { key: 'rejected', label: 'Rejected', color: '#dc2626' },
+]
+
+const pct = (v) => (v == null ? '—' : `${v.toFixed(1)}%`)
+
+/**
+ * Stage rows for the given stages, merged across every event.
+ *
+ * Nothing returns stage history for all events at once, so this fans out over
+ * event × stage. Keys match EventDetail's, so an already-visited event costs nothing,
+ * and two callers asking for the same stage share one request rather than two.
+ */
+function useStageSummaries(stages) {
+  const { data: events = [] } = useQuery({
+    queryKey: ['events'],
+    queryFn: () => getEvents().then(r => r.data.data),
+  })
+
+  const queries = useQueries({
+    queries: events.flatMap(event => stages.map(stage => ({
+      queryKey: ['eventStageSummary', String(event.id), stage],
+      queryFn: () => getEventStageSummary(event.id, stage).then(r => r.data.data),
+    }))),
+  })
+
+  const byStage = {}
+  events.forEach((_, ei) => stages.forEach((stage, si) => {
+    ;(byStage[stage] ??= []).push(...(queries[ei * stages.length + si]?.data ?? []))
+  }))
+
+  return { byStage, isPending: queries.some(q => q.isPending) }
+}
+
+function RecruitmentFunnel({ candidates }) {
+  const { isNarrow } = useLayoutMetrics()
+  const { byStage, isPending } = useStageSummaries(FUNNEL_STAGES)
+
+  const funnel = buildFunnel(new Set(candidates.map(c => c.id)), byStage)
+  const joined = funnel[funnel.length - 1]
+
+  const conversionRows = [
+    ...funnel.filter(step => step.from).map(step => ({
+      key: step.name, from: step.from, to: step.name, count: step.reached, conversion: step.conversion,
+    })),
+    {
+      key: 'overall',
+      from: 'Applied',
+      to: joined.name,
+      count: joined.reached,
+      conversion: funnel[0].reached ? (joined.reached / funnel[0].reached) * 100 : null,
+      overall: true,
+    },
+  ]
+
+  const columns = [
+    {
+      title: 'Step',
+      key: 'step',
+      render: (_, row) => (
+        <span style={{ fontWeight: row.overall ? FONT_WEIGHT.semibold : FONT_WEIGHT.regular }}>
+          {row.from} → {row.to}
+        </span>
+      ),
+    },
+    { title: 'Candidates', dataIndex: 'count', key: 'count', align: 'right', width: 100 },
+    {
+      title: 'Conversion',
+      dataIndex: 'conversion',
+      key: 'conversion',
+      align: 'right',
+      width: 110,
+      render: (value, row) => (
+        <span style={{ fontWeight: FONT_WEIGHT.semibold, color: row.overall ? INK.brand : INK.primary }}>
+          {pct(value)}
+        </span>
+      ),
+    },
+  ]
+
+  return (
+    <Card title="Recruitment Funnel" bordered={false} style={{ borderRadius: RADIUS.card }}>
+      {isPending ? <Spin style={{ display: 'block', margin: `${SPACE.xl}px auto` }} /> : (
+        <Row gutter={GUTTER}>
+          <Col xs={24} lg={14}>
+            <ResponsiveContainer width="100%" height={funnel.length * 44 + 48}>
+              <BarChart data={funnel} layout="vertical" margin={{ left: 0, right: isNarrow ? 12 : 24, top: 4, bottom: 4 }}>
+                <CartesianGrid horizontal={false} stroke="#eef0f4" />
+                <XAxis type="number" allowDecimals={false} tick={{ fontSize: FONT_SIZE.caption, fill: INK.faint }} />
+                <YAxis
+                  type="category" dataKey="name" width={isNarrow ? 74 : 108}
+                  tick={{ fontSize: isNarrow ? FONT_SIZE.caption : FONT_SIZE.small, fill: INK.secondary }}
+                  tickLine={false} axisLine={false}
+                />
+                <Tooltip cursor={{ fill: 'rgba(79, 70, 229, 0.06)' }} />
+                <Legend />
+                {FUNNEL_SEGMENTS.map(segment => (
+                  <Bar key={segment.key} dataKey={segment.key} name={segment.label} stackId="funnel" fill={segment.color} barSize={20} />
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
+          </Col>
+          <Col xs={24} lg={10}>
+            <Table size="small" pagination={false} rowKey="key" dataSource={conversionRows} columns={columns} />
+          </Col>
+        </Row>
+      )}
+    </Card>
+  )
+}
+
 export default function Analytics() {
   const { data: candidates = [], isLoading } = useQuery({
     queryKey: ['candidates'],
@@ -297,6 +471,20 @@ export default function Analytics() {
             </Card>
           </Col>
         ))}
+      </Row>
+
+      {/* Recruitment funnel */}
+      <Row gutter={GUTTER}>
+        <Col xs={24}>
+          <RecruitmentFunnel candidates={candidates} />
+        </Col>
+      </Row>
+
+      {/* Campus effectiveness */}
+      <Row gutter={GUTTER}>
+        <Col xs={24}>
+          <CampusEffectiveness candidates={candidates} />
+        </Col>
       </Row>
 
       {/* Branch distribution | Position preferences */}

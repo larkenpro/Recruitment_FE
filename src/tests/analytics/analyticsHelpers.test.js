@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { tally, avg, computeAnalytics, buildRoundComparisonRows } from '../../utils/analyticsHelpers'
+import { tally, avg, computeAnalytics, buildRoundComparisonRows, buildFunnel, buildCampusRows } from '../../utils/analyticsHelpers'
 
 // ── tally ─────────────────────────────────────────────────────────────────────
 
@@ -278,5 +278,99 @@ describe('buildRoundComparisonRows', () => {
     expect(buildRoundComparisonRows([])).toEqual([])
     expect(buildRoundComparisonRows()).toEqual([])
     expect(buildRoundComparisonRows([{ id: 1, events: [] }])).toEqual([])
+  })
+})
+
+describe('buildFunnel', () => {
+  const summaries = {
+    Resume: [
+      { candidateId: 1, status: 'SHORTLISTED' },
+      { candidateId: 2, status: 'SHORTLISTED' },
+      { candidateId: 3, status: 'REJECTED' },
+      { candidateId: 1, status: 'SHORTLISTED' }, // same person, second event
+    ],
+    Rounds: [{ candidateId: 1, status: 'SHORTLISTED' }, { candidateId: 2, status: 'REJECTED' }],
+    Offer: [{ candidateId: 1, status: 'SHORTLISTED' }],
+    Joining: [{ candidateId: 1, status: null }],
+  }
+
+  it('counts distinct candidates per stage and converts off the previous stage', () => {
+    const [applied, resume, rounds, offer, joining] = buildFunnel(new Set([1, 2, 3, 4, 5, 6]), summaries)
+
+    expect(applied).toMatchObject({ name: 'Applied', reached: 6, advanced: 3, inProgress: 3, conversion: null })
+    expect(resume).toMatchObject({ name: 'Resume', reached: 3, rejected: 1, advanced: 2, inProgress: 0, from: 'Applied' })
+    expect(resume.conversion).toBeCloseTo(50)
+    expect(rounds).toMatchObject({ reached: 2, rejected: 1, advanced: 1, inProgress: 0 })
+    expect(offer).toMatchObject({ reached: 1, advanced: 1 })
+    expect(joining).toMatchObject({ reached: 1, advanced: 0, inProgress: 1 })
+  })
+
+  it('reports no conversion rather than dividing by zero on an empty funnel', () => {
+    const steps = buildFunnel(new Set(), {})
+    expect(steps.every(s => s.conversion === null)).toBe(true)
+    expect(steps.every(s => s.reached === 0 && s.inProgress === 0)).toBe(true)
+  })
+
+  // candidate_stage_history had no delete cascade before V29, so a deleted candidate's rows
+  // survived and pushed a stage above the one feeding it — the funnel read 166.7% on real data.
+  it('ignores stage rows for candidates that no longer exist', () => {
+    const [applied, resume] = buildFunnel(new Set([1, 2, 3]), summaries)
+
+    expect(applied.reached).toBe(3)
+    expect(resume.reached).toBe(3)
+    expect(resume.conversion).toBeCloseTo(100)
+  })
+
+  it('never reports a conversion above 100%', () => {
+    const ghosts = { Resume: [7, 8, 9, 10].map(candidateId => ({ candidateId, status: 'SHORTLISTED' })) }
+    const steps = buildFunnel(new Set([1]), ghosts)
+
+    expect(steps.every(s => s.conversion == null || s.conversion <= 100)).toBe(true)
+  })
+})
+
+describe('buildCampusRows', () => {
+  const METRICS = [
+    { key: 'applications', label: 'Applications' },
+    { key: 'shortlists', label: 'Shortlists', stage: 'Resume', status: 'SHORTLISTED' },
+    { key: 'offered', label: 'Offered', stage: 'Offer' },
+  ]
+
+  const candidates = [
+    { id: 1, college: { name: 'NIT' } },
+    { id: 2, college: { name: 'NIT' } },
+    { id: 3, college: { name: 'CET' } },
+    { id: 4, college: null },
+  ]
+
+  const summaries = {
+    Resume: [
+      { candidateId: 1, status: 'SHORTLISTED' },
+      { candidateId: 1, status: 'SHORTLISTED' }, // same person, second drive
+      { candidateId: 2, status: 'REJECTED' },
+      { candidateId: 3, status: 'SHORTLISTED' },
+      { candidateId: 99, status: 'SHORTLISTED' }, // stale row, candidate is gone
+    ],
+    Offer: [{ candidateId: 1, status: null }],
+  }
+
+  it('counts distinct candidates per college and honours the status filter', () => {
+    const [nit, cet] = buildCampusRows(candidates, summaries, METRICS)
+
+    expect(nit).toEqual({ college: 'NIT', applications: 2, shortlists: 1, offered: 1 })
+    expect(cet).toEqual({ college: 'CET', applications: 1, shortlists: 1, offered: 0 })
+  })
+
+  it('skips candidates with no college and stage rows with no candidate', () => {
+    const rows = buildCampusRows(candidates, summaries, METRICS)
+
+    expect(rows.map(r => r.college)).toEqual(['NIT', 'CET'])
+    expect(rows.reduce((n, r) => n + r.shortlists, 0)).toBe(2) // id 99 not counted anywhere
+  })
+
+  it('zero-fills a metric whose stage has no rows, so a later column needs no other change', () => {
+    const withAttrition = [...METRICS, { key: 'attrition', label: 'Early Attrition', stage: 'Exit' }]
+
+    expect(buildCampusRows(candidates, summaries, withAttrition)[0].attrition).toBe(0)
   })
 })
