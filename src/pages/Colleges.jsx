@@ -102,14 +102,18 @@ export default function Colleges() {
 
   const handleOk = () => form.validateFields().then(values => {
     const dupes = (colleges ?? []).filter(c =>
-      c.id !== editingCollege?.id && isSimilar(c.name, values.name) && isSimilarOrBlank(c.city, values.city))
+      c.id !== editingCollege?.id
+      && (c.tier ?? '') === (values.tier ?? '')
+      && isSimilarOrBlank(c.city, values.city)
+      && isSimilarOrBlank(c.state, values.state)
+      && isSimilar(c.name, values.name))
     if (!dupes.length) return save(values)
     Modal.confirm({
       title: 'Possible duplicate college',
       content: (
         <>
           <p>Similar colleges already exist:</p>
-          <ul>{dupes.map(c => <li key={c.id}><strong>{c.name}</strong>{[c.city, c.state].filter(Boolean).length ? ` — ${[c.city, c.state].filter(Boolean).join(', ')}` : ''}</li>)}</ul>
+          <ul>{dupes.map(c => <li key={c.id}><strong>{c.name}</strong>{[c.city, c.state, c.tier].filter(Boolean).map(v => ` — ${v}`).join('')}</li>)}</ul>
         </>
       ),
       okText: 'Save anyway', cancelText: 'Go back',
