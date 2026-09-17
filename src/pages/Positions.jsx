@@ -66,14 +66,17 @@ export default function Positions() {
 
   const handleSave = (values) => {
     const dupes = (positions ?? []).filter(p =>
-      p.id !== editing?.id && isSimilar(p.title, values.title) && isSimilarOrBlank(p.department, values.department))
+      p.id !== editing?.id
+      && (p.type ?? '') === (values.type ?? '')
+      && isSimilarOrBlank(p.department, values.department)
+      && isSimilar(p.title, values.title))
     if (!dupes.length) return save(values)
     Modal.confirm({
       title: 'Possible duplicate position',
       content: (
         <>
           <p>Similar positions already exist:</p>
-          <ul>{dupes.map(p => <li key={p.id}><strong>{p.title}</strong>{p.department ? ` — ${p.department}` : ''}</li>)}</ul>
+          <ul>{dupes.map(p => <li key={p.id}><strong>{p.title}</strong>{[p.department, p.type].filter(Boolean).map(v => ` — ${v}`).join('')}</li>)}</ul>
         </>
       ),
       okText: 'Save anyway', cancelText: 'Go back',
