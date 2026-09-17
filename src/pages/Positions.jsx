@@ -7,6 +7,7 @@ import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
 import DevOnly from '../components/DevOnly'
 import { SPACE } from '../theme'
+import { isSimilar, isSimilarOrBlank } from '../utils/similarity'
 
 const TYPE_COLORS = { 'Full-Time': 'green', 'Part-Time': 'blue', 'Internship': 'orange', 'Contract': 'purple' }
 const TYPE_OPTIONS = ['Full-Time', 'Part-Time', 'Internship', 'Contract'].map(v => ({ value: v }))
@@ -59,16 +60,28 @@ export default function Positions() {
   const openEdit = (record) => { setEditing(record); form.setFieldsValue(record); setOpen(true) }
   const closeModal = () => { setOpen(false); setEditing(null); form.resetFields() }
 
+  const save = (values) => editing
+    ? updateMutation.mutate({ id: editing.id, data: values })
+    : createMutation.mutate(values)
+
   const handleSave = (values) => {
-    if (editing) {
-      updateMutation.mutate({ id: editing.id, data: values })
-    } else {
-      createMutation.mutate(values)
-    }
+    const dupes = (positions ?? []).filter(p =>
+      p.id !== editing?.id && isSimilar(p.title, values.title) && isSimilarOrBlank(p.department, values.department))
+    if (!dupes.length) return save(values)
+    Modal.confirm({
+      title: 'Possible duplicate position',
+      content: (
+        <>
+          <p>Similar positions already exist:</p>
+          <ul>{dupes.map(p => <li key={p.id}><strong>{p.title}</strong>{p.department ? ` — ${p.department}` : ''}</li>)}</ul>
+        </>
+      ),
+      okText: 'Save anyway', cancelText: 'Go back',
+      onOk: () => save(values),
+    })
   }
 
   const columns = [
-    { title: '#', dataIndex: 'id', width: 60 },
     { title: 'Title', dataIndex: 'title', render: t => <strong>{t}</strong> },
     { title: 'Department', dataIndex: 'department', render: d => d || '—' },
     {

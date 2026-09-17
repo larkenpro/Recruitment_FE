@@ -75,7 +75,6 @@ function UsersTab() {
   const roleOptions = (roles || []).map(r => ({ value: r.id, label: r.name }))
 
   const columns = [
-    { title: '#', dataIndex: 'id', width: 60 },
     { title: 'Username', dataIndex: 'username', render: t => <strong>{t}</strong> },
     { title: 'Email', dataIndex: 'email' },
     {
@@ -199,7 +198,6 @@ function RolesTab() {
   })
 
   const columns = [
-    { title: '#', dataIndex: 'id', width: 60 },
     { title: 'Name', dataIndex: 'name', render: (t, r) => <strong>{t}{r.protectedRole ? ' (protected)' : ''}</strong> },
     {
       title: 'Pages', dataIndex: 'pages',

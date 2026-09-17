@@ -62,8 +62,8 @@ export default function Events() {
   const statusColor = { UPCOMING: 'blue', ACTIVE: 'green', COMPLETED: 'default', CANCELLED: 'red' }
 
   const columns = [
-    { title: '#', dataIndex: 'id', width: 60 },
     { title: 'College', render: (_, r) => <a onClick={() => navigate(`/events/${r.id}`)}><strong>{r.college?.name}</strong></a> },
+    { title: 'Positions', dataIndex: 'positions', render: ps => ps?.length ? ps.map(p => <Tag key={p.id}>{p.title}</Tag>) : '—' },
     { title: 'Year', dataIndex: 'recruitmentYear' },
     { title: 'Start Date', dataIndex: 'startDate' },
     {

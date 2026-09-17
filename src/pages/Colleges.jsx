@@ -8,6 +8,7 @@ import FilterBar from '../components/FilterBar'
 import { EMAIL_RULE, PHONE_RULE } from '../components/validation/rules'
 import DevOnly from '../components/DevOnly'
 import { SPACE } from '../theme'
+import { isSimilar, isSimilarOrBlank } from '../utils/similarity'
 
 const FILTER_KEYS = [
   { key: 'city',  label: 'City',  getVal: r => r.city },
@@ -90,13 +91,30 @@ export default function Colleges() {
 
   const closeModal = () => { setOpen(false); setEditingCollege(null); form.resetFields() }
 
-  const handleOk = () => form.validateFields().then(values => {
+  const save = (values) => {
     if (editingCollege) {
       const { id, ...base } = editingCollege
       updateMutation.mutate({ id, data: { ...base, ...values } })
     } else {
       createMutation.mutate(values)
     }
+  }
+
+  const handleOk = () => form.validateFields().then(values => {
+    const dupes = (colleges ?? []).filter(c =>
+      c.id !== editingCollege?.id && isSimilar(c.name, values.name) && isSimilarOrBlank(c.city, values.city))
+    if (!dupes.length) return save(values)
+    Modal.confirm({
+      title: 'Possible duplicate college',
+      content: (
+        <>
+          <p>Similar colleges already exist:</p>
+          <ul>{dupes.map(c => <li key={c.id}><strong>{c.name}</strong>{[c.city, c.state].filter(Boolean).length ? ` — ${[c.city, c.state].filter(Boolean).join(', ')}` : ''}</li>)}</ul>
+        </>
+      ),
+      okText: 'Save anyway', cancelText: 'Go back',
+      onOk: () => save(values),
+    })
   })
 
   const openContacts = (record) => {
@@ -112,7 +130,6 @@ export default function Colleges() {
   })
 
   const columns = [
-    { title: '#', dataIndex: 'id', width: 60 },
     { title: 'Name', dataIndex: 'name', render: t => <strong>{t}</strong> },
     { title: 'City', dataIndex: 'city' },
     { title: 'State', dataIndex: 'state' },
