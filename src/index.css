@@ -79,3 +79,6 @@ body {
     font-size: 16px !important;
   }
 }
+
+/* Recharts legend items that toggle a series on click */
+.recharts-legend-item:hover .legend-toggle { text-decoration: underline; }

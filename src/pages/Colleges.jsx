@@ -10,10 +10,14 @@ import DevOnly from '../components/DevOnly'
 import { SPACE } from '../theme'
 import { isSimilar, isSimilarOrBlank } from '../utils/similarity'
 
+const STATUS_OPTIONS = ['Not Contacted', 'Contacted', 'In Conversation', 'Confirmed', 'Dropped']
+const STATUS_COLOR = { 'Not Contacted': 'default', Contacted: 'blue', 'In Conversation': 'gold', Confirmed: 'green', Dropped: 'red' }
+
 const FILTER_KEYS = [
   { key: 'city',  label: 'City',  getVal: r => r.city },
   { key: 'state', label: 'State', getVal: r => r.state },
   { key: 'tier',  label: 'Tier',  getVal: r => r.tier },
+  { key: 'status', label: 'Status', getVal: r => r.status },
 ]
 
 // contactPerson/collegeEmail/phoneNumber each hold a comma-joined, index-aligned
@@ -82,6 +86,7 @@ export default function Colleges() {
     form.setFieldsValue({
       ...colleges[idx],
       tier: tiers[Math.floor(Math.random() * tiers.length)],
+      status: STATUS_OPTIONS[Math.floor(Math.random() * STATUS_OPTIONS.length)],
     })
   }
 
@@ -138,6 +143,7 @@ export default function Colleges() {
     { title: 'City', dataIndex: 'city' },
     { title: 'State', dataIndex: 'state' },
     { title: 'Tier', dataIndex: 'tier', render: t => <Tag color={t === 'Tier 1' ? 'blue' : t === 'Tier 2' ? 'green' : 'default'}>{t}</Tag> },
+    { title: 'Status', dataIndex: 'status', render: t => t && <Tag color={STATUS_COLOR[t] ?? 'default'}>{t}</Tag> },
     {
       title: 'Contacts', width: 140, render: (_, record) => {
         const n = contactsFromRecord(record).filter(c => c.contactPerson || c.collegeEmail || c.phoneNumber).length
@@ -191,6 +197,9 @@ export default function Colleges() {
           <Form.Item name="state" label="State"><Input /></Form.Item>
           <Form.Item name="tier" label="Tier">
             <Select options={[{ value: 'Tier 1' }, { value: 'Tier 2' }, { value: 'Tier 3' }]} />
+          </Form.Item>
+          <Form.Item name="status" label="Status" initialValue="Not Contacted">
+            <Select options={STATUS_OPTIONS.map(value => ({ value }))} />
           </Form.Item>
         </Form>
       </Modal>

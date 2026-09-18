@@ -398,6 +398,13 @@ function useStageSummaries() {
 function RecruitmentFunnel({ candidates }) {
   const { isNarrow } = useLayoutMetrics()
   const { byStage, isPending } = useStageSummaries()
+  // Legend click toggles a segment; Bar `hide` keeps the entry in the legend but greys it out.
+  const [hidden, setHidden] = useState(new Set())
+  const toggleSegment = ({ dataKey }) => setHidden(prev => {
+    const next = new Set(prev)
+    next.has(dataKey) ? next.delete(dataKey) : next.add(dataKey)
+    return next
+  })
 
   const funnel = buildFunnel(new Set(candidates.map(c => c.id)), byStage)
   const joined = funnel[funnel.length - 1]
@@ -456,12 +463,19 @@ function RecruitmentFunnel({ candidates }) {
                   tickLine={false} axisLine={false}
                 />
                 <Tooltip cursor={{ fill: 'rgba(79, 70, 229, 0.06)' }} />
-                <Legend />
+                <Legend
+                  onClick={toggleSegment}
+                  wrapperStyle={{ cursor: 'pointer' }}
+                  formatter={(value, entry) => (
+                    <span className="legend-toggle" style={{ textDecoration: entry.inactive ? 'line-through' : 'none' }}>{value}</span>
+                  )}
+                />
                 {FUNNEL_SEGMENTS.map(segment => (
-                  <Bar key={segment.key} dataKey={segment.key} name={segment.label} stackId="funnel" fill={segment.color} barSize={20} />
+                  <Bar key={segment.key} dataKey={segment.key} name={segment.label} stackId="funnel" fill={segment.color} barSize={20} hide={hidden.has(segment.key)} />
                 ))}
               </BarChart>
             </ResponsiveContainer>
+            <div style={{ ...TEXT.caption, textAlign: 'center', marginTop: SPACE.xs }}>Click a legend item to show or hide it</div>
           </Col>
           <Col xs={24} lg={10}>
             <Table size="small" pagination={false} rowKey="key" dataSource={conversionRows} columns={columns} />
