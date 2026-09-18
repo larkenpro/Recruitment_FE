@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Card, Table, Button, Modal, Form, Input, Select, Tag, message, Space } from 'antd'
+import { Card, Table, Button, Modal, Form, Input, Select, Tag, message, Space, Popover } from 'antd'
 import { PlusOutlined, LinkOutlined, ExperimentOutlined, ImportOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
@@ -63,7 +63,23 @@ export default function Events() {
 
   const columns = [
     { title: 'College', render: (_, r) => <a onClick={() => navigate(`/events/${r.id}`)}><strong>{r.college?.name}</strong></a> },
-    { title: 'Positions', dataIndex: 'positions', render: ps => ps?.length ? ps.map(p => <Tag key={p.id}>{p.title}</Tag>) : '—' },
+    {
+      title: 'Positions', dataIndex: 'positions', width: 220,
+      render: ps => {
+        if (!ps?.length) return '—'
+        const shown = ps.slice(0, 2), rest = ps.slice(2)
+        return (
+          <>
+            {shown.map(p => <Tag key={p.id}>{p.title}</Tag>)}
+            {rest.length > 0 && (
+              <Popover content={rest.map(p => <Tag key={p.id}>{p.title}</Tag>)}>
+                <Tag style={{ cursor: 'pointer' }}>+{rest.length}</Tag>
+              </Popover>
+            )}
+          </>
+        )
+      },
+    },
     { title: 'Year', dataIndex: 'recruitmentYear' },
     { title: 'Start Date', dataIndex: 'startDate' },
     {
