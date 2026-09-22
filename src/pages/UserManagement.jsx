@@ -6,8 +6,9 @@ import {
 import { PlusOutlined, EditOutlined, DeleteOutlined, KeyOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  getUsers, createUser, updateUser, setUserEnabled, deleteUser, resetUserPassword,
+  getUsers, createUser, updateUser, setUserEnabled, deleteUser, resetUserPassword, clearAllData,
 } from '../api/users'
+import { useAuth } from '../context/AuthContext'
 import { getRoles, getRolePages, createRole, updateRole, deleteRole } from '../api/roles'
 
 const errorMessage = (err, fallback) => err.response?.data?.message || `${fallback} (${err.response?.status ?? 'network error'})`
@@ -187,7 +188,7 @@ function RolesTab() {
   const openAdd = () => { setEditingRole(null); roleForm.resetFields(); setRoleModalOpen(true) }
   const openEdit = (record) => {
     setEditingRole(record)
-    roleForm.setFieldsValue({ name: record.name, pages: record.pages })
+    roleForm.setFieldsValue({ name: record.name, pages: record.pages, canClearData: record.canClearData })
     setRoleModalOpen(true)
   }
   const closeRoleModal = () => { setRoleModalOpen(false); setEditingRole(null); roleForm.resetFields() }
@@ -203,6 +204,7 @@ function RolesTab() {
       title: 'Pages', dataIndex: 'pages',
       render: (pages) => pages.map(p => <Tag key={p}>{p}</Tag>),
     },
+    { title: 'Clear Data', dataIndex: 'canClearData', render: (v) => <Tag color={v ? 'red' : undefined}>{v ? 'Allowed' : 'No'}</Tag> },
     {
       title: 'Actions', width: 100,
       render: (_, record) => (
@@ -246,15 +248,47 @@ function RolesTab() {
               options={(pageOptions || []).map(p => ({ value: p.key, label: p.label }))}
             />
           </Form.Item>
+          <Form.Item name="canClearData" label="Can clear all data" valuePropName="checked" initialValue={false}>
+            <Switch disabled={editingRole?.protectedRole} />
+          </Form.Item>
         </Form>
       </Modal>
     </Card>
   )
 }
 
+function ClearDataButton() {
+  const queryClient = useQueryClient()
+  const [confirmText, setConfirmText] = useState('')
+  const mutation = useMutation({
+    mutationFn: clearAllData,
+    onSuccess: (res) => { queryClient.clear(); setConfirmText(''); message.success(res.data.message) },
+    onError: (err) => message.error(errorMessage(err, 'Failed to clear data')),
+  })
+  return (
+    <Popconfirm
+      title="Clear all data?"
+      description={
+        <>
+          <p>Deletes every candidate, college, event, position, offer and result. Users and roles are kept. This cannot be undone.</p>
+          <Input placeholder='Type "CLEAR" to confirm' value={confirmText} onChange={(e) => setConfirmText(e.target.value)} />
+        </>
+      }
+      okText="Clear everything"
+      okButtonProps={{ danger: true, disabled: confirmText !== 'CLEAR', loading: mutation.isPending }}
+      onConfirm={() => mutation.mutate()}
+      onCancel={() => setConfirmText('')}
+    >
+      <Button danger icon={<DeleteOutlined />}>Clear All Data</Button>
+    </Popconfirm>
+  )
+}
+
 export default function UserManagement() {
+  const { user } = useAuth()
   return (
     <Tabs
+      tabBarExtraContent={user?.canClearData && <ClearDataButton />}
       defaultActiveKey="users"
       items={[
         { key: 'users', label: 'Users', children: <UsersTab /> },

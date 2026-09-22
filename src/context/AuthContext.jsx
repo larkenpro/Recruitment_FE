@@ -26,7 +26,7 @@ export function AuthProvider({ children }) {
   const loginUser = (data) => {
     localStorage.setItem('token', data.token)
     setToken(data.token)
-    setUser({ username: data.username, email: data.email, pages: data.pages })
+    setUser({ username: data.username, email: data.email, pages: data.pages, canClearData: data.canClearData })
   }
 
   const logout = () => {
