@@ -9,9 +9,10 @@ import {
   getUsers, createUser, updateUser, setUserEnabled, deleteUser, resetUserPassword, clearAllData,
 } from '../api/users'
 import { useAuth } from '../context/AuthContext'
+import { getErrorMessage as errorMessage } from '../utils/errorUtils'
 import { getRoles, getRolePages, createRole, updateRole, deleteRole } from '../api/roles'
 
-const errorMessage = (err, fallback) => err.response?.data?.message || `${fallback} (${err.response?.status ?? 'network error'})`
+// Aliased so the shared helper's request-id suffix reaches this page's toasts too.
 
 function UsersTab() {
   const queryClient = useQueryClient()

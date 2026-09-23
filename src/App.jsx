@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ConfigProvider } from 'antd'
 import { antdTheme } from './theme'
-import { AuthProvider } from './context/AuthContext'
+import { AuthProvider, useAuth } from './context/AuthContext'
 import ProtectedRoute from './routes/ProtectedRoute'
 import PageGuard from './routes/PageGuard'
 import AppLayout from './components/Layout'
@@ -17,12 +17,24 @@ import Analytics from './pages/Analytics'
 import Candidates from './pages/Candidates'
 import ImportCandidates from './pages/ImportCandidates'
 import UserManagement from './pages/UserManagement'
+import AuditLog from './pages/AuditLog'
 
 const queryClient = new QueryClient()
 
 const P = ({ page, children }) => (
   <ProtectedRoute><AppLayout><PageGuard page={page}>{children}</PageGuard></AppLayout></ProtectedRoute>
 )
+
+// The audit log hangs off the CLEAR_DATA authority rather than a Page, matching the
+// backend's /api/v1/admin/** rule — so it can't go through PageGuard.
+const Admin = ({ children }) => {
+  const { user } = useAuth()
+  return (
+    <ProtectedRoute>
+      <AppLayout>{user?.canClearData ? children : <Navigate to="/" replace />}</AppLayout>
+    </ProtectedRoute>
+  )
+}
 
 export default function App() {
   return (
@@ -43,6 +55,7 @@ export default function App() {
               <Route path="/candidates/:id" element={<P page="CANDIDATES"><CandidateDetail /></P>} />
               <Route path="/analytics" element={<P page="ANALYTICS"><Analytics /></P>} />
               <Route path="/users" element={<P page="USER_MANAGEMENT"><UserManagement /></P>} />
+              <Route path="/audit" element={<Admin><AuditLog /></Admin>} />
             </Routes>
           </BrowserRouter>
         </AuthProvider>
