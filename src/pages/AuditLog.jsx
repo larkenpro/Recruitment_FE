@@ -13,6 +13,15 @@ const METHODS = ['POST', 'PUT', 'PATCH', 'DELETE', 'GET']
 const statusColour = (status) => (status >= 500 ? 'red' : status >= 400 ? 'orange' : 'green')
 const methodColour = (method) => (method === 'DELETE' ? 'red' : method === 'POST' ? 'blue' : 'default')
 
+// Bodies are stored as compact JSON, or a "[unparsed body, N bytes]" placeholder.
+const prettyBody = (body) => {
+  try {
+    return JSON.stringify(JSON.parse(body), null, 2)
+  } catch {
+    return body
+  }
+}
+
 export default function AuditLog() {
   const [filters, setFilters] = useState({ username: '', method: undefined, path: '', failuresOnly: false })
   const [range, setRange] = useState(null)
@@ -120,6 +129,12 @@ export default function AuditLog() {
         loading={isFetching}
         size="small"
         scroll={{ x: 'max-content' }}
+        expandable={{
+          rowExpandable: (row) => !!row.requestBody,
+          expandedRowRender: (row) => (
+            <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{prettyBody(row.requestBody)}</pre>
+          ),
+        }}
         pagination={{
           current: page,
           pageSize,
