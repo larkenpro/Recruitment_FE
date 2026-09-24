@@ -154,7 +154,7 @@ describe('Apply Flow', () => {
         name: '_Ghost',
         email: 'ghost@example.com',
         branch: 'Information Technology',
-        preferredPosition1Id: positionId,
+        preferredPositionIds: [positionId],
       })
     ).rejects.toMatchObject({ response: { status: 404 } })
   })

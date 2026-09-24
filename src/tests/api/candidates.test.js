@@ -37,6 +37,7 @@ describe('Candidates API', () => {
     const ts = Date.now()
     const res = await createCandidate({
       name: '_Test Candidate',
+      username: `test_${ts}`,
       email: `test_${ts}@example.com`,
       collegeId,
     })
@@ -61,6 +62,7 @@ describe('Candidates API', () => {
     const ts = Date.now()
     const res = await updateCandidate(createdId, {
       name: '_Test Candidate Updated',
+      username: `test_${ts}`,
       email: `test_${ts}@example.com`,
       collegeId,
     })

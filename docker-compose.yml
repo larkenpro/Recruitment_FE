@@ -3,5 +3,11 @@ services:
     build: .
     image: rajathhebbark/recruitment-fe:prod
     restart: unless-stopped
+    # Docker never rotates container stdout by default; cap it so nginx access logs can't fill the disk.
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
     ports:
       - "3002:80"
