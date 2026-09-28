@@ -44,6 +44,7 @@ export default function App() {
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<Login />} />
+              <Route path="/reset-password" element={<Login />} />
               <Route path="/apply/:token" element={<PublicApply />} />
               <Route path="/" element={<Navigate to="/colleges" replace />} />
               <Route path="/colleges" element={<P page="COLLEGES"><Colleges /></P>} />
