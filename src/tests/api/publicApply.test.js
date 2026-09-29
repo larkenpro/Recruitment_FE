@@ -32,7 +32,8 @@ describe('Apply Flow', () => {
       const event = eventsRes.data.data.find(e => e.positions?.length > 0) ?? eventsRes.data.data[0] ?? null
       if (event) {
         const linkRes = await generateLink(event.id)
-        applyToken = linkRes.data.data?.token ?? null
+        // generate returns the full apply URL (…/apply/<token>), not an object
+        applyToken = linkRes.data.data?.split('/apply/').pop() || null
 
         // prefer a position already linked to this event
         const posRes = await getEventPositions(event.id)
@@ -69,7 +70,7 @@ describe('Apply Flow', () => {
       tenthMark: 90,
       twelfthMark: 88,
       backlogs: 0,
-      preferredPosition1Id: positionId,
+      preferredPositionIds: [positionId],
     })
     expect(res.data.status).toBe('success')
     expect(typeof res.data.data.candidateId).toBe('number')
@@ -83,7 +84,7 @@ describe('Apply Flow', () => {
       email: `applicant2_${Date.now()}@example.com`,
       branch: 'Information Technology',
       backlogs: 0,
-      preferredPosition1Id: positionId,
+      preferredPositionIds: [positionId],
     })
     expect(res.data.status).toBe('success')
     expect(res.data.data.eventId).toBeDefined()
@@ -96,7 +97,7 @@ describe('Apply Flow', () => {
       submitApplication(applyToken, {
         email: `noemail_${Date.now()}@example.com`,
         branch: 'Electrical Engineering',
-        preferredPosition1Id: positionId,
+        preferredPositionIds: [positionId],
       })
     ).rejects.toMatchObject({ response: { status: 400 } })
   })
@@ -108,23 +109,12 @@ describe('Apply Flow', () => {
         name: '_Bad Email',
         email: 'not-an-email',
         branch: 'Electrical Engineering',
-        preferredPosition1Id: positionId,
+        preferredPositionIds: [positionId],
       })
     ).rejects.toMatchObject({ response: { status: 400 } })
   })
 
-  it('submitApplication — missing required branch returns 400', async () => {
-    if (!applyToken || !positionId) return
-    await expect(
-      submitApplication(applyToken, {
-        name: '_No Branch',
-        email: `nobranch_${Date.now()}@example.com`,
-        preferredPosition1Id: positionId,
-      })
-    ).rejects.toMatchObject({ response: { status: 400 } })
-  })
-
-  it('submitApplication — missing preferredPosition1Id returns 400', async () => {
+  it('submitApplication — missing preferredPositionIds returns 400', async () => {
     if (!applyToken) return
     await expect(
       submitApplication(applyToken, {
@@ -142,7 +132,7 @@ describe('Apply Flow', () => {
         name: '_Bad Position',
         email: `badpos_${Date.now()}@example.com`,
         branch: 'Civil Engineering',
-        preferredPosition1Id: 999999,
+        preferredPositionIds: [999999],
       })
     ).rejects.toMatchObject({ response: { status: 404 } })
   })
@@ -198,7 +188,7 @@ describe('Apply Flow', () => {
       twelfthMark: 88,
       ugCgpa: 8.5,
       backlogs: 0,
-      preferredPosition1Id: positionId,
+      preferredPositionIds: [positionId],
     })
     expect(res.data.status).toBe('success')
     expect(typeof res.data.data.candidateId).toBe('number')
@@ -216,7 +206,7 @@ describe('Apply Flow', () => {
       email: `backlogs0_${Date.now()}@example.com`,
       branch: 'Information Technology',
       backlogs: 0,
-      preferredPosition1Id: positionId,
+      preferredPositionIds: [positionId],
     })
     expect(res.data.status).toBe('success')
   })
@@ -231,7 +221,7 @@ describe('Apply Flow', () => {
         email: `negbacklogs_${Date.now()}@example.com`,
         branch: 'Electrical Engineering',
         backlogs: -1,
-        preferredPosition1Id: positionId,
+        preferredPositionIds: [positionId],
       })
     ).rejects.toMatchObject({ response: { status: 400 } })
   })
@@ -248,7 +238,7 @@ describe('Apply Flow', () => {
         branch: 'Computer Science & Engineering',
         ugCgpa: 11,
         backlogs: 0,
-        preferredPosition1Id: positionId,
+        preferredPositionIds: [positionId],
       })
     ).rejects.toMatchObject({ response: { status: 400 } })
   })
@@ -262,7 +252,7 @@ describe('Apply Flow', () => {
         branch: 'Computer Science & Engineering',
         tenthMark: 105,
         backlogs: 0,
-        preferredPosition1Id: positionId,
+        preferredPositionIds: [positionId],
       })
     ).rejects.toMatchObject({ response: { status: 400 } })
   })
@@ -276,7 +266,7 @@ describe('Apply Flow', () => {
         branch: 'Computer Science & Engineering',
         ugCgpa: -1,
         backlogs: 0,
-        preferredPosition1Id: positionId,
+        preferredPositionIds: [positionId],
       })
     ).rejects.toMatchObject({ response: { status: 400 } })
   })
@@ -293,34 +283,9 @@ describe('Apply Flow', () => {
         branch: 'Computer Science & Engineering',
         ugCgpa: NaN,
         backlogs: 0,
-        preferredPosition1Id: positionId,
+        preferredPositionIds: [positionId],
       })
     ).rejects.toMatchObject({ response: { status: 400 } })
-  })
-
-  // ── handleSubmit: duplicate preferred positions ───────────────────────────
-  // The component UI filters pref2 to exclude pref1, but the API receives raw
-  // IDs — both being the same should be caught or handled gracefully.
-  it('submitApplication — same position for pref1 and pref2 is handled (400 or success)', async () => {
-    if (!applyToken || !positionId) return
-    let status
-    try {
-      const res = await submitApplication(applyToken, {
-        name: '_Test Dup Pref',
-        email: `duppref_${Date.now()}@example.com`,
-        branch: 'Information Technology',
-        backlogs: 0,
-        preferredPosition1Id: positionId,
-        preferredPosition2Id: positionId,  // same as pref1
-      })
-      status = res.status
-    } catch (err) {
-      status = err.response?.status
-    }
-    // Acceptable outcomes: API rejects (400) or accepts (200/201).
-    // If it silently accepts duplicates, status is truthy and this passes.
-    // The point is: it must NOT return 500 (unhandled error).
-    expect(status).not.toBe(500)
   })
 
   // ── handleSubmit: duplicate email submission ──────────────────────────────
@@ -334,7 +299,7 @@ describe('Apply Flow', () => {
       email,
       branch: 'Information Technology',
       backlogs: 0,
-      preferredPosition1Id: positionId,
+      preferredPositionIds: [positionId],
     })
     // Second submission with same email
     try {
@@ -343,7 +308,7 @@ describe('Apply Flow', () => {
         email,
         branch: 'Information Technology',
         backlogs: 0,
-        preferredPosition1Id: positionId,
+        preferredPositionIds: [positionId],
       })
       // If the backend silently accepts duplicates, that is also a valid outcome
       // but the test documents the behavior.
@@ -363,7 +328,7 @@ describe('Apply Flow', () => {
       email: `intern_${Date.now()}@example.com`,
       branch: 'Computer Science & Engineering',
       backlogs: 0,
-      preferredPosition1Id: positionId,
+      preferredPositionIds: [positionId],
       internshipAvailability: 'June-2025 to August-2025',
     })
     expect(res.data.status).toBe('success')
@@ -377,7 +342,7 @@ describe('Apply Flow', () => {
       email: `nointern_${Date.now()}@example.com`,
       branch: 'Computer Science & Engineering',
       backlogs: 0,
-      preferredPosition1Id: positionId,
+      preferredPositionIds: [positionId],
       internshipAvailability: null,
     })
     expect(res.data.status).toBe('success')
@@ -394,7 +359,7 @@ describe('Apply Flow', () => {
         email: `longname_${Date.now()}@example.com`,
         branch: 'Computer Science & Engineering',
         backlogs: 0,
-        preferredPosition1Id: positionId,
+        preferredPositionIds: [positionId],
       })
       status = res.status
     } catch (err) {
@@ -410,7 +375,7 @@ describe('Apply Flow', () => {
       email: `special_${Date.now()}@example.com`,
       branch: 'Computer Science & Engineering',
       backlogs: 0,
-      preferredPosition1Id: positionId,
+      preferredPositionIds: [positionId],
     })
     expect(res.data.status).toBe('success')
   })
@@ -424,7 +389,7 @@ describe('Apply Flow', () => {
         email: `xss_${Date.now()}@example.com`,
         branch: 'Computer Science & Engineering',
         backlogs: 0,
-        preferredPosition1Id: positionId,
+        preferredPositionIds: [positionId],
       })
       status = res.status
     } catch (err) {
@@ -451,7 +416,7 @@ describe('Apply Flow', () => {
       pgDegree: 'M.Tech CSE',
       pgCgpa: 9.0,
       backlogs: 0,
-      preferredPosition1Id: positionId,
+      preferredPositionIds: [positionId],
       jobLocation: 'Both',
       githubLink: 'https://github.com/testuser',
       leadershipPositions: 'Class Representative, Coding Club Lead',

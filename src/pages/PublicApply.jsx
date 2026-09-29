@@ -4,7 +4,7 @@ import { Form, Input, Select, Button, Card, Row, Col, Typography, Divider, Uploa
 import { UploadOutlined, UserOutlined, BookOutlined, AimOutlined, ArrowUpOutlined, ArrowDownOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { getApplyForm, submitApplication, checkApplication } from '../api/candidates'
 import { getEventPositions } from '../api/events'
-import { EMAIL_RULE, PHONE_RULE, URL_RULE, CGPA_RULE, SCORE_RULE, requiredRule } from '../components/validation/rules'
+import { EMAIL_RULE, PHONE_RULE, URL_RULE, CGPA_RULE, SCORE_RULE, NON_NEGATIVE_RULE, requiredRule } from '../components/validation/rules'
 import DevOnly from '../components/DevOnly'
 import { SPACE, GUTTER } from '../theme'
 
@@ -361,7 +361,7 @@ export default function PublicApply() {
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12}>
-                  <Form.Item name="keamRank" label="KEAM Rank (if applicable)">
+                  <Form.Item name="keamRank" label="KEAM Rank (if applicable)" rules={[NON_NEGATIVE_RULE]}>
                     <Input type="number" placeholder="1234" size="large" />
                   </Form.Item>
                 </Col>
@@ -386,12 +386,12 @@ export default function PublicApply() {
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12}>
-                  <Form.Item name="arrears" label="Active Backlogs">
+                  <Form.Item name="arrears" label="Active Backlogs" rules={[NON_NEGATIVE_RULE]}>
                     <Input type="number" placeholder="0" size="large" />
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12}>
-                  <Form.Item name="backlogs" label="Total Backlogs">
+                  <Form.Item name="backlogs" label="Total Backlogs" rules={[NON_NEGATIVE_RULE]}>
                     <Input type="number" placeholder="0" size="large" />
                   </Form.Item>
                 </Col>

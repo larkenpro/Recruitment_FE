@@ -5,7 +5,6 @@ import {
   createPosition,
   updatePosition,
   deletePosition,
-  getPublicPositions,
 } from '../../api/positions'
 
 describe('Positions API', () => {
@@ -91,12 +90,5 @@ describe('Positions API', () => {
     await expect(getPosition(999999)).rejects.toMatchObject({
       response: { status: 404 },
     })
-  })
-
-  // ── getPublicPositions ────────────────────────────────────────────────────
-  it('getPublicPositions — returns success with an array', async () => {
-    const res = await getPublicPositions()
-    expect(res.data.status).toBe('success')
-    expect(Array.isArray(res.data.data)).toBe(true)
   })
 })

@@ -6,7 +6,6 @@ import {
   updateCandidate,
   deleteCandidate,
   getCandidateResume,
-  getCandidateScores,
   getCandidateStageHistory,
 } from '../../api/candidates'
 import { getColleges } from '../../api/colleges'
@@ -72,21 +71,14 @@ describe('Candidates API', () => {
   })
 
   // ── Sub-resources ─────────────────────────────────────────────────────────
-  it.skip('GET /candidates/:id/scores — returns success with an array', async () => {
-    if (!createdId) return
-    const res = await getCandidateScores(createdId)
-    expect(res.data.status).toBe('success')
-    expect(Array.isArray(res.data.data)).toBe(true)
-  })
-
-  it.skip('GET /candidates/:id/stage-history — returns success with an array', async () => {
+  // stage-history returns a bare list, not the usual { status, data } envelope
+  it('GET /candidates/:id/stage-history — returns an array', async () => {
     if (!createdId) return
     const res = await getCandidateStageHistory(createdId)
-    expect(res.data.status).toBe('success')
-    expect(Array.isArray(res.data.data)).toBe(true)
+    expect(Array.isArray(res.data)).toBe(true)
   })
 
-  it.skip('GET /candidates/:id/resume — returns 404 when no resume uploaded', async () => {
+  it('GET /candidates/:id/resume — returns 404 when no resume uploaded', async () => {
     if (!createdId) return
     await expect(getCandidateResume(createdId)).rejects.toMatchObject({
       response: { status: 404 },

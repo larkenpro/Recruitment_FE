@@ -3,6 +3,9 @@ import { getEvents, getEvent, createEvent, updateEventStatus, getRounds, createR
 import { getColleges } from '../../api/colleges'
 import { createPosition, deletePosition } from '../../api/positions'
 
+// Events can't be deleted and identical ones are rejected, so each run needs its own years.
+const YEAR = 3000 + Math.floor(Math.random() * 6000)
+
 describe('Events API', () => {
   let createdId = null
   let collegeId = null
@@ -29,12 +32,12 @@ describe('Events API', () => {
     if (!collegeId) return // skip if no college seeded
     const res = await createEvent({
       collegeId,
-      recruitmentYear: 2099,
-      startDate: '2099-01-01',
+      recruitmentYear: YEAR,
+      startDate: `${YEAR}-01-01`,
       status: 'UPCOMING',
     })
     expect(res.data.status).toBe('success')
-    expect(res.data.data.recruitmentYear).toBe(2099)
+    expect(res.data.data.recruitmentYear).toBe(YEAR)
     createdId = res.data.data.id
   })
 
@@ -57,7 +60,7 @@ describe('Events API', () => {
   // ── Rounds ────────────────────────────────────────────────────────────────
   // BACKEND BUG: /events/:id/rounds returns 500 for both GET and POST.
   // Unskip these once the backend rounds endpoints are fixed.
-  describe.skip('Rounds', () => {
+  describe('Rounds', () => {
     let createdRoundId = null
 
     // ── GET rounds (empty) ──────────────────────────────────────────────────
@@ -165,8 +168,8 @@ describe('Events API', () => {
       if (!collegeId || !positionId) return
       const res = await createEvent({
         collegeId,
-        recruitmentYear: 2097,
-        startDate: '2097-01-01',
+        recruitmentYear: YEAR + 1,
+        startDate: `${YEAR + 1}-01-01`,
         status: 'UPCOMING',
         positionIds: [positionId],
       })
@@ -183,8 +186,8 @@ describe('Events API', () => {
       if (!collegeId) return
       const res = await createEvent({
         collegeId,
-        recruitmentYear: 2096,
-        startDate: '2096-01-01',
+        recruitmentYear: YEAR + 2,
+        startDate: `${YEAR + 2}-01-01`,
         status: 'UPCOMING',
       })
       expect(res.data.status).toBe('success')

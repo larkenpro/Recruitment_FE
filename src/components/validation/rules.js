@@ -28,3 +28,4 @@ const rangeRule = (min, max, message) => ({
 
 export const SCORE_RULE = rangeRule(0, 100, 'Score must be between 0 and 100')
 export const CGPA_RULE = rangeRule(0, 10, 'CGPA must be between 0 and 10')
+export const NON_NEGATIVE_RULE = rangeRule(0, Infinity, 'Cannot be negative')
