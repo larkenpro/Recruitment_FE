@@ -8,7 +8,7 @@ import {
   requestSignInLink, setCandidateSession, updateMyApplication, updateMyProfile, uploadMyResume,
 } from '../api/portal'
 import { getPublicEventPositions } from '../api/candidates'
-import { eventPairs, preferenceKey, preferenceLabel, rankedWithChosenFirst, selectedPreferences } from '../utils/preferences'
+import { eventPairs, hasInternship, preferenceKey, preferenceLabel, rankedWithChosenFirst, selectedPreferences, tickedPairs } from '../utils/preferences'
 import { academicFormValues, academicPayload } from '../utils/academic'
 import { EMAIL_RULE, PHONE_RULE, URL_RULE, requiredRule } from '../components/validation/rules'
 import AcademicFields, { BRANCH_OPTIONS, JOB_LOCATION_OPTIONS } from '../components/AcademicFields'
@@ -269,11 +269,14 @@ function ApplicationForm({ eventId, initial, chosen, askConsent = false, submitL
             <Select allowClear placeholder="Select location" options={JOB_LOCATION_OPTIONS} />
           </Form.Item>
         </Col>
-        <Col xs={24} sm={12}>
-          <Form.Item name="internshipAvailability" label="Internship Availability">
-            <DatePicker.RangePicker picker="month" style={{ width: '100%' }} format="MMMM YYYY" />
-          </Form.Item>
-        </Col>
+        {/* Only for internship applications; unticking them drops the field and its value. */}
+        {ranker && hasInternship(tickedPairs(ranker.ranked, ranker.selected)) && (
+          <Col xs={24} sm={12}>
+            <Form.Item name="internshipAvailability" label="Internship Availability" preserve={false}>
+              <DatePicker.RangePicker picker="month" style={{ width: '100%' }} format="MMMM YYYY" />
+            </Form.Item>
+          </Col>
+        )}
         <Col xs={24}>
           <Form.Item name="leadershipPositions" label="Leadership Positions Held">
             <Input.TextArea rows={2} />

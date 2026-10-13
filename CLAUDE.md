@@ -232,6 +232,7 @@ Token-based public form — no auth required. **Only for new candidates.**
 - Leaving step 0 calls `checkApplication(token, { email, rollNo })`. If they're already a candidate, a modal says "A candidate with this email/roll number already exists" with **[Cancel]** / **[Send me a link]** — the link goes to the masked email on file (`requestSignInLink`) and leads to the candidate page. A 409 from submit shows the same modal.
 - At least one pair must be ticked: a submit without one (even if other fields also fail) shows "Tick at least one position you want to apply for." under the ranker and scrolls to it; it clears once one is ticked.
 - The GitHub Link field only shows once the candidate ticks a position in the **IT** department (`hasItPosition` in `utils/preferences.js`, case/space-insensitive; department is free text, so "Information Technology" doesn't count). The admin modal and the candidate profile always show it.
+- Internship Availability likewise only shows once a ticked pair's type is Internship or Intern-to-FTE (`hasInternship`), here and in the candidate page's apply/edit form; unticking drops the value (`preserve={false}`), so the application saves none. The admin modal always shows it.
 - Form values go through `academicPayload` (`utils/academic.js`) before submit.
 - `components/ConsentField` (required checkbox: information may be used for recruitment) sits above Submit; the candidate page's "Apply to …" form uses it too. CandidateDetail shows when consent was given.
 - "Fill Test Data" buttons are `DevOnly`.

@@ -4,7 +4,7 @@ import { Form, Input, Select, Button, Card, Row, Col, Typography, Divider, Uploa
 import { UploadOutlined, UserOutlined, BookOutlined, AimOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { getApplyForm, submitApplication, checkApplication, getPublicEventPositions } from '../api/candidates'
 import { requestSignInLink } from '../api/portal'
-import { eventPairs, hasItPosition, preferenceKey } from '../utils/preferences'
+import { eventPairs, hasInternship, hasItPosition, preferenceKey, tickedPairs } from '../utils/preferences'
 import { academicPayload } from '../utils/academic'
 import { EMAIL_RULE, PHONE_RULE, URL_RULE, requiredRule } from '../components/validation/rules'
 import AcademicFields, { BRANCH_OPTIONS, JOB_LOCATION_OPTIONS } from '../components/AcademicFields'
@@ -37,6 +37,8 @@ export default function PublicApply() {
   // Set by a submit with nothing ticked; the prompt shows by the ranker until one is ticked.
   const [prefError, setPrefError] = useState(false)
   const rankerRef = useRef(null)
+  // GitHub and internship availability are only asked for when a ticked position calls for them.
+  const ticked = tickedPairs(rankedPairs, selected)
 
   useEffect(() => {
     getApplyForm(token)
@@ -327,8 +329,8 @@ export default function PublicApply() {
                     <Select size="large" placeholder="Select location" options={JOB_LOCATION_OPTIONS} />
                   </Form.Item>
                 </Col>
-                {/* Only asked once an IT position is ticked; unticking it drops the field and its value. */}
-                {hasItPosition(rankedPairs.filter(p => selected.has(preferenceKey(p)))) && (
+                {/* Unticking the position that calls for a field drops the field and its value (preserve={false}). */}
+                {hasItPosition(ticked) && (
                   <Col xs={24} sm={12}>
                     <Form.Item name="githubLink" label="GitHub Link" rules={[URL_RULE]} preserve={false}>
                       <Input placeholder="https://github.com/username" size="large" />
@@ -340,16 +342,18 @@ export default function PublicApply() {
                     <Input.TextArea rows={3} placeholder="Class Representative, Coding Club Lead..." size="large" />
                   </Form.Item>
                 </Col>
-                <Col xs={24} sm={12}>
-                  <Form.Item name="internshipAvailability" label="Internship Availability">
-                    <DatePicker.RangePicker
-                      picker="month"
-                      size="large"
-                      style={{ width: '100%' }}
-                      format="MMMM YYYY"
-                    />
-                  </Form.Item>
-                </Col>
+                {hasInternship(ticked) && (
+                  <Col xs={24} sm={12}>
+                    <Form.Item name="internshipAvailability" label="Internship Availability" preserve={false}>
+                      <DatePicker.RangePicker
+                        picker="month"
+                        size="large"
+                        style={{ width: '100%' }}
+                        format="MMMM YYYY"
+                      />
+                    </Form.Item>
+                  </Col>
+                )}
                 <Col xs={24} sm={12}>
                   <Form.Item
                     label={<span>Resume (PDF/DOC) <span style={{ color: '#ff4d4f' }}>*</span></span>}

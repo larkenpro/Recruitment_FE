@@ -22,6 +22,12 @@ export const rankedWithChosenFirst = (chosen, openPairs) => {
 // Whether any pair is for a position in the IT department (department is free text).
 export const hasItPosition = (pairs) => pairs.some((p) => p.position.department?.trim().toLowerCase() === 'it')
 
+// Whether any pair involves an internship: the Internship and Intern-to-FTE types.
+export const hasInternship = (pairs) => pairs.some((p) => /intern/i.test(p.type.name))
+
+// The ticked pairs, in ranked order.
+export const tickedPairs = (ranked, selected) => ranked.filter((p) => selected.has(preferenceKey(p)))
+
 // Ticked pairs in ranked order, as the JSON endpoints take them.
 export const selectedPreferences = (ranked, selected) =>
   ranked
