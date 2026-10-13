@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Card, Table, Button, Modal, Form, Input, message, Space, Popconfirm } from 'antd'
+import { Card, Table, Button, Modal, Form, Input, message, Space, Popconfirm, Tag } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, ExperimentOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getPositions, createPosition, updatePosition, deletePosition } from '../api/positions'
@@ -47,6 +47,7 @@ export default function Positions() {
     form.setFieldsValue({
       title: titles[Math.floor(Math.random() * titles.length)],
       department: departments[Math.floor(Math.random() * departments.length)],
+      jobDescription: 'Work with the team to design, build and test features end to end. Freshers welcome; training provided.',
     })
   }
 
@@ -80,6 +81,11 @@ export default function Positions() {
   const columns = [
     { title: 'Title', dataIndex: 'title', render: t => <strong>{t}</strong> },
     { title: 'Department', dataIndex: 'department', render: d => d || '—' },
+    {
+      // Sent to colleges in automated emails, so a missing one is flagged rather than hidden.
+      title: 'Job Description', dataIndex: 'jobDescription', width: 360, ellipsis: true,
+      render: jd => jd || <Tag color="red">Missing</Tag>,
+    },
     {
       title: 'Actions', render: (_, r) => (
         <Space>
@@ -130,6 +136,14 @@ export default function Positions() {
           </Form.Item>
           <Form.Item name="department" label="Department">
             <Input placeholder="Engineering" />
+          </Form.Item>
+          <Form.Item
+            name="jobDescription"
+            label="Job Description"
+            extra="Included in the automated emails sent to colleges."
+            rules={[{ required: true, whitespace: true, message: 'Job description is required' }]}
+          >
+            <Input.TextArea rows={6} placeholder="Responsibilities, skills, eligibility…" />
           </Form.Item>
         </Form>
       </Modal>

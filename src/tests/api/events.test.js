@@ -149,6 +149,7 @@ describe('Events API', () => {
         const res = await createPosition({
           title: '_Test Position (events suite)',
           department: 'Engineering',
+          jobDescription: 'Scratch position for the events suite.',
         })
         positionId = res.data.data.id
       } catch {

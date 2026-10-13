@@ -172,7 +172,7 @@ Renders dropdowns (or number inputs for min/max) from `optionMap`. Active filter
 - API: `src/api/events.js` — `getEvents`, `createEvent`, `updateEventStatus`, `generateLink`, `getRounds`, `createRound`, `getEventPositions`, `addEventPositions`, `removeEventPosition`, `getCandidatesByEvent`.
 
 ### Positions (`src/pages/Positions.jsx`)
-- CRUD for job positions (title, department). One row per title — the type (Internship / FTE / Intern-to-FTE) is chosen per event on EventDetail, not here.
+- CRUD for job positions (title, department, job description — required, sent to colleges in automated emails; the table flags positions without one as "Missing"). One row per title — the type (Internship / FTE / Intern-to-FTE) is chosen per event on EventDetail, not here.
 - Delete with Popconfirm.
 - Filter keys: department.
 - API: `src/api/positions.js` — `getPositions`, `createPosition`, `updatePosition`, `deletePosition`.

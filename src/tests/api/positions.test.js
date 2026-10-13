@@ -23,11 +23,13 @@ describe('Positions API', () => {
     const res = await createPosition({
       title: '_Test Engineer',
       department: 'QA',
+      jobDescription: 'Test the product end to end.',
     })
     expect(res.data.status).toBe('success')
     expect(res.data.data).toMatchObject({
       title: '_Test Engineer',
       department: 'QA',
+      jobDescription: 'Test the product end to end.',
     })
     expect(typeof res.data.data.id).toBe('number')
     createdId = res.data.data.id
@@ -56,11 +58,16 @@ describe('Positions API', () => {
     expect(res.data.data.map(t => t.name)).toEqual(['Internship', 'FTE', 'Intern-to-FTE'])
   })
 
+  it('POST /positions — missing job description returns 400', async () => {
+    await expect(createPosition({ title: '_No JD' })).rejects.toMatchObject({ response: { status: 400 } })
+  })
+
   // ── PUT ───────────────────────────────────────────────────────────────────
   it('PUT /positions/:id — updates the position', async () => {
     const res = await updatePosition(createdId, {
       title: '_Senior Test Engineer',
       department: 'QA',
+      jobDescription: 'Lead QA for the product.',
     })
     expect(res.data.status).toBe('success')
     expect(res.data.data.title).toBe('_Senior Test Engineer')

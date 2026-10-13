@@ -307,7 +307,7 @@ export default function ImportCandidates() {
                 </Form.Item>
               </Form>
               <Alert type="info" showIcon
-                message="The workbook's positions are attached to the new event automatically, and any title missing from the Positions table is created with a placeholder department."
+                message="The workbook's positions are attached to the new event automatically, and any title missing from the Positions table is created with a placeholder department and no job description."
                 description={positionTitles.join(', ') || 'none found'} />
             </>
           )}
@@ -340,7 +340,7 @@ export default function ImportCandidates() {
               description={[
                 failures.length ? `${failures.length} row(s) rejected.` : null,
                 result.createdPositions?.length
-                  ? `Created ${result.createdPositions.length} new position(s) with placeholder department/type: ${result.createdPositions.join(', ')} — fill them in on the Positions page.`
+                  ? `Created ${result.createdPositions.length} new position(s) with a placeholder department and no job description: ${result.createdPositions.join(', ')} — fill them in on the Positions page.`
                   : null,
               ].filter(Boolean).join(' ') || null}
             />
