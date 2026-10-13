@@ -6,4 +6,4 @@ export const createPosition = (data) => api.post('/positions', data)
 export const updatePosition = (id, data) => api.put(`/positions/${id}`, data)
 export const deletePosition = (id) => api.delete(`/positions/${id}`)
 
-export const getPublicPositions = () => api.get('/positions')
+export const getPositionTypes = () => api.get('/position-types')

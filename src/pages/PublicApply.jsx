@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
-import { Form, Input, Select, Button, Card, Row, Col, Typography, Divider, Upload, Alert, Steps, Result, DatePicker, Tag, Space, Modal } from 'antd'
+import { Form, Input, Select, Button, Card, Row, Col, Typography, Divider, Upload, Alert, Steps, Result, DatePicker, Tag, Space, Modal, Checkbox } from 'antd'
 import { UploadOutlined, UserOutlined, BookOutlined, AimOutlined, ArrowUpOutlined, ArrowDownOutlined, ThunderboltOutlined } from '@ant-design/icons'
-import { getApplyForm, submitApplication, checkApplication } from '../api/candidates'
-import { getEventPositions } from '../api/events'
+import { getApplyForm, submitApplication, checkApplication, getPublicEventPositions } from '../api/candidates'
+import { eventPairs, preferenceKey } from '../utils/preferences'
 import { EMAIL_RULE, PHONE_RULE, URL_RULE, CGPA_RULE, SCORE_RULE, NON_NEGATIVE_RULE, requiredRule } from '../components/validation/rules'
 import DevOnly from '../components/DevOnly'
 import { SPACE, GUTTER } from '../theme'
@@ -14,7 +14,10 @@ export default function PublicApply() {
   const { token } = useParams()
   const [form] = Form.useForm()
   const [eventInfo, setEventInfo] = useState(null)
+  // Every (position, type) pair the event is hiring for, in the candidate's ranked order;
+  // only the ticked ones are submitted.
   const [rankedPositions, setRankedPositions] = useState([])
+  const [included, setIncluded] = useState(new Set())
   const [positionsLoaded, setPositionsLoaded] = useState(false)
 
   const movePosition = (index, dir) => {
@@ -36,9 +39,9 @@ export default function PublicApply() {
     getApplyForm(token)
       .then(r => {
         setEventInfo(r.data)
-        return getEventPositions(r.data.data.event.id)
+        return getPublicEventPositions(r.data.data.event.id)
       })
-      .then(r => { setRankedPositions(r.data.data); setPositionsLoaded(true) })
+      .then(r => { setRankedPositions(eventPairs(r.data.data)); setPositionsLoaded(true) })
       .catch(() => setError('Invalid or expired link'))
   }, [token])
 
@@ -84,7 +87,18 @@ export default function PublicApply() {
     setStep(1)
   }
 
+  const toggleIncluded = (key, checked) => setIncluded(prev => {
+    const next = new Set(prev)
+    if (checked) next.add(key)
+    else next.delete(key)
+    return next
+  })
+
   const handleSubmit = async (values) => {
+    if (included.size === 0) {
+      setError('Tick at least one position you want to apply for.')
+      return
+    }
     if (!resumeFile) {
       setError('Please upload your resume before submitting.')
       return
@@ -108,7 +122,7 @@ export default function PublicApply() {
         keamRank: values.keamRank ? Number(values.keamRank) : null,
         arrears: values.arrears ? Number(values.arrears) : 0,
         backlogs: values.backlogs ? Number(values.backlogs) : 0,
-        preferredPositionIds: rankedPositions.map(p => p.id),
+        preferences: rankedPositions.map(preferenceKey).filter(key => included.has(key)),
       }, resumeFile)
       setSubmitted(true)
     } catch (err) {
@@ -416,25 +430,35 @@ export default function PublicApply() {
                       Rank Positions by Preference
                     </div>
                     <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 12 }}>
-                      Use arrows to reorder — your top choice goes first.
+                      Tick each position and type you want to apply for, then use the arrows to reorder — your top choice goes first.
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {rankedPositions.map((pos, index) => (
-                        <div
-                          key={pos.id}
-                          style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', border: '1.5px solid #e5e7eb', borderRadius: 10, background: '#fff' }}
-                        >
-                          <Tag style={{ fontWeight: 600, minWidth: 36, textAlign: 'center', flexShrink: 0 }}>{index + 1}</Tag>
-                          <span style={{ fontWeight: 500, color: '#1e1b4b', fontSize: 14, flex: 1 }}>
-                            {pos.title}
-                            {pos.type && <span style={{ fontWeight: 400, color: '#6b7280', marginLeft: 6 }}>— {pos.type}</span>}
-                          </span>
-                          <Space size={4}>
-                            <Button size="small" icon={<ArrowUpOutlined />} disabled={index === 0} onClick={() => movePosition(index, -1)} />
-                            <Button size="small" icon={<ArrowDownOutlined />} disabled={index === rankedPositions.length - 1} onClick={() => movePosition(index, 1)} />
-                          </Space>
-                        </div>
-                      ))}
+                      {rankedPositions.map((pair, index) => {
+                        const key = preferenceKey(pair)
+                        const isIncluded = included.has(key)
+                        const rank = rankedPositions.slice(0, index + 1).filter(p => included.has(preferenceKey(p))).length
+                        return (
+                          <div
+                            key={key}
+                            style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', border: '1.5px solid #e5e7eb', borderRadius: 10, background: isIncluded ? '#fff' : '#fafafa' }}
+                          >
+                            <Checkbox
+                              checked={isIncluded}
+                              onChange={e => toggleIncluded(key, e.target.checked)}
+                              aria-label={`Apply for ${pair.position.title} as ${pair.type.name}`}
+                            />
+                            <Tag style={{ fontWeight: 600, minWidth: 36, textAlign: 'center', flexShrink: 0 }}>{isIncluded ? rank : '—'}</Tag>
+                            <span style={{ fontWeight: 500, color: isIncluded ? '#1e1b4b' : '#9ca3af', fontSize: 14, flex: 1 }}>
+                              {pair.position.title}
+                              <span style={{ fontWeight: 400, color: '#6b7280', marginLeft: 6 }}>— {pair.type.name}</span>
+                            </span>
+                            <Space size={4}>
+                              <Button size="small" icon={<ArrowUpOutlined />} disabled={index === 0} onClick={() => movePosition(index, -1)} />
+                              <Button size="small" icon={<ArrowDownOutlined />} disabled={index === rankedPositions.length - 1} onClick={() => movePosition(index, 1)} />
+                            </Space>
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
                 </Col>

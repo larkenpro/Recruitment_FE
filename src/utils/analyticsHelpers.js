@@ -1,3 +1,5 @@
+import { preferenceLabel } from './preferences'
+
 /**
  * Count occurrences of each key across an array.
  * Returns [{name, value}] sorted by value descending.
@@ -126,7 +128,10 @@ export function computeAnalytics(candidates) {
  * popularity. Every column is zero-filled on every row, so no cell is missing and a sorter
  * always compares numbers.
  *
- * @param candidates flat candidate array, each with `preferredPositions: [{ title }]`
+ * Each column is a (position, type) pair, e.g. "Quality Engineer — FTE": a candidate can rank
+ * the same position under two types, and those are separate preferences.
+ *
+ * @param candidates flat candidate array, each with `preferredPositions: [{ position: { title }, type: { name } }]`
  * @returns `{ positions: string[], rows: [{ key, label, total, [title]: count }] }`
  */
 export function buildPositionPreferenceTable(candidates) {
@@ -134,9 +139,9 @@ export function buildPositionPreferenceTable(candidates) {
   const totalByPosition = new Map()
 
   candidates.forEach(c => {
-    ;(c.preferredPositions ?? []).forEach((position, rank) => {
-      const title = position?.title
-      if (!title) return
+    ;(c.preferredPositions ?? []).forEach((preference, rank) => {
+      if (!preference?.position?.title) return
+      const title = preferenceLabel(preference)
       if (!countsByRank.has(rank)) countsByRank.set(rank, new Map())
       const atRank = countsByRank.get(rank)
       atRank.set(title, (atRank.get(title) ?? 0) + 1)

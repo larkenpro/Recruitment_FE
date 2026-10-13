@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Card, Table, Button, Modal, Form, Input, Select, Tag, message, Space, Popconfirm } from 'antd'
+import { Card, Table, Button, Modal, Form, Input, message, Space, Popconfirm } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, ExperimentOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getPositions, createPosition, updatePosition, deletePosition } from '../api/positions'
@@ -9,12 +9,8 @@ import DevOnly from '../components/DevOnly'
 import { SPACE } from '../theme'
 import { isSimilar, isSimilarOrBlank } from '../utils/similarity'
 
-const TYPE_COLORS = { 'Full-Time': 'green', 'Part-Time': 'blue', 'Internship': 'orange', 'Contract': 'purple' }
-const TYPE_OPTIONS = ['Full-Time', 'Part-Time', 'Internship', 'Contract'].map(v => ({ value: v }))
-
 const FILTER_KEYS = [
   { key: 'department', label: 'Department', getVal: r => r.department },
-  { key: 'type',       label: 'Type',       getVal: r => r.type },
 ]
 
 export default function Positions() {
@@ -48,11 +44,9 @@ export default function Positions() {
   const fillTestData = () => {
     const titles = ['Software Engineer', 'Business Analyst', 'Data Analyst', 'QA Engineer', 'DevOps Engineer', 'Product Manager', 'Technical BA', 'Cloud Engineer']
     const departments = ['Engineering', 'Product', 'Analytics', 'Quality Assurance', 'Infrastructure', 'Operations']
-    const types = ['Full-Time', 'Internship', 'Contract', 'Part-Time']
     form.setFieldsValue({
       title: titles[Math.floor(Math.random() * titles.length)],
       department: departments[Math.floor(Math.random() * departments.length)],
-      type: types[Math.floor(Math.random() * types.length)],
     })
   }
 
@@ -67,7 +61,6 @@ export default function Positions() {
   const handleSave = (values) => {
     const dupes = (positions ?? []).filter(p =>
       p.id !== editing?.id
-      && (p.type ?? '') === (values.type ?? '')
       && isSimilarOrBlank(p.department, values.department)
       && isSimilar(p.title, values.title))
     if (!dupes.length) return save(values)
@@ -76,7 +69,7 @@ export default function Positions() {
       content: (
         <>
           <p>Similar positions already exist:</p>
-          <ul>{dupes.map(p => <li key={p.id}><strong>{p.title}</strong>{[p.department, p.type].filter(Boolean).map(v => ` — ${v}`).join('')}</li>)}</ul>
+          <ul>{dupes.map(p => <li key={p.id}><strong>{p.title}</strong>{p.department ? ` — ${p.department}` : ''}</li>)}</ul>
         </>
       ),
       okText: 'Save anyway', cancelText: 'Go back',
@@ -87,10 +80,6 @@ export default function Positions() {
   const columns = [
     { title: 'Title', dataIndex: 'title', render: t => <strong>{t}</strong> },
     { title: 'Department', dataIndex: 'department', render: d => d || '—' },
-    {
-      title: 'Type', dataIndex: 'type',
-      render: t => t ? <Tag color={TYPE_COLORS[t] ?? 'default'}>{t}</Tag> : '—'
-    },
     {
       title: 'Actions', render: (_, r) => (
         <Space>
@@ -141,9 +130,6 @@ export default function Positions() {
           </Form.Item>
           <Form.Item name="department" label="Department">
             <Input placeholder="Engineering" />
-          </Form.Item>
-          <Form.Item name="type" label="Type">
-            <Select placeholder="Select type" options={TYPE_OPTIONS} allowClear />
           </Form.Item>
         </Form>
       </Modal>

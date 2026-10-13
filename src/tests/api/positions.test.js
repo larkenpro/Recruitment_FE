@@ -5,6 +5,7 @@ import {
   createPosition,
   updatePosition,
   deletePosition,
+  getPositionTypes,
 } from '../../api/positions'
 
 describe('Positions API', () => {
@@ -22,13 +23,11 @@ describe('Positions API', () => {
     const res = await createPosition({
       title: '_Test Engineer',
       department: 'QA',
-      type: 'Full-Time',
     })
     expect(res.data.status).toBe('success')
     expect(res.data.data).toMatchObject({
       title: '_Test Engineer',
       department: 'QA',
-      type: 'Full-Time',
     })
     expect(typeof res.data.data.id).toBe('number')
     createdId = res.data.data.id
@@ -50,10 +49,11 @@ describe('Positions API', () => {
     res.data.data.forEach(p => expect(p.department).toBe('QA'))
   })
 
-  it('GET /positions?type=Full-Time — filters results by type', async () => {
-    const res = await getPositions({ type: 'Full-Time' })
+  // ── Position types ────────────────────────────────────────────────────────
+  it('GET /position-types — returns Internship, FTE and Intern-to-FTE', async () => {
+    const res = await getPositionTypes()
     expect(res.data.status).toBe('success')
-    res.data.data.forEach(p => expect(p.type).toBe('Full-Time'))
+    expect(res.data.data.map(t => t.name)).toEqual(['Internship', 'FTE', 'Intern-to-FTE'])
   })
 
   // ── PUT ───────────────────────────────────────────────────────────────────
@@ -61,7 +61,6 @@ describe('Positions API', () => {
     const res = await updatePosition(createdId, {
       title: '_Senior Test Engineer',
       department: 'QA',
-      type: 'Full-Time',
     })
     expect(res.data.status).toBe('success')
     expect(res.data.data.title).toBe('_Senior Test Engineer')

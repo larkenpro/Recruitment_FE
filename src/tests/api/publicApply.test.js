@@ -17,12 +17,12 @@ const expectHttpOrConnectionError = async (promise, httpStatus) => {
     }
   }
 }
-import { getApplyForm, submitApplication, uploadResume } from '../../api/candidates'
-import { getEvents, generateLink, getEventPositions } from '../../api/events'
+import { getApplyForm, submitApplication, uploadResume, getPublicEventPositions } from '../../api/candidates'
+import { getEvents, generateLink } from '../../api/events'
 
 describe('Apply Flow', () => {
   let applyToken = null
-  let positionId = null
+  let preference = null
   let candidateId = null
 
   // ── Setup: obtain a real apply token and an event-linked position ID ──────
@@ -35,9 +35,10 @@ describe('Apply Flow', () => {
         // generate returns the full apply URL (…/apply/<token>), not an object
         applyToken = linkRes.data.data?.split('/apply/').pop() || null
 
-        // prefer a position already linked to this event
-        const posRes = await getEventPositions(event.id)
-        positionId = posRes.data.data[0]?.id ?? null
+        // a (position, type) pair the event is hiring for, as the form submits it
+        const posRes = await getPublicEventPositions(event.id)
+        const open = posRes.data.data.find(p => p.types?.length)
+        preference = open ? `${open.id}:${open.types[0].id}` : null
       }
     } catch {
       // backend not reachable — flow tests will be skipped via guard
@@ -59,7 +60,7 @@ describe('Apply Flow', () => {
 
   // ── POST /apply/:token ────────────────────────────────────────────────────
   it('submitApplication — valid payload returns success with candidateId', async () => {
-    if (!applyToken || !positionId) return
+    if (!applyToken || !preference) return
     const res = await submitApplication(applyToken, {
       name: '_Test Applicant',
       email: `applicant_${Date.now()}@example.com`,
@@ -70,7 +71,7 @@ describe('Apply Flow', () => {
       tenthMark: 90,
       twelfthMark: 88,
       backlogs: 0,
-      preferredPositionIds: [positionId],
+      preferences: [preference],
     })
     expect(res.data.status).toBe('success')
     expect(typeof res.data.data.candidateId).toBe('number')
@@ -78,13 +79,13 @@ describe('Apply Flow', () => {
   })
 
   it('submitApplication — response includes eventId and positionId', async () => {
-    if (!applyToken || !positionId) return
+    if (!applyToken || !preference) return
     const res = await submitApplication(applyToken, {
       name: '_Test Applicant 2',
       email: `applicant2_${Date.now()}@example.com`,
       branch: 'Information Technology',
       backlogs: 0,
-      preferredPositionIds: [positionId],
+      preferences: [preference],
     })
     expect(res.data.status).toBe('success')
     expect(res.data.data.eventId).toBeDefined()
@@ -92,29 +93,29 @@ describe('Apply Flow', () => {
   })
 
   it('submitApplication — missing required name returns 400', async () => {
-    if (!applyToken || !positionId) return
+    if (!applyToken || !preference) return
     await expect(
       submitApplication(applyToken, {
         email: `noemail_${Date.now()}@example.com`,
         branch: 'Electrical Engineering',
-        preferredPositionIds: [positionId],
+        preferences: [preference],
       })
     ).rejects.toMatchObject({ response: { status: 400 } })
   })
 
   it('submitApplication — invalid email format returns 400', async () => {
-    if (!applyToken || !positionId) return
+    if (!applyToken || !preference) return
     await expect(
       submitApplication(applyToken, {
         name: '_Bad Email',
         email: 'not-an-email',
         branch: 'Electrical Engineering',
-        preferredPositionIds: [positionId],
+        preferences: [preference],
       })
     ).rejects.toMatchObject({ response: { status: 400 } })
   })
 
-  it('submitApplication — missing preferredPositionIds returns 400', async () => {
+  it('submitApplication — missing preferences returns 400', async () => {
     if (!applyToken) return
     await expect(
       submitApplication(applyToken, {
@@ -125,26 +126,26 @@ describe('Apply Flow', () => {
     ).rejects.toMatchObject({ response: { status: 400 } })
   })
 
-  it('submitApplication — non-existent positionId returns 404', async () => {
+  it('submitApplication — pair the event is not hiring for returns 400', async () => {
     if (!applyToken) return
     await expect(
       submitApplication(applyToken, {
         name: '_Bad Position',
         email: `badpos_${Date.now()}@example.com`,
         branch: 'Civil Engineering',
-        preferredPositionIds: [999999],
+        preferences: ['999999:1'],
       })
-    ).rejects.toMatchObject({ response: { status: 404 } })
+    ).rejects.toMatchObject({ response: { status: 400 } })
   })
 
   it('submitApplication — expired/invalid token returns 404', async () => {
-    if (!positionId) return
+    if (!preference) return
     await expect(
       submitApplication('invalid-token-xyz', {
         name: '_Ghost',
         email: 'ghost@example.com',
         branch: 'Information Technology',
-        preferredPositionIds: [positionId],
+        preferences: [preference],
       })
     ).rejects.toMatchObject({ response: { status: 404 } })
   })
@@ -179,7 +180,7 @@ describe('Apply Flow', () => {
   // PublicApply.jsx converts all mark/CGPA fields via Number().
   // Sending string representations should be accepted by the API.
   it('submitApplication — numeric fields as strings are accepted', async () => {
-    if (!applyToken || !positionId) return
+    if (!applyToken || !preference) return
     const res = await submitApplication(applyToken, {
       name: '_Test Numeric Strings',
       email: `numstr_${Date.now()}@example.com`,
@@ -188,7 +189,7 @@ describe('Apply Flow', () => {
       twelfthMark: 88,
       ugCgpa: 8.5,
       backlogs: 0,
-      preferredPositionIds: [positionId],
+      preferences: [preference],
     })
     expect(res.data.status).toBe('success')
     expect(typeof res.data.data.candidateId).toBe('number')
@@ -200,19 +201,19 @@ describe('Apply Flow', () => {
   // and the else branch fires — still yields 0, so the result is correct.
   // But it means backlogs:0 submitted explicitly is handled the same as omitted.
   it('submitApplication — backlogs explicitly 0 is accepted', async () => {
-    if (!applyToken || !positionId) return
+    if (!applyToken || !preference) return
     const res = await submitApplication(applyToken, {
       name: '_Test Backlogs Zero',
       email: `backlogs0_${Date.now()}@example.com`,
       branch: 'Information Technology',
       backlogs: 0,
-      preferredPositionIds: [positionId],
+      preferences: [preference],
     })
     expect(res.data.status).toBe('success')
   })
 
   it('submitApplication — negative backlogs should be rejected (returns 400)', async () => {
-    if (!applyToken || !positionId) return
+    if (!applyToken || !preference) return
     // The component does Number(values.backlogs) — negative values pass through unchecked.
     // This test surfaces whether the backend validates the range.
     await expect(
@@ -221,7 +222,7 @@ describe('Apply Flow', () => {
         email: `negbacklogs_${Date.now()}@example.com`,
         branch: 'Electrical Engineering',
         backlogs: -1,
-        preferredPositionIds: [positionId],
+        preferences: [preference],
       })
     ).rejects.toMatchObject({ response: { status: 400 } })
   })
@@ -230,7 +231,7 @@ describe('Apply Flow', () => {
   // The component does no range validation before submitting — these corner
   // cases reveal whether the API enforces bounds.
   it('submitApplication — ugCgpa above 10 should be rejected (returns 400)', async () => {
-    if (!applyToken || !positionId) return
+    if (!applyToken || !preference) return
     await expect(
       submitApplication(applyToken, {
         name: '_Test High CGPA',
@@ -238,13 +239,13 @@ describe('Apply Flow', () => {
         branch: 'Computer Science & Engineering',
         ugCgpa: 11,
         backlogs: 0,
-        preferredPositionIds: [positionId],
+        preferences: [preference],
       })
     ).rejects.toMatchObject({ response: { status: 400 } })
   })
 
   it('submitApplication — tenthMark above 100 should be rejected (returns 400)', async () => {
-    if (!applyToken || !positionId) return
+    if (!applyToken || !preference) return
     await expect(
       submitApplication(applyToken, {
         name: '_Test High Tenth',
@@ -252,13 +253,13 @@ describe('Apply Flow', () => {
         branch: 'Computer Science & Engineering',
         tenthMark: 105,
         backlogs: 0,
-        preferredPositionIds: [positionId],
+        preferences: [preference],
       })
     ).rejects.toMatchObject({ response: { status: 400 } })
   })
 
   it('submitApplication — negative ugCgpa should be rejected (returns 400)', async () => {
-    if (!applyToken || !positionId) return
+    if (!applyToken || !preference) return
     await expect(
       submitApplication(applyToken, {
         name: '_Test Neg CGPA',
@@ -266,7 +267,7 @@ describe('Apply Flow', () => {
         branch: 'Computer Science & Engineering',
         ugCgpa: -1,
         backlogs: 0,
-        preferredPositionIds: [positionId],
+        preferences: [preference],
       })
     ).rejects.toMatchObject({ response: { status: 400 } })
   })
@@ -275,7 +276,7 @@ describe('Apply Flow', () => {
   // Number("abc") = NaN. The component passes this straight to the API.
   // This test verifies the backend rejects NaN-producing inputs.
   it('submitApplication — non-numeric ugCgpa (NaN after Number()) should be rejected (returns 400)', async () => {
-    if (!applyToken || !positionId) return
+    if (!applyToken || !preference) return
     await expect(
       submitApplication(applyToken, {
         name: '_Test NaN CGPA',
@@ -283,7 +284,7 @@ describe('Apply Flow', () => {
         branch: 'Computer Science & Engineering',
         ugCgpa: NaN,
         backlogs: 0,
-        preferredPositionIds: [positionId],
+        preferences: [preference],
       })
     ).rejects.toMatchObject({ response: { status: 400 } })
   })
@@ -291,7 +292,7 @@ describe('Apply Flow', () => {
   // ── handleSubmit: duplicate email submission ──────────────────────────────
   // Submitting the same email a second time should return a clear error, not 500.
   it('submitApplication — duplicate email returns 400 or 409 (not 500)', async () => {
-    if (!applyToken || !positionId) return
+    if (!applyToken || !preference) return
     const email = `dup_${Date.now()}@example.com`
     // First submission
     await submitApplication(applyToken, {
@@ -299,7 +300,7 @@ describe('Apply Flow', () => {
       email,
       branch: 'Information Technology',
       backlogs: 0,
-      preferredPositionIds: [positionId],
+      preferences: [preference],
     })
     // Second submission with same email
     try {
@@ -308,7 +309,7 @@ describe('Apply Flow', () => {
         email,
         branch: 'Information Technology',
         backlogs: 0,
-        preferredPositionIds: [positionId],
+        preferences: [preference],
       })
       // If the backend silently accepts duplicates, that is also a valid outcome
       // but the test documents the behavior.
@@ -322,27 +323,27 @@ describe('Apply Flow', () => {
   // The component formats dates as "MMMM-YYYY to MMMM-YYYY" before sending.
   // Test that a pre-formatted string is accepted by the API.
   it('submitApplication — valid internshipAvailability string is accepted', async () => {
-    if (!applyToken || !positionId) return
+    if (!applyToken || !preference) return
     const res = await submitApplication(applyToken, {
       name: '_Test Internship',
       email: `intern_${Date.now()}@example.com`,
       branch: 'Computer Science & Engineering',
       backlogs: 0,
-      preferredPositionIds: [positionId],
+      preferences: [preference],
       internshipAvailability: 'June-2025 to August-2025',
     })
     expect(res.data.status).toBe('success')
   })
 
   it('submitApplication — null internshipAvailability is accepted (field omitted)', async () => {
-    if (!applyToken || !positionId) return
+    if (!applyToken || !preference) return
     // Component sends null when DatePicker is not filled in.
     const res = await submitApplication(applyToken, {
       name: '_Test No Internship',
       email: `nointern_${Date.now()}@example.com`,
       branch: 'Computer Science & Engineering',
       backlogs: 0,
-      preferredPositionIds: [positionId],
+      preferences: [preference],
       internshipAvailability: null,
     })
     expect(res.data.status).toBe('success')
@@ -350,7 +351,7 @@ describe('Apply Flow', () => {
 
   // ── handleSubmit: oversized / special character inputs ───────────────────
   it('submitApplication — very long name should be rejected or truncated gracefully', async () => {
-    if (!applyToken || !positionId) return
+    if (!applyToken || !preference) return
     const longName = 'A'.repeat(300)
     let status
     try {
@@ -359,7 +360,7 @@ describe('Apply Flow', () => {
         email: `longname_${Date.now()}@example.com`,
         branch: 'Computer Science & Engineering',
         backlogs: 0,
-        preferredPositionIds: [positionId],
+        preferences: [preference],
       })
       status = res.status
     } catch (err) {
@@ -369,19 +370,19 @@ describe('Apply Flow', () => {
   })
 
   it('submitApplication — name with special characters is accepted', async () => {
-    if (!applyToken || !positionId) return
+    if (!applyToken || !preference) return
     const res = await submitApplication(applyToken, {
       name: "O'Brien-Smith Jr.",
       email: `special_${Date.now()}@example.com`,
       branch: 'Computer Science & Engineering',
       backlogs: 0,
-      preferredPositionIds: [positionId],
+      preferences: [preference],
     })
     expect(res.data.status).toBe('success')
   })
 
   it('submitApplication — XSS payload in name does not cause 500', async () => {
-    if (!applyToken || !positionId) return
+    if (!applyToken || !preference) return
     let status
     try {
       const res = await submitApplication(applyToken, {
@@ -389,7 +390,7 @@ describe('Apply Flow', () => {
         email: `xss_${Date.now()}@example.com`,
         branch: 'Computer Science & Engineering',
         backlogs: 0,
-        preferredPositionIds: [positionId],
+        preferences: [preference],
       })
       status = res.status
     } catch (err) {
@@ -400,7 +401,7 @@ describe('Apply Flow', () => {
 
   // ── handleSubmit: all optional fields populated ───────────────────────────
   it('submitApplication — full payload with all optional fields returns success', async () => {
-    if (!applyToken || !positionId) return
+    if (!applyToken || !preference) return
     const res = await submitApplication(applyToken, {
       name: '_Test Full Payload',
       email: `full_${Date.now()}@example.com`,
@@ -416,7 +417,7 @@ describe('Apply Flow', () => {
       pgDegree: 'M.Tech CSE',
       pgCgpa: 9.0,
       backlogs: 0,
-      preferredPositionIds: [positionId],
+      preferences: [preference],
       jobLocation: 'Both',
       githubLink: 'https://github.com/testuser',
       leadershipPositions: 'Class Representative, Coding Club Lead',

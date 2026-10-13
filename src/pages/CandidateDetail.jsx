@@ -2,6 +2,7 @@ import {
   ArrowDownOutlined,
   ArrowUpOutlined,
   BookOutlined,
+  CloseOutlined,
   DeleteOutlined,
   DownloadOutlined,
   EditOutlined,
@@ -53,7 +54,6 @@ import {
   deleteCandidateDocument,
   getCandidate,
   getCandidateDocuments,
-  getCandidateEvent,
   getCandidateResume,
   getCandidateRoundResults,
   getResumeFile,
@@ -66,7 +66,7 @@ import {
   upsertOffer,
   uploadCandidateDocument,
 } from '../api/candidates'
-import { getEventPositions } from '../api/events'
+import { preferenceKey, preferenceLabel } from '../utils/preferences'
 import { getErrorMessage } from '../utils/errorUtils'
 import { GUTTER, useLayoutMetrics } from '../theme'
 import { PIPELINE_STAGES, useStageDecision } from '../hooks/useStageDecision'
@@ -74,6 +74,10 @@ import { SCORE_RULE } from '../components/validation/rules'
 
 const { Title, Text } = Typography
 const STATUS_COLOR = { SHORTLISTED: 'green', HOLD: 'orange', REJECTED: 'red' }
+
+// The offer form selects a preference pair; offers saved before types existed have no type.
+const offeredPairKey = (offer) =>
+  offer.offeredPosition && offer.offeredType ? `${offer.offeredPosition.id}:${offer.offeredType.id}` : undefined
 
 export default function CandidateDetail() {
   const { id } = useParams()
@@ -239,23 +243,18 @@ export default function CandidateDetail() {
     onError: (err) => message.error(getErrorMessage(err)),
   })
 
-  const openEditPrefs = async () => {
-    const eventId = await getCandidateEvent(candidate.id)
-      .then((r) => r.data.data?.id)
-      .catch(() => null)
-    const eventPositions = eventId ? await getEventPositions(eventId).then((r) => r.data.data) : []
-    const preferred = candidate.preferredPositions ?? []
-    const preferredIds = new Set(preferred.map((p) => p.id))
-    setRankedPositions([...preferred, ...eventPositions.filter((p) => !preferredIds.has(p.id))])
+  const openEditPrefs = () => {
+    setRankedPositions(candidate.preferredPositions ?? [])
     setEditingPrefs(true)
   }
 
   const savePrefs = () => {
     prefMutation.mutate({
+      username: candidate.username,
       name: candidate.name,
       email: candidate.email,
       collegeId: candidate.college?.id,
-      preferredPositionIds: rankedPositions.map((p) => p.id),
+      preferences: rankedPositions.map((p) => ({ positionId: p.position.id, typeId: p.type.id })),
     })
   }
 
@@ -523,12 +522,12 @@ export default function CandidateDetail() {
       children: editingPrefs ? (
         <div style={{ maxWidth: 480 }}>
           <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
-            Use arrows to reorder — top position is most preferred.
+            Use arrows to reorder — top position is most preferred. Remove any the candidate no longer wants.
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
-            {rankedPositions.map((pos, index) => (
+            {rankedPositions.map((pref, index) => (
               <div
-                key={pos.id}
+                key={preferenceKey(pref)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -540,12 +539,7 @@ export default function CandidateDetail() {
                 }}
               >
                 <Tag style={{ fontWeight: 600, minWidth: 28, textAlign: 'center', flexShrink: 0 }}>{index + 1}</Tag>
-                <span style={{ fontSize: 13, fontWeight: 500, color: '#1e1b4b', flex: 1 }}>
-                  {pos.title}
-                  {pos.type && (
-                    <span style={{ fontWeight: 400, color: '#6b7280', marginLeft: 6 }}>— {pos.type}</span>
-                  )}
-                </span>
+                <span style={{ fontSize: 13, fontWeight: 500, color: '#1e1b4b', flex: 1 }}>{preferenceLabel(pref)}</span>
                 <Space size={4}>
                   <Button
                     size="small"
@@ -558,6 +552,12 @@ export default function CandidateDetail() {
                     icon={<ArrowDownOutlined />}
                     disabled={index === rankedPositions.length - 1}
                     onClick={() => movePosition(index, 1)}
+                  />
+                  <Button
+                    size="small"
+                    icon={<CloseOutlined />}
+                    aria-label="Remove preference"
+                    onClick={() => setRankedPositions(rankedPositions.filter((_, i) => i !== index))}
                   />
                 </Space>
               </div>
@@ -580,9 +580,9 @@ export default function CandidateDetail() {
               </Button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {preferred.map((pos, index) => (
+              {preferred.map((pref, index) => (
                 <div
-                  key={pos.id}
+                  key={preferenceKey(pref)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -594,12 +594,7 @@ export default function CandidateDetail() {
                   }}
                 >
                   <Tag style={{ fontWeight: 600, minWidth: 28, textAlign: 'center', flexShrink: 0 }}>{index + 1}</Tag>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: '#1e1b4b' }}>
-                    {pos.title}
-                    {pos.type && (
-                      <span style={{ fontWeight: 400, color: '#6b7280', marginLeft: 6 }}>— {pos.type}</span>
-                    )}
-                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: '#1e1b4b' }}>{preferenceLabel(pref)}</span>
                 </div>
               ))}
             </div>
@@ -729,17 +724,20 @@ export default function CandidateDetail() {
                     ? {
                         offerDate: offerData.offerDate ? dayjs(offerData.offerDate) : undefined,
                         location: offerData.location,
-                        offeredPositionId: offerData.offeredPosition?.id,
+                        offeredPair: offeredPairKey(offerData),
                         status: offerData.status,
                       }
                     : {}
                 }
-                onFinish={(values) =>
+                onFinish={({ offeredPair, ...values }) => {
+                  const [offeredPositionId, offeredTypeId] = offeredPair ? offeredPair.split(':').map(Number) : [null, null]
                   offerMutation.mutate({
                     ...values,
+                    offeredPositionId,
+                    offeredTypeId,
                     offerDate: values.offerDate?.format('YYYY-MM-DD') ?? null,
                   })
-                }
+                }}
               >
                 <Row gutter={GUTTER}>
                   <Col xs={24} sm={12}>
@@ -761,13 +759,13 @@ export default function CandidateDetail() {
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12}>
-                    <Form.Item name="offeredPositionId" label="Offered Position">
+                    <Form.Item name="offeredPair" label="Offered Position">
                       <Select
                         placeholder="Select position"
                         allowClear
                         options={(candidate.preferredPositions ?? []).map((p) => ({
-                          value: p.id,
-                          label: `${p.title}${p.type ? ` — ${p.type}` : ''}`,
+                          value: preferenceKey(p),
+                          label: preferenceLabel(p),
                         }))}
                       />
                     </Form.Item>
@@ -801,7 +799,7 @@ export default function CandidateDetail() {
                 </Descriptions.Item>
                 <Descriptions.Item label="Offered Position">
                   {offerData.offeredPosition
-                    ? `${offerData.offeredPosition.title}${offerData.offeredPosition.type ? ` — ${offerData.offeredPosition.type}` : ''}`
+                    ? `${offerData.offeredPosition.title}${offerData.offeredType ? ` — ${offerData.offeredType.name}` : ''}`
                     : '—'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Status">
@@ -818,7 +816,7 @@ export default function CandidateDetail() {
                   offerForm.setFieldsValue({
                     offerDate: offerData.offerDate ? dayjs(offerData.offerDate) : undefined,
                     location: offerData.location,
-                    offeredPositionId: offerData.offeredPosition?.id,
+                    offeredPair: offeredPairKey(offerData),
                     status: offerData.status,
                   })
                   setEditingOffer(true)

@@ -5,7 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { getEvents, createEvent, updateEventStatus } from '../api/events'
 import { getColleges } from '../api/colleges'
-import { getPositions } from '../api/positions'
+import { getPositions, getPositionTypes } from '../api/positions'
+import PositionTypeFields, { toEventPositions } from '../components/PositionTypeFields'
 import DevOnly from '../components/DevOnly'
 import { SPACE } from '../theme'
 import { useColumnFilter } from '../hooks/useColumnFilter'
@@ -28,6 +29,7 @@ export default function Events() {
   const { filteredData, filters, setFilter, removeFilter, optionMap } = useColumnFilter(events, FILTER_KEYS)
   const { data: colleges } = useQuery({ queryKey: ['colleges'], queryFn: () => getColleges().then(r => r.data.data) })
   const { data: positions } = useQuery({ queryKey: ['positions'], queryFn: () => getPositions().then(r => r.data.data) })
+  const { data: positionTypes } = useQuery({ queryKey: ['positionTypes'], queryFn: () => getPositionTypes().then(r => r.data.data) })
 
   const createMutation = useMutation({
     mutationFn: createEvent,
@@ -64,15 +66,24 @@ export default function Events() {
   const columns = [
     { title: 'College', render: (_, r) => <a onClick={() => navigate(`/events/${r.id}`)}><strong>{r.college?.name}</strong></a> },
     {
-      title: 'Positions', dataIndex: 'positions', width: 220,
-      render: ps => {
+      title: 'Positions', dataIndex: 'positions', width: 260,
+      render: (ps, r) => {
         if (!ps?.length) return '—'
+        // Each tag reads "Title · Internship, FTE"; a position with no type can't take applications.
+        const tag = p => {
+          const types = (r.positionTypes ?? []).filter(t => t.positionId === p.id).map(t => t.type.name)
+          return (
+            <Tag key={p.id} color={types.length ? undefined : 'red'}>
+              {p.title} · {types.length ? types.join(', ') : 'no type'}
+            </Tag>
+          )
+        }
         const shown = ps.slice(0, 2), rest = ps.slice(2)
         return (
           <>
-            {shown.map(p => <Tag key={p.id}>{p.title}</Tag>)}
+            {shown.map(tag)}
             {rest.length > 0 && (
-              <Popover content={rest.map(p => <Tag key={p.id}>{p.title}</Tag>)}>
+              <Popover content={rest.map(tag)}>
                 <Tag style={{ cursor: 'pointer' }}>+{rest.length}</Tag>
               </Popover>
             )}
@@ -124,8 +135,11 @@ export default function Events() {
 
       {/* Create Event Modal */}
       <Modal title="Create Event" open={open} onCancel={() => setOpen(false)}
-        onOk={() => form.validateFields().then(v => createMutation.mutate({
-          ...v, collegeId: Number(v.collegeId), recruitmentYear: Number(v.recruitmentYear)
+        onOk={() => form.validateFields().then(({ positionIds, positionTypes: picked, ...v }) => createMutation.mutate({
+          ...v,
+          collegeId: Number(v.collegeId),
+          recruitmentYear: Number(v.recruitmentYear),
+          positions: toEventPositions({ positionIds, positionTypes: picked }),
         }))} okText="Save">
         <DevOnly>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: SPACE.sm }}>
@@ -147,9 +161,10 @@ export default function Events() {
             <Select
               mode="multiple"
               placeholder="Select positions for this event"
-              options={positions?.map(p => ({ value: p.id, label: p.type ? `${p.title} — ${p.type}` : p.title })) ?? []}
+              options={positions?.map(p => ({ value: p.id, label: p.title })) ?? []}
             />
           </Form.Item>
+          <PositionTypeFields positions={positions} positionTypes={positionTypes} />
         </Form>
       </Modal>
     </>

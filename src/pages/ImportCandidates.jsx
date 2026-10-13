@@ -10,6 +10,7 @@ import {
   chunk, distinctPositions, BATCH_SIZE,
 } from '../api/imports'
 import { getEvents } from '../api/events'
+import { getPositionTypes } from '../api/positions'
 import { getColleges } from '../api/colleges'
 import { getErrorMessage } from '../utils/errorUtils'
 
@@ -46,6 +47,7 @@ export default function ImportCandidates() {
   const [divisor, setDivisor] = useState(9.5)
   const [mode, setMode] = useState('existing')
   const [eventId, setEventId] = useState(null)
+  const [typeId, setTypeId] = useState(null)
   // Captured when leaving step 2 — the Form unmounts there, so its instance can't be read later.
   const [newEvent, setNewEvent] = useState(null)
   const [running, setRunning] = useState(false)
@@ -61,6 +63,7 @@ export default function ImportCandidates() {
   })
   const { data: events } = useQuery({ queryKey: ['events'], queryFn: () => getEvents().then((r) => r.data.data) })
   const { data: colleges } = useQuery({ queryKey: ['colleges'], queryFn: () => getColleges().then((r) => r.data.data) })
+  const { data: positionTypes } = useQuery({ queryKey: ['positionTypes'], queryFn: () => getPositionTypes().then((r) => r.data.data) })
 
   const positionColumn = headers.findIndex((h) => mapping[h] === 'preferredPositions')
   const positionTitles = distinctPositions(rows, positionColumn)
@@ -103,6 +106,7 @@ export default function ImportCandidates() {
     mapping: Object.fromEntries(Object.entries(mapping).filter(([, target]) => target)),
     positionTitles,
     divisor,
+    typeId,
   })
 
   const runImport = async () => {
@@ -252,6 +256,20 @@ export default function ImportCandidates() {
 
       {step === 2 && (
         <>
+          <div style={{ marginBottom: 16, maxWidth: 480 }}>
+            <Text strong style={{ display: 'block', marginBottom: 4 }}>Position type</Text>
+            <Select
+              style={{ width: '100%' }}
+              placeholder="Internship, FTE or Intern-to-FTE"
+              value={typeId}
+              onChange={setTypeId}
+              options={(positionTypes ?? []).map((t) => ({ value: t.id, label: t.name }))}
+            />
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              The sheet only lists position titles, so every candidate&apos;s preferences are recorded under this type, and it is opened on the event&apos;s positions.
+            </Text>
+          </div>
+
           <Radio.Group value={mode} onChange={(e) => setMode(e.target.value)} style={{ marginBottom: 16 }}>
             <Radio.Button value="existing">Add to an existing event</Radio.Button>
             <Radio.Button value="new">Create a new event</Radio.Button>
@@ -289,7 +307,7 @@ export default function ImportCandidates() {
                 </Form.Item>
               </Form>
               <Alert type="info" showIcon
-                message="The workbook's positions are attached to the new event automatically, and any title missing from the Positions table is created with placeholder department/type."
+                message="The workbook's positions are attached to the new event automatically, and any title missing from the Positions table is created with a placeholder department."
                 description={positionTitles.join(', ') || 'none found'} />
             </>
           )}
@@ -297,7 +315,7 @@ export default function ImportCandidates() {
           <div style={{ marginTop: 16 }}>
             <Space>
               <Button onClick={() => setStep(1)}>Back</Button>
-              <Button type="primary" disabled={mode === 'existing' && !eventId} onClick={goToImportStep}>Next</Button>
+              <Button type="primary" disabled={!typeId || (mode === 'existing' && !eventId)} onClick={goToImportStep}>Next</Button>
             </Space>
           </div>
         </>

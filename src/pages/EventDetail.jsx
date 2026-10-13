@@ -18,6 +18,7 @@ import {
   Alert,
   Button,
   Card,
+  Checkbox,
   Col,
   Descriptions,
   Divider,
@@ -59,9 +60,12 @@ import {
   moveGroupMember,
   getRounds,
   removeEventPosition,
+  setEventPositionTypes,
   updateEventStatus,
 } from '../api/events'
-import { getPositions } from '../api/positions'
+import { getPositions, getPositionTypes } from '../api/positions'
+import { preferenceLabel } from '../utils/preferences'
+import PositionTypeFields, { toEventPositions } from '../components/PositionTypeFields'
 import { getCandidateResume, getResumeFile, updateRoundResult, addStageEntry, updateStageStatusByName } from '../api/candidates'
 import { getErrorMessage } from '../utils/errorUtils'
 import { GUTTER, useLayoutMetrics } from '../theme'
@@ -148,6 +152,11 @@ export default function EventDetail() {
   const { data: allPositions } = useQuery({
     queryKey: ['positions'],
     queryFn: () => getPositions().then((r) => r.data.data),
+  })
+
+  const { data: positionTypes } = useQuery({
+    queryKey: ['positionTypes'],
+    queryFn: () => getPositionTypes().then((r) => r.data.data),
   })
 
   const { data: candidates, isLoading: candidatesLoading } = useQuery({
@@ -353,7 +362,7 @@ export default function EventDetail() {
   }
 
   const addPositionsMutation = useMutation({
-    mutationFn: (positionIds) => addEventPositions(id, positionIds),
+    mutationFn: (positions) => addEventPositions(id, positions),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['eventPositions', id] })
       positionForm.resetFields()
@@ -368,6 +377,13 @@ export default function EventDetail() {
       queryClient.invalidateQueries({ queryKey: ['eventPositions', id] })
       message.success('Position removed!')
     },
+    onError: (err) => message.error(getErrorMessage(err)),
+  })
+
+  const positionTypesMutation = useMutation({
+    mutationFn: ({ positionId, typeIds }) => setEventPositionTypes(id, positionId, typeIds),
+    // Returns every event position with its types, so it goes straight into the cache.
+    onSuccess: (res) => queryClient.setQueryData(['eventPositions', id], res.data.data),
     onError: (err) => message.error(getErrorMessage(err)),
   })
 
@@ -490,6 +506,10 @@ export default function EventDetail() {
       message.warning('Add at least one interview round before generating the application link.')
       return
     }
+    if (untypedPositions.length > 0) {
+      message.warning('Choose at least one type for every position before generating the application link.')
+      return
+    }
     try {
       const res = await generateLink(Number(id))
       setLink(res.data.data)
@@ -520,6 +540,7 @@ export default function EventDetail() {
   if (!event) return <Empty />
 
   const sortedRounds = [...(rounds ?? [])].sort((a, b) => a.sequence - b.sequence)
+  const untypedPositions = (eventPositions ?? []).filter((p) => !(p.types?.length))
   const hasGroupDiscussion = sortedRounds.some((r) => r.roundType === 'GROUP_DISCUSSION')
 
   // Candidates who reached a round: PASSed every round sequenced before it.
@@ -638,7 +659,18 @@ export default function EventDetail() {
                 >
                   <List.Item.Meta
                     title={<Text strong>{p.title}</Text>}
-                    description={[p.department, p.type].filter(Boolean).join(' · ')}
+                    description={
+                      <>
+                        {p.department && <div>{p.department}</div>}
+                        <Checkbox.Group
+                          value={(p.types ?? []).map((t) => t.id)}
+                          options={(positionTypes ?? []).map((t) => ({ value: t.id, label: t.name }))}
+                          disabled={positionTypesMutation.isPending}
+                          onChange={(typeIds) => positionTypesMutation.mutate({ positionId: p.id, typeIds })}
+                          style={{ marginTop: 4 }}
+                        />
+                      </>
+                    }
                   />
                 </List.Item>
               )}
@@ -651,7 +683,7 @@ export default function EventDetail() {
             form={positionForm}
             layout="vertical"
             style={{ maxWidth: 480 }}
-            onFinish={(v) => addPositionsMutation.mutate(v.positionIds)}
+            onFinish={(v) => addPositionsMutation.mutate(toEventPositions(v))}
           >
             <Form.Item name="positionIds" rules={[{ required: true, message: 'Select at least one position' }]}>
               <Select
@@ -661,10 +693,11 @@ export default function EventDetail() {
                 showSearch
                 options={availablePositions.map((p) => ({
                   value: p.id,
-                  label: p.type ? `${p.title} — ${p.type}` : p.title,
+                  label: p.title,
                 }))}
               />
             </Form.Item>
+            <PositionTypeFields positions={availablePositions} positionTypes={positionTypes} />
             <Button type="primary" htmlType="submit" loading={addPositionsMutation.isPending}>
               Add
             </Button>
@@ -1285,6 +1318,12 @@ export default function EventDetail() {
               { title: 'Branch', dataIndex: 'branch', render: (v) => v || '—' },
               { title: 'UG CGPA', dataIndex: 'ugCgpa', render: (v) => v ?? '—' },
               {
+                title: 'Preferences',
+                render: (_, r) => (r.preferredPositions ?? []).map((p, i) => (
+                  <div key={i} style={{ whiteSpace: 'nowrap' }}>{i + 1}. {preferenceLabel(p)}</div>
+                )),
+              },
+              {
                 title: 'Backlogs',
                 dataIndex: 'backlogs',
                 render: (v) => <Tag color={(v ?? 0) === 0 ? 'green' : 'red'}>{v ?? 0}</Tag>,
@@ -1358,7 +1397,7 @@ export default function EventDetail() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: sectionGap }}>
-      {(missingPositions || missingRounds) && (
+      {(missingPositions || missingRounds || untypedPositions.length > 0) && (
         <Alert
           type="warning"
           showIcon
@@ -1367,6 +1406,9 @@ export default function EventDetail() {
             <>
               {missingPositions && <div>Add at least one position in the Positions tab.</div>}
               {missingRounds && <div>Add at least one interview round in the Rounds tab.</div>}
+              {untypedPositions.length > 0 && (
+                <div>Choose at least one type in the Positions tab for: {untypedPositions.map((p) => p.title).join(', ')}.</div>
+              )}
             </>
           }
         />
@@ -1469,13 +1511,13 @@ export default function EventDetail() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <Text type="secondary" style={{ fontSize: 13 }}>
                 Generate a shareable link for candidates to apply. Only available when the event is{' '}
-                <Tag color="green" style={{ margin: 0 }}>ACTIVE</Tag> and has at least one position and round set up.
+                <Tag color="green" style={{ margin: 0 }}>ACTIVE</Tag> and has at least one position (each with a type) and round set up.
               </Text>
               <Button
                 type="primary"
                 icon={<LinkOutlined />}
                 onClick={handleGenerateLink}
-                disabled={event.status !== 'ACTIVE' || missingPositions || missingRounds}
+                disabled={event.status !== 'ACTIVE' || missingPositions || missingRounds || untypedPositions.length > 0}
               >
                 Generate Link
               </Button>

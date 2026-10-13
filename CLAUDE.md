@@ -67,6 +67,15 @@ Use this file as a persistent reference for all coding decisions in this project
 - Do not introduce new dependencies unless necessary and discussed
 - Never commit secrets, `.env` files, or credentials
 
+## Backend Design / API Shape Changes
+
+When a requested feature changes the backend design and the shape of the API output, work through every step below. This spans both repos: `recruitment/` (backend) and `Recruitment_FE/` (frontend).
+
+0. **Make the change.** e.g. `{ name, roll }` becomes `{ first_name, last_name, roll_no }`.
+1. **Backend dependents.** Check every other table, entity, DTO and service that depends on the changed table, and update them too. e.g. reports that showed `name` now show `first_name + last_name`.
+2. **Tests.** Write or update tests for steps 0 and 1. Remove any stale tests that relied on the old data shape.
+3. **Frontend dependents.** Track down every component that uses data from steps 0 and 1, and update it to read and display the new shape. e.g. tables that showed `name` now show `first_name + last_name`, and anything reading `roll` now expects `roll_no`.
+
 ---
 
 *Update this file whenever new preferences are confirmed in conversation.*
@@ -163,16 +172,16 @@ Renders dropdowns (or number inputs for min/max) from `optionMap`. Active filter
 - API: `src/api/events.js` — `getEvents`, `createEvent`, `updateEventStatus`, `generateLink`, `getRounds`, `createRound`, `getEventPositions`, `addEventPositions`, `removeEventPosition`, `getCandidatesByEvent`.
 
 ### Positions (`src/pages/Positions.jsx`)
-- CRUD for job positions (title, department, type: Full-Time / Part-Time / Internship / Contract).
+- CRUD for job positions (title, department). One row per title — the type (Internship / FTE / Intern-to-FTE) is chosen per event on EventDetail, not here.
 - Delete with Popconfirm.
-- Filter keys: department, type.
+- Filter keys: department.
 - API: `src/api/positions.js` — `getPositions`, `createPosition`, `updatePosition`, `deletePosition`.
 
 ### Candidates (`src/pages/Candidates.jsx`)
 - Lists all candidates. Name cell is a link to `CandidateDetail`.
 - Edit modal: full candidate form (personal, academic, role preferences).
-  - On open, fetches full candidate record + their event's positions, merges preferred positions (already ranked) with remaining event positions to build an ordered drag list.
-  - Role preferences are reordered with up/down arrow buttons; saved as `preferredPositionIds` (ordered array).
+  - On open, fetches the full candidate record; its `preferredPositions` are ranked (position, type) pairs.
+  - Pairs are reordered with up/down arrows or removed; saved as `preferences: [{ positionId, typeId }]` (ordered). Labels come from `utils/preferences.js`.
 - Filter keys: college, branch, ugCgpa (min), backlogs (max).
 - API: `getCandidates`, `getCandidate`, `getCandidateEvent`, `updateCandidate`, `deleteCandidate` + `getEventPositions`.
 
@@ -210,7 +219,7 @@ Token-based public form — no auth required.
 - On load, validates the token via `getApplyForm(token)` (plain axios, no auth header) → gets event info; also fetches event positions for the preference ranking UI.
 - 3-step wizard (Ant Design `Steps`): Personal Info → Academic Details → Preferences.
 - Step navigation via state (`step` 0/1/2); steps are shown/hidden with `display` style (all in one `Form` so validation state is preserved).
-- Position preference ranking: same up/down arrow UI as Candidates page; ranked order is sent as `preferredPositionIds[]`.
+- Position preference ranking: lists every (position, type) pair the event is hiring for (`getPublicEventPositions`, no auth). The candidate ticks the pairs they want and ranks them with up/down arrows; the ticked ones are sent in order as `preferences[]` = `"positionId:typeId"`.
 - Resume upload: file held in `resumeFile` state; submitted as `multipart/form-data` via `submitApplication`.
 - "Fill Test Data" button (development aid) pre-fills the form with random Indian names/data.
 - On success: shows Ant Design `Result` success screen.

@@ -12,8 +12,10 @@ export const deleteRound = (eventId, roundId) => api.delete(`/events/${eventId}/
 export const reorderRounds = (eventId, roundIds) => api.put(`/events/${eventId}/rounds/reorder`, { roundIds })
 export const getCandidatesByEvent = (eventId) => api.get(`/events/${eventId}/candidates`)
 export const getEventPositions = (eventId) => api.get(`/events/${eventId}/positions`)
-export const addEventPositions = (eventId, positionIds) => api.post(`/events/${eventId}/positions`, positionIds)
+// positions: [{ positionId, typeIds }] — every position needs at least one type
+export const addEventPositions = (eventId, positions) => api.post(`/events/${eventId}/positions`, positions)
 export const removeEventPosition = (eventId, positionId) => api.delete(`/events/${eventId}/positions/${positionId}`)
+export const setEventPositionTypes = (eventId, positionId, typeIds) => api.put(`/events/${eventId}/positions/${positionId}/types`, typeIds)
 export const getEventStageSummary = (eventId, stageName = 'Resume') =>
   api.get(`/events/${eventId}/candidates/stage-summary?stageName=${encodeURIComponent(stageName)}`)
 export const getEventRoundResults = (eventId) => api.get(`/events/${eventId}/round-results`)

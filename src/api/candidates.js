@@ -7,10 +7,8 @@ export const getCandidates = () => api.get(C())
 export const getCandidate = (id) => api.get(C(`/${id}`))
 export const createCandidate = (data) => api.post(C(), data)
 export const updateCandidate = (id, data) => api.put(C(`/${id}`), data)
-export const patchCandidate = (id, data) => api.patch(C(`/${id}`), data)
 export const deleteCandidate = (id) => api.delete(C(`/${id}`))
 
-export const getCandidateEvent = (id) => api.get(C(`/${id}/event`))
 export const getCandidateResume = (id) => api.get(`${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/candidates/${id}/resume`)
 
 const V1 = (path = '') => `${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/candidates${path}`
@@ -63,6 +61,10 @@ export const deleteCandidateDocument = (candidateId, documentId) =>
 // validates token in backend
 export const getApplyForm = (token) =>
   axios.get(`${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/links/validate/${token}`)
+
+// The event's positions and the types each is open for — public, no auth.
+export const getPublicEventPositions = (eventId) =>
+  axios.get(`${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/events/${eventId}/positions`)
 
 export const submitApplication = (token, data, file) => {
   const form = new FormData()

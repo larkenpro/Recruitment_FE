@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { Card, Table, Button, Modal, Form, Input, InputNumber, Select, DatePicker, Tag, message, Space, Popconfirm, Row, Col, Divider } from 'antd'
 import dayjs from 'dayjs'
-import { EditOutlined, DeleteOutlined, EyeOutlined, ArrowUpOutlined, ArrowDownOutlined, ExperimentOutlined } from '@ant-design/icons'
+import { EditOutlined, DeleteOutlined, EyeOutlined, ArrowUpOutlined, ArrowDownOutlined, ExperimentOutlined, CloseOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { getCandidates, getCandidate, getCandidateEvent, updateCandidate, deleteCandidate } from '../api/candidates'
+import { getCandidates, getCandidate, updateCandidate, deleteCandidate } from '../api/candidates'
 import { getColleges } from '../api/colleges'
 import DevOnly from '../components/DevOnly'
 import { SPACE, GUTTER } from '../theme'
-import { getEventPositions } from '../api/events'
+import { preferenceKey, preferenceLabel } from '../utils/preferences'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
 import { EMAIL_RULE, PHONE_RULE, URL_RULE, CGPA_RULE, SCORE_RULE, requiredRule } from '../components/validation/rules'
@@ -84,13 +84,7 @@ export default function Candidates() {
           : null
       })(),
     })
-    const eventId = await getCandidateEvent(full.id).then(r => r.data.data?.id).catch(() => null)
-    const eventPositions = eventId
-      ? await getEventPositions(eventId).then(r => r.data.data)
-      : []
-    const preferred = full.preferredPositions ?? []
-    const preferredIds = new Set(preferred.map(p => p.id))
-    setRankedPositions([...preferred, ...eventPositions.filter(p => !preferredIds.has(p.id))])
+    setRankedPositions(full.preferredPositions ?? [])
   }
 
   const fillTestData = () => {
@@ -118,13 +112,15 @@ export default function Candidates() {
   const handleSave = (values) => {
     const payload = {
       ...values,
+      // Required by the backend but not an editable field, so it isn't in the form values.
+      username: editing.username,
       internshipAvailability: (() => {
         const [start, end] = values.internshipAvailability ?? []
         return start && end
           ? `${start.format('MMMM-YYYY')} to ${end.format('MMMM-YYYY')}`
           : null
       })(),
-      preferredPositionIds: rankedPositions.map(p => p.id),
+      preferences: rankedPositions.map(p => ({ positionId: p.position.id, typeId: p.type.id })),
     }
     updateMutation.mutate({ id: editing.id, data: payload })
   }
@@ -317,21 +313,19 @@ export default function Candidates() {
 
           {/* ── Preferences ── */}
           <Divider orientation="left" style={{ fontSize: 13 }}>Role Preferences</Divider>
-          <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>Use arrows to reorder — top position is most preferred.</div>
+          <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>Use arrows to reorder — top position is most preferred. Remove any the candidate no longer wants.</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
-            {rankedPositions.map((pos, index) => (
+            {rankedPositions.map((pref, index) => (
               <div
-                key={pos.id}
+                key={preferenceKey(pref)}
                 style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', border: '1.5px solid #e5e7eb', borderRadius: 8, background: '#fff' }}
               >
                 <Tag style={{ fontWeight: 600, minWidth: 28, textAlign: 'center', flexShrink: 0 }}>{index + 1}</Tag>
-                <span style={{ fontSize: 13, fontWeight: 500, color: '#1e1b4b', flex: 1 }}>
-                  {pos.title}
-                  {pos.type && <span style={{ fontWeight: 400, color: '#6b7280', marginLeft: 6 }}>— {pos.type}</span>}
-                </span>
+                <span style={{ fontSize: 13, fontWeight: 500, color: '#1e1b4b', flex: 1 }}>{preferenceLabel(pref)}</span>
                 <Space size={4}>
                   <Button size="small" icon={<ArrowUpOutlined />} disabled={index === 0} onClick={() => movePosition(index, -1)} />
                   <Button size="small" icon={<ArrowDownOutlined />} disabled={index === rankedPositions.length - 1} onClick={() => movePosition(index, 1)} />
+                  <Button size="small" icon={<CloseOutlined />} aria-label="Remove preference" onClick={() => setRankedPositions(rankedPositions.filter((_, i) => i !== index))} />
                 </Space>
               </div>
             ))}

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { getEvents, getEvent, createEvent, updateEventStatus, getRounds, createRound, getEventPositions, getCandidatesByEvent, getGroups, generateGroups, updateGroup, deleteAllGroups } from '../../api/events'
+import { getEvents, getEvent, createEvent, updateEventStatus, getRounds, createRound, getEventPositions, setEventPositionTypes, getCandidatesByEvent, getGroups, generateGroups, updateGroup, deleteAllGroups } from '../../api/events'
 import { getColleges } from '../../api/colleges'
-import { createPosition, deletePosition } from '../../api/positions'
+import { createPosition, deletePosition, getPositionTypes } from '../../api/positions'
 
 // Events can't be deleted and identical ones are rejected, so each run needs its own years.
 const YEAR = 3000 + Math.floor(Math.random() * 6000)
@@ -149,7 +149,6 @@ describe('Events API', () => {
         const res = await createPosition({
           title: '_Test Position (events suite)',
           department: 'Engineering',
-          type: 'Full-Time',
         })
         positionId = res.data.data.id
       } catch {
@@ -164,14 +163,14 @@ describe('Events API', () => {
     })
 
     // ── POST with positionIds ─────────────────────────────────────────────
-    it('POST /events — creates event with positionIds and returns positions array', async () => {
+    it('POST /events — creates event with typed positions and returns positions array', async () => {
       if (!collegeId || !positionId) return
       const res = await createEvent({
         collegeId,
         recruitmentYear: YEAR + 1,
         startDate: `${YEAR + 1}-01-01`,
         status: 'UPCOMING',
-        positionIds: [positionId],
+        positions: [{ positionId, typeIds: [(await getPositionTypes()).data.data[0].id] }],
       })
       expect(res.data.status).toBe('success')
       const event = res.data.data
@@ -182,7 +181,7 @@ describe('Events API', () => {
     })
 
     // ── POST with empty positionIds ───────────────────────────────────────
-    it('POST /events — response includes empty positions array when positionIds omitted', async () => {
+    it('POST /events — response includes empty positions array when positions omitted', async () => {
       if (!collegeId) return
       const res = await createEvent({
         collegeId,
@@ -235,10 +234,39 @@ describe('Events API', () => {
 
     // ── GET /events/:id/positions — event with no positions is empty ───────
     it('GET /events/:id/positions — returns empty array for event with no positions', async () => {
-      if (!createdId) return // createdId was created without positionIds
+      if (!createdId) return // createdId was created without positions
       const res = await getEventPositions(createdId)
       expect(res.data.status).toBe('success')
       expect(res.data.data.length).toBe(0)
+    })
+
+    // ── PUT /events/:id/positions/:positionId/types ───────────────────────
+    it('PUT /events/:id/positions/:positionId/types — sets the types the position is open for', async () => {
+      if (!linkedEventId || !positionId) return
+      const types = (await getPositionTypes()).data.data
+      const res = await setEventPositionTypes(linkedEventId, positionId, [types[0].id, types[1].id])
+      expect(res.data.status).toBe('success')
+      const linked = res.data.data.find(p => p.id === positionId)
+      expect(linked.types.map(t => t.id)).toEqual([types[0].id, types[1].id])
+
+      const reread = await getEventPositions(linkedEventId)
+      expect(reread.data.data.find(p => p.id === positionId).types).toHaveLength(2)
+    })
+
+    it('PUT /events/:id/positions/:positionId/types — 404 for a position not on the event', async () => {
+      if (!linkedEventId) return
+      await expect(setEventPositionTypes(linkedEventId, 999999, [])).rejects.toMatchObject({
+        response: { status: 404 },
+      })
+    })
+
+    it('POST /events — a position with no type is rejected with 400', async () => {
+      if (!collegeId || !positionId) return
+      await expect(createEvent({
+        collegeId,
+        recruitmentYear: YEAR + 3,
+        positions: [{ positionId, typeIds: [] }],
+      })).rejects.toMatchObject({ response: { status: 400 } })
     })
 
     // ── 404 ───────────────────────────────────────────────────────────────

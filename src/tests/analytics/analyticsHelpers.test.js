@@ -120,7 +120,7 @@ describe('computeAnalytics', () => {
     tenthMark: 90,
     twelfthMark: 85,
     backlogs: 0,
-    preferredPositions: [{ title: 'Software Engineer' }],
+    preferredPositions: [{ position: { title: 'Software Engineer' }, type: { name: 'FTE' } }],
   }
 
   it('returns null for an empty array', () => {
@@ -352,40 +352,52 @@ describe('buildCampusRows', () => {
 // V11 replaced preferredPosition1/2 with an ordered, variable-length list. The chart these
 // counts feed kept reading the dropped fields, so it rendered empty on every dataset.
 describe('buildPositionPreferenceTable', () => {
+  // A preference is a (position, type) pair; columns are labelled "<title> — <type>".
+  const pref = (title, type = 'FTE') => ({ position: { title }, type: { name: type } })
   const candidates = [
-    { preferredPositions: [{ title: 'SDE' }, { title: 'BA' }] },
-    { preferredPositions: [{ title: 'SDE' }, { title: 'QA' }, { title: 'BA' }] },
-    { preferredPositions: [{ title: 'BA' }] },
+    { preferredPositions: [pref('SDE'), pref('BA')] },
+    { preferredPositions: [pref('SDE'), pref('QA'), pref('BA')] },
+    { preferredPositions: [pref('BA')] },
   ]
 
   it('cross-tabulates counts by rank, ordering columns by total descending', () => {
     const { positions, rows } = buildPositionPreferenceTable(candidates)
 
-    expect(positions).toEqual(['BA', 'SDE', 'QA']) // 3, 2, 1
+    expect(positions).toEqual(['BA — FTE', 'SDE — FTE', 'QA — FTE']) // 3, 2, 1
     expect(rows.map(r => r.label)).toEqual(['Preference 1', 'Preference 2', 'Preference 3'])
-    expect(rows[0]).toMatchObject({ label: 'Preference 1', SDE: 2, BA: 1, QA: 0, total: 3 })
-    expect(rows[1]).toMatchObject({ label: 'Preference 2', SDE: 0, BA: 1, QA: 1, total: 2 })
-    expect(rows[2]).toMatchObject({ label: 'Preference 3', SDE: 0, BA: 1, QA: 0, total: 1 })
+    expect(rows[0]).toMatchObject({ label: 'Preference 1', 'SDE — FTE': 2, 'BA — FTE': 1, 'QA — FTE': 0, total: 3 })
+    expect(rows[1]).toMatchObject({ label: 'Preference 2', 'SDE — FTE': 0, 'BA — FTE': 1, 'QA — FTE': 1, total: 2 })
+    expect(rows[2]).toMatchObject({ label: 'Preference 3', 'SDE — FTE': 0, 'BA — FTE': 1, 'QA — FTE': 0, total: 1 })
+  })
+
+  it('counts the same position under two types as separate columns', () => {
+    const { positions, rows } = buildPositionPreferenceTable([
+      { preferredPositions: [pref('SDE', 'Internship'), pref('SDE', 'FTE')] },
+    ])
+
+    expect(positions).toEqual(['SDE — FTE', 'SDE — Internship'])
+    expect(rows[0]).toMatchObject({ 'SDE — Internship': 1, 'SDE — FTE': 0 })
+    expect(rows[1]).toMatchObject({ 'SDE — Internship': 0, 'SDE — FTE': 1 })
   })
 
   it('gives a rank past the old two-slot limit its own row', () => {
     const { rows } = buildPositionPreferenceTable([
-      { preferredPositions: [{ title: 'A' }, { title: 'B' }, { title: 'C' }, { title: 'D' }] },
+      { preferredPositions: [pref('A'), pref('B'), pref('C'), pref('D')] },
     ])
 
     expect(rows).toHaveLength(4)
-    expect(rows[3]).toMatchObject({ label: 'Preference 4', D: 1, total: 1 })
+    expect(rows[3]).toMatchObject({ label: 'Preference 4', 'D — FTE': 1, total: 1 })
   })
 
   it('ignores candidates with no preferences and entries with no title', () => {
     const { positions, rows } = buildPositionPreferenceTable([
       {},
       { preferredPositions: [] },
-      { preferredPositions: [null, { title: '' }, { title: 'SDE' }] },
+      { preferredPositions: [null, pref(''), pref('SDE')] },
     ])
 
-    expect(positions).toEqual(['SDE'])
-    expect(rows).toEqual([{ key: 'rank-2', label: 'Preference 3', SDE: 1, total: 1 }])
+    expect(positions).toEqual(['SDE — FTE'])
+    expect(rows).toEqual([{ key: 'rank-2', label: 'Preference 3', 'SDE — FTE': 1, total: 1 }])
   })
 
   it('zero-fills every column so sorters always compare numbers', () => {
