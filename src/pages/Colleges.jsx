@@ -11,6 +11,7 @@ import { SPACE } from '../theme'
 import { isSimilar, isSimilarOrBlank } from '../utils/similarity'
 
 const STATUS_OPTIONS = ['Not Contacted', 'Contacted', 'In Conversation', 'Confirmed', 'Dropped']
+const TIERS = ['Tier 1', 'Tier 2', 'Tier 3', 'Tier 4']
 const STATUS_COLOR = { 'Not Contacted': 'default', Contacted: 'blue', 'In Conversation': 'gold', Confirmed: 'green', Dropped: 'red' }
 
 const FILTER_KEYS = [
@@ -81,11 +82,10 @@ export default function Colleges() {
       { name: 'BITS Pilani', city: 'Pilani', state: 'Rajasthan' },
       { name: 'VIT Vellore', city: 'Vellore', state: 'Tamil Nadu' },
     ]
-    const tiers = ['Tier 1', 'Tier 2', 'Tier 3']
     const idx = Math.floor(Math.random() * colleges.length)
     form.setFieldsValue({
       ...colleges[idx],
-      tier: tiers[Math.floor(Math.random() * tiers.length)],
+      tier: TIERS[Math.floor(Math.random() * TIERS.length)],
       status: STATUS_OPTIONS[Math.floor(Math.random() * STATUS_OPTIONS.length)],
     })
   }
@@ -196,7 +196,7 @@ export default function Colleges() {
           <Form.Item name="city" label="City"><Input /></Form.Item>
           <Form.Item name="state" label="State"><Input /></Form.Item>
           <Form.Item name="tier" label="Tier">
-            <Select options={[{ value: 'Tier 1' }, { value: 'Tier 2' }, { value: 'Tier 3' }]} />
+            <Select options={TIERS.map(t => ({ value: t }))} />
           </Form.Item>
           <Form.Item name="status" label="Status" initialValue="Not Contacted">
             <Select options={STATUS_OPTIONS.map(value => ({ value }))} />
