@@ -8,7 +8,7 @@ import {
 } from 'recharts'
 import { getCandidates, getCandidateRoundResults } from '../api/candidates'
 import { getAllRoundResults } from '../api/roundResults'
-import { getStageSummaries } from '../api/analytics'
+import { getAllApplications, getStageSummaries } from '../api/analytics'
 import { computeAnalytics, computeScoreByRoundType, groupAndAggregate, avg, buildRoundComparisonRows, buildFunnel, buildCampusRows, buildPositionPreferenceTable } from '../utils/analyticsHelpers'
 import { SPACE, GUTTER, RADIUS, FONT_SIZE, FONT_WEIGHT, INK, TEXT, useLayoutMetrics } from '../theme'
 
@@ -69,6 +69,7 @@ const DATA_SOURCES = {
     label: 'Candidates',
     dimensions: [
       { key: 'branch', label: 'Branch', get: c => c.branch },
+      { key: 'graduationYear', label: 'Batch', get: c => c.graduationYear },
       { key: 'collegeName', label: 'College', get: c => c.college?.name },
       { key: 'collegeCity', label: 'College City', get: c => c.college?.city },
       { key: 'collegeState', label: 'College State', get: c => c.college?.state },
@@ -205,8 +206,13 @@ function CampusEffectiveness({ candidates }) {
   )
 }
 
-function PositionPreferences({ candidates }) {
-  const { positions, rows } = buildPositionPreferenceTable(candidates)
+function PositionPreferences() {
+  // Preferences belong to each event application, not to the candidate.
+  const { data: applications = [] } = useQuery({
+    queryKey: ['analyticsApplications'],
+    queryFn: () => getAllApplications().then(r => r.data),
+  })
+  const { positions, rows } = buildPositionPreferenceTable(applications)
 
   const columns = [
     {
@@ -259,6 +265,7 @@ function PositionPreferences({ candidates }) {
 const PROFILE_CRITERIA = [
   { key: 'branch', label: 'Branch', get: c => c.branch },
   { key: 'college', label: 'College', get: c => c.college?.name },
+  { key: 'graduationYear', label: 'Batch', get: c => c.graduationYear },
   { key: 'ugCgpa', label: 'UG CGPA', get: c => c.ugCgpa },
   { key: 'tenthMark', label: '10th Mark', get: c => c.tenthMark },
   { key: 'twelfthMark', label: '12th Mark', get: c => c.twelfthMark },
@@ -550,7 +557,7 @@ export default function Analytics() {
       {/* Position preferences by rank */}
       <Row gutter={GUTTER}>
         <Col xs={24}>
-          <PositionPreferences candidates={candidates} />
+          <PositionPreferences />
         </Col>
       </Row>
 

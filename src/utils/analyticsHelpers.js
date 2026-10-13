@@ -119,7 +119,7 @@ export function computeAnalytics(candidates) {
 /**
  * Cross-tabulate position preferences: one row per preference rank, one column per position.
  *
- * `preferredPositions` is ordered by the candidate's own ranking (index 0 = top choice), so
+ * Each application's `preferences` are ordered by the candidate's own ranking (index 0 = top choice), so
  * the array index *is* the rank. The list is variable-length, which is why this is a matrix
  * rather than the single-series bar chart it replaced — that chart could only show a total
  * per position, and was reading `preferredPosition1`/`preferredPosition2`, fields V11 dropped.
@@ -131,15 +131,15 @@ export function computeAnalytics(candidates) {
  * Each column is a (position, type) pair, e.g. "Quality Engineer — FTE": a candidate can rank
  * the same position under two types, and those are separate preferences.
  *
- * @param candidates flat candidate array, each with `preferredPositions: [{ position: { title }, type: { name } }]`
+ * @param applications event applications, each with `preferences: [{ position: { title }, type: { name } }]`
  * @returns `{ positions: string[], rows: [{ key, label, total, [title]: count }] }`
  */
-export function buildPositionPreferenceTable(candidates) {
+export function buildPositionPreferenceTable(applications) {
   const countsByRank = new Map()
   const totalByPosition = new Map()
 
-  candidates.forEach(c => {
-    ;(c.preferredPositions ?? []).forEach((preference, rank) => {
+  applications.forEach(a => {
+    ;(a.preferences ?? []).forEach((preference, rank) => {
       if (!preference?.position?.title) return
       const title = preferenceLabel(preference)
       if (!countsByRank.has(rank)) countsByRank.set(rank, new Map())

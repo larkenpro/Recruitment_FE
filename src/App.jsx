@@ -13,6 +13,7 @@ import Positions from './pages/Positions'
 import CandidateDetail from './pages/CandidateDetail'
 import EventDetail from './pages/EventDetail'
 import PublicApply from './pages/PublicApply'
+import CandidatePortal from './pages/CandidatePortal'
 import Analytics from './pages/Analytics'
 import Candidates from './pages/Candidates'
 import ImportCandidates from './pages/ImportCandidates'
@@ -46,6 +47,7 @@ export default function App() {
               <Route path="/login" element={<Login />} />
               <Route path="/reset-password" element={<Login />} />
               <Route path="/apply/:token" element={<PublicApply />} />
+              <Route path="/candidate" element={<CandidatePortal />} />
               <Route path="/" element={<Navigate to="/colleges" replace />} />
               <Route path="/colleges" element={<P page="COLLEGES"><Colleges /></P>} />
               <Route path="/events" element={<P page="EVENTS"><Events/></P>} />

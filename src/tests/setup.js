@@ -13,6 +13,17 @@ if (typeof localStorage === 'undefined') {
   }
 }
 
+// The candidate page keeps its session in sessionStorage (api/portal.js).
+if (typeof sessionStorage === 'undefined') {
+  const store = {}
+  global.sessionStorage = {
+    getItem: (k) => store[k] ?? null,
+    setItem: (k, v) => { store[k] = String(v) },
+    removeItem: (k) => { delete store[k] },
+    clear: () => { Object.keys(store).forEach(k => delete store[k]) },
+  }
+}
+
 if (typeof window === 'undefined') {
   global.window = { location: { href: '' } }
 }

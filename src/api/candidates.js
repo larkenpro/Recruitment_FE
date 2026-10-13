@@ -17,6 +17,10 @@ const V1 = (path = '') => `${import.meta.env.VITE_PUBLIC_API_URL}/api/v1/candida
 // /download endpoints require a JWT, which a plain <iframe>/<a href> can't send).
 export const getResumeFile = (id) => api.get(V1(`/${id}/resume/view`), { responseType: 'blob' })
 
+// What the candidate submitted for each event they applied to.
+export const getCandidateApplications = (id) => api.get(V1(`/${id}/applications`))
+export const updateCandidateApplication = (candidateId, eventId, data) => api.put(V1(`/${candidateId}/applications/${eventId}`), data)
+
 export const getCandidateRoundResults = (id) => api.get(V1(`/${id}/round-results`))
 export const updateRoundResult = (candidateId, eventId, roundId, data) => api.put(V1(`/${candidateId}/events/${eventId}/rounds/${roundId}`), data)
 export const getCandidateStageHistory = (id) => api.get(V1(`/${id}/stage-history`))

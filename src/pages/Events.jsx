@@ -12,11 +12,13 @@ import { SPACE } from '../theme'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
 import { getErrorMessage } from '../utils/errorUtils'
+import { EVENT_MODE_OPTIONS, eventMode } from '../utils/eventModes'
 
 const FILTER_KEYS = [
   { key: 'college',         label: 'College', getVal: r => r.college?.name },
   { key: 'recruitmentYear', label: 'Year',    getVal: r => r.recruitmentYear },
   { key: 'status',          label: 'Status',  getVal: r => r.status },
+  { key: 'mode',            label: 'Mode',    getVal: r => eventMode(r.mode).label },
 ]
 
 export default function Events() {
@@ -92,6 +94,10 @@ export default function Events() {
       },
     },
     { title: 'Year', dataIndex: 'recruitmentYear' },
+    {
+      title: 'Mode', dataIndex: 'mode',
+      render: m => <Tag color={eventMode(m).color}>{eventMode(m).label}</Tag>,
+    },
     { title: 'Start Date', dataIndex: 'startDate' },
     {
       title: 'Status', dataIndex: 'status', render: (s, r) => (
@@ -154,6 +160,9 @@ export default function Events() {
             <Input type="number" />
           </Form.Item>
           <Form.Item name="startDate" label="Start Date"><Input type="date" /></Form.Item>
+          <Form.Item name="mode" label="Mode" initialValue="ON_CAMPUS" rules={[{ required: true }]}>
+            <Select options={EVENT_MODE_OPTIONS} />
+          </Form.Item>
           <Form.Item name="status" label="Status" initialValue="UPCOMING">
             <Select options={['UPCOMING', 'ACTIVE', 'COMPLETED', 'CANCELLED'].map(s => ({ value: s }))} />
           </Form.Item>

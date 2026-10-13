@@ -1,22 +1,22 @@
 import { useState } from 'react'
-import { Card, Table, Button, Modal, Form, Input, InputNumber, Select, DatePicker, Tag, message, Space, Popconfirm, Row, Col, Divider } from 'antd'
+import { Card, Table, Button, Modal, Form, Input, InputNumber, Select, DatePicker, Tag, message, Space, Popconfirm, Row, Col } from 'antd'
 import dayjs from 'dayjs'
-import { EditOutlined, DeleteOutlined, EyeOutlined, ArrowUpOutlined, ArrowDownOutlined, ExperimentOutlined, CloseOutlined } from '@ant-design/icons'
+import { EditOutlined, DeleteOutlined, EyeOutlined, ExperimentOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { getCandidates, getCandidate, updateCandidate, deleteCandidate } from '../api/candidates'
 import { getColleges } from '../api/colleges'
 import DevOnly from '../components/DevOnly'
 import { SPACE, GUTTER } from '../theme'
-import { preferenceKey, preferenceLabel } from '../utils/preferences'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
-import { EMAIL_RULE, PHONE_RULE, URL_RULE, CGPA_RULE, SCORE_RULE, requiredRule } from '../components/validation/rules'
+import { EMAIL_RULE, PHONE_RULE, URL_RULE, CGPA_RULE, SCORE_RULE, GRADUATION_YEAR_RULE, requiredRule } from '../components/validation/rules'
 
 const FILTER_KEYS = [
   { key: 'name',      label: 'Name',     getVal: r => r.name, type: 'text' },
   { key: 'college',  label: 'College',  getVal: r => r.college?.name },
   { key: 'branch',   label: 'Branch',   getVal: r => r.branch },
+  { key: 'graduationYear', label: 'Batch', getVal: r => r.graduationYear },
   { key: 'ugCgpa',   label: 'UG CGPA',  getVal: r => r.ugCgpa,   type: 'min' },
   { key: 'backlogs', label: 'Backlogs', getVal: r => r.backlogs, type: 'max' },
 ]
@@ -26,15 +26,6 @@ export default function Candidates() {
   const navigate = useNavigate()
   const [editing, setEditing] = useState(null)
   const [form] = Form.useForm()
-  const [rankedPositions, setRankedPositions] = useState([])
-
-  const movePosition = (index, dir) => {
-    const next = index + dir
-    if (next < 0 || next >= rankedPositions.length) return
-    const updated = [...rankedPositions]
-    ;[updated[index], updated[next]] = [updated[next], updated[index]]
-    setRankedPositions(updated)
-  }
 
   const { data: candidates, isLoading } = useQuery({
     queryKey: ['candidates'],
@@ -84,7 +75,6 @@ export default function Candidates() {
           : null
       })(),
     })
-    setRankedPositions(full.preferredPositions ?? [])
   }
 
   const fillTestData = () => {
@@ -93,6 +83,7 @@ export default function Candidates() {
       phone: `${Math.floor(6000000000 + Math.random() * 3999999999)}`,
       rollNo: `CS2022${rollNum}`,
       branch: 'Computer Science & Engineering',
+      graduationYear: 2026,
       tenthMark: parseFloat((85 + Math.random() * 14).toFixed(2)),
       twelfthMark: parseFloat((80 + Math.random() * 18).toFixed(2)),
       keamRank: Math.floor(100 + Math.random() * 5000),
@@ -120,7 +111,6 @@ export default function Candidates() {
           ? `${start.format('MMMM-YYYY')} to ${end.format('MMMM-YYYY')}`
           : null
       })(),
-      preferences: rankedPositions.map(p => ({ positionId: p.position.id, typeId: p.type.id })),
     }
     updateMutation.mutate({ id: editing.id, data: payload })
   }
@@ -135,6 +125,7 @@ export default function Candidates() {
     { title: 'Phone', dataIndex: 'phone', render: v => v || '—' },
     { title: 'College', render: (_, r) => r.college?.name ?? '—' },
     { title: 'Branch', dataIndex: 'branch', render: v => v || '—' },
+    { title: 'Batch', dataIndex: 'graduationYear', render: v => v ?? '—' },
     { title: 'UG CGPA', dataIndex: 'ugCgpa', render: v => v ?? '—' },
     {
       title: 'Total Backlogs', dataIndex: 'backlogs',
@@ -231,6 +222,11 @@ export default function Candidates() {
               </Form.Item>
             </Col>
             <Col xs={24} sm={12} md={8}>
+              <Form.Item name="graduationYear" label="Year of Graduation" rules={[GRADUATION_YEAR_RULE]}>
+                <InputNumber style={{ width: '100%' }} min={1980} max={2100} placeholder="2026" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8}>
               <Form.Item name="jobLocation" label="Job Location">
                 <Input />
               </Form.Item>
@@ -311,26 +307,9 @@ export default function Candidates() {
             </Col>
           </Row>
 
-          {/* ── Preferences ── */}
-          <Divider orientation="left" style={{ fontSize: 13 }}>Role Preferences</Divider>
-          <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>Use arrows to reorder — top position is most preferred. Remove any the candidate no longer wants.</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
-            {rankedPositions.map((pref, index) => (
-              <div
-                key={preferenceKey(pref)}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', border: '1.5px solid #e5e7eb', borderRadius: 8, background: '#fff' }}
-              >
-                <Tag style={{ fontWeight: 600, minWidth: 28, textAlign: 'center', flexShrink: 0 }}>{index + 1}</Tag>
-                <span style={{ fontSize: 13, fontWeight: 500, color: '#1e1b4b', flex: 1 }}>{preferenceLabel(pref)}</span>
-                <Space size={4}>
-                  <Button size="small" icon={<ArrowUpOutlined />} disabled={index === 0} onClick={() => movePosition(index, -1)} />
-                  <Button size="small" icon={<ArrowDownOutlined />} disabled={index === rankedPositions.length - 1} onClick={() => movePosition(index, 1)} />
-                  <Button size="small" icon={<CloseOutlined />} aria-label="Remove preference" onClick={() => setRankedPositions(rankedPositions.filter((_, i) => i !== index))} />
-                </Space>
-              </div>
-            ))}
+          <div style={{ fontSize: 12, color: '#6b7280' }}>
+            These are the candidate's current details. Marks and position preferences as submitted for each event are edited on the candidate's page.
           </div>
-
         </Form>
       </Modal>
     </>

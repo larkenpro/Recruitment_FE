@@ -61,10 +61,12 @@ import {
   getRounds,
   removeEventPosition,
   setEventPositionTypes,
+  updateEventMode,
   updateEventStatus,
 } from '../api/events'
 import { getPositions, getPositionTypes } from '../api/positions'
 import { preferenceLabel } from '../utils/preferences'
+import { EVENT_MODE_OPTIONS, eventMode } from '../utils/eventModes'
 import PositionTypeFields, { toEventPositions } from '../components/PositionTypeFields'
 import { getCandidateResume, getResumeFile, updateRoundResult, addStageEntry, updateStageStatusByName } from '../api/candidates'
 import { getErrorMessage } from '../utils/errorUtils'
@@ -77,6 +79,7 @@ const { Title, Text } = Typography
 
 const CANDIDATE_FILTER_KEYS = [
   { key: 'branch', label: 'Branch', getVal: (r) => r.branch },
+  { key: 'graduationYear', label: 'Batch', getVal: (r) => r.graduationYear },
   { key: 'ugCgpa', label: 'CGPA', type: 'min', getVal: (r) => r.ugCgpa },
   { key: 'backlogs', label: 'Backlogs', type: 'max', getVal: (r) => r.backlogs ?? 0 },
   { key: 'resumeStatus', label: 'Resume Result', getVal: (r) => r.resumeStatus },
@@ -84,12 +87,14 @@ const CANDIDATE_FILTER_KEYS = [
 
 const ROUND_FILTER_KEYS = [
   { key: 'branch', label: 'Branch', getVal: (r) => r.branch },
+  { key: 'graduationYear', label: 'Batch', getVal: (r) => r.graduationYear },
   { key: 'backlogs', label: 'Backlogs', type: 'max', getVal: (r) => r.backlogs ?? 0 },
   { key: 'roundsDecision', label: 'Decision', getVal: (r) => r.roundsDecision },
 ]
 
 const LATE_STAGE_FILTER_KEYS = [
   { key: 'branch', label: 'Branch', getVal: (r) => r.branch },
+  { key: 'graduationYear', label: 'Batch', getVal: (r) => r.graduationYear },
   { key: 'stageStatus', label: 'Decision', getVal: (r) => r.stageStatus },
 ]
 
@@ -161,7 +166,8 @@ export default function EventDetail() {
 
   const { data: candidates, isLoading: candidatesLoading } = useQuery({
     queryKey: ['eventCandidates', id],
-    queryFn: () => getCandidatesByEvent(id).then((r) => r.data.data),
+    // One row per application, carrying this event's details; every table here keys on the candidate.
+    queryFn: () => getCandidatesByEvent(id).then((r) => r.data.data.map((a) => ({ ...a, id: a.candidateId }))),
   })
 
   const { data: stageSummaryList } = useQuery({
@@ -305,6 +311,16 @@ export default function EventDetail() {
     '12 Month Retained': { filteredData: filteredTwelveMonthData, filters: twelveMonthFilters, setFilter: setTwelveMonthFilter, removeFilter: removeTwelveMonthFilter, optionMap: { ...twelveMonthOptionMap, stageStatus: ROUND_DECISION_OPTIONS } },
     'Exit': { filteredData: filteredExitData, filters: exitFilters, setFilter: setExitFilter, removeFilter: removeExitFilter, optionMap: { ...exitOptionMap, stageStatus: ROUND_DECISION_OPTIONS } },
   }
+
+  const modeMutation = useMutation({
+    mutationFn: (mode) => updateEventMode(id, mode),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['event', id] })
+      queryClient.invalidateQueries({ queryKey: ['events'] })
+      message.success('Mode updated!')
+    },
+    onError: (err) => message.error(getErrorMessage(err)),
+  })
 
   const statusMutation = useMutation({
     mutationFn: (status) => updateEventStatus(id, status),
@@ -594,6 +610,7 @@ export default function EventDetail() {
             { title: 'Roll No', dataIndex: 'rollNo', render: (v) => v || '—' },
             { title: 'Email', dataIndex: 'email' },
             { title: 'Branch', dataIndex: 'branch', render: (v) => v || '—' },
+            { title: 'Batch', dataIndex: 'graduationYear', render: (v) => v ?? '—' },
             { title: 'UG CGPA', dataIndex: 'ugCgpa', render: (v) => v ?? '—' },
             {
               title: 'Decision',
@@ -1093,6 +1110,7 @@ export default function EventDetail() {
       },
       { title: 'Roll No', dataIndex: 'rollNo', render: (v) => v || '—' },
       { title: 'Branch', dataIndex: 'branch', render: (v) => v || '—' },
+      { title: 'Batch', dataIndex: 'graduationYear', render: (v) => v ?? '—' },
       { title: 'UG CGPA', dataIndex: 'ugCgpa', render: (v) => v ?? '—' },
       {
         title: 'Score',
@@ -1316,10 +1334,11 @@ export default function EventDetail() {
               { title: 'Email', dataIndex: 'email' },
               { title: 'Phone', dataIndex: 'phone', render: (v) => v || '—' },
               { title: 'Branch', dataIndex: 'branch', render: (v) => v || '—' },
+              { title: 'Batch', dataIndex: 'graduationYear', render: (v) => v ?? '—' },
               { title: 'UG CGPA', dataIndex: 'ugCgpa', render: (v) => v ?? '—' },
               {
                 title: 'Preferences',
-                render: (_, r) => (r.preferredPositions ?? []).map((p, i) => (
+                render: (_, r) => (r.preferences ?? []).map((p, i) => (
                   <div key={i} style={{ whiteSpace: 'nowrap' }}>{i + 1}. {preferenceLabel(p)}</div>
                 )),
               },
@@ -1456,6 +1475,16 @@ export default function EventDetail() {
               <Descriptions.Item label="Start Date">{event.startDate ?? '—'}</Descriptions.Item>
               <Descriptions.Item label="City">{event.college?.city ?? '—'}</Descriptions.Item>
               <Descriptions.Item label="Tier">{event.college?.tier ?? '—'}</Descriptions.Item>
+              <Descriptions.Item label="Mode">
+                <Select
+                  value={event.mode}
+                  size="small"
+                  style={{ width: 150 }}
+                  loading={modeMutation.isPending}
+                  onChange={(val) => modeMutation.mutate(val)}
+                  options={EVENT_MODE_OPTIONS.map((m) => ({ value: m.value, label: <Tag color={eventMode(m.value).color}>{m.label}</Tag> }))}
+                />
+              </Descriptions.Item>
               <Descriptions.Item label="Status">
                 <Select
                   value={event.status}

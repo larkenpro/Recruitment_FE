@@ -21,27 +21,8 @@ const FILTER_KEYS = [
   { key: 'status', label: 'Status', getVal: r => r.status },
 ]
 
-// contactPerson/collegeEmail/phoneNumber each hold a comma-joined, index-aligned
-// list of values — contact i is {name[i], email[i], phone[i]}.
-const splitList = (s) => (s || '').split(',').map(v => v.trim())
-
-const contactsFromRecord = (r) => {
-  const names = splitList(r?.contactPerson)
-  const emails = splitList(r?.collegeEmail)
-  const phones = splitList(r?.phoneNumber)
-  const count = Math.max(names.length, emails.length, phones.length, 1)
-  return Array.from({ length: count }, (_, i) => ({
-    contactPerson: names[i] || '',
-    collegeEmail: emails[i] || '',
-    phoneNumber: phones[i] || '',
-  }))
-}
-
-const contactsToFields = (contacts) => ({
-  contactPerson: contacts.map(c => c.contactPerson || '').join(','),
-  collegeEmail: contacts.map(c => c.collegeEmail || '').join(','),
-  phoneNumber: contacts.map(c => c.phoneNumber || '').join(','),
-})
+// The contacts editor always shows at least one (empty) row.
+const contactsOf = (r) => (r?.contacts?.length ? r.contacts : [{}])
 
 export default function Colleges() {
   const queryClient = useQueryClient()
@@ -128,14 +109,14 @@ export default function Colleges() {
 
   const openContacts = (record) => {
     setContactsCollege(record)
-    contactsForm.setFieldsValue({ contacts: contactsFromRecord(record) })
+    contactsForm.setFieldsValue({ contacts: contactsOf(record) })
   }
 
   const closeContactsModal = () => { setContactsCollege(null); contactsForm.resetFields() }
 
   const handleContactsOk = () => contactsForm.validateFields().then(({ contacts }) => {
     const { id, ...base } = contactsCollege
-    updateContactsMutation.mutate({ id, data: { ...base, ...contactsToFields(contacts) } })
+    updateContactsMutation.mutate({ id, data: { ...base, contacts } })
   })
 
   const columns = [
@@ -146,7 +127,7 @@ export default function Colleges() {
     { title: 'Status', dataIndex: 'status', render: t => t && <Tag color={STATUS_COLOR[t] ?? 'default'}>{t}</Tag> },
     {
       title: 'Contacts', width: 140, render: (_, record) => {
-        const n = contactsFromRecord(record).filter(c => c.contactPerson || c.collegeEmail || c.phoneNumber).length
+        const n = record.contacts?.length ?? 0
         return (
           <Button size="small" icon={<TeamOutlined />} onClick={() => openContacts(record)}>
             {n} contact{n === 1 ? '' : 's'}
@@ -211,6 +192,7 @@ export default function Colleges() {
         onOk={handleContactsOk}
         okText="Save"
         confirmLoading={updateContactsMutation.isPending}
+        width={860}
         destroyOnClose
       >
         <Form form={contactsForm} layout="vertical">
@@ -221,6 +203,7 @@ export default function Colleges() {
                   <thead>
                     <tr>
                       <th style={{ textAlign: 'left', paddingBottom: 8 }}>Contact Person</th>
+                      <th style={{ textAlign: 'left', paddingBottom: 8 }}>Designation</th>
                       <th style={{ textAlign: 'left', paddingBottom: 8 }}>Email</th>
                       <th style={{ textAlign: 'left', paddingBottom: 8 }}>Phone</th>
                       <th style={{ width: 32 }} />
@@ -230,17 +213,22 @@ export default function Colleges() {
                     {fields.map(({ key, name, ...field }) => (
                       <tr key={key}>
                         <td style={{ paddingRight: 8, paddingBottom: 8 }}>
-                          <Form.Item {...field} name={[name, 'contactPerson']} noStyle>
+                          <Form.Item {...field} name={[name, 'name']} noStyle>
                             <Input placeholder="Contact Person" />
                           </Form.Item>
                         </td>
                         <td style={{ paddingRight: 8, paddingBottom: 8 }}>
-                          <Form.Item {...field} name={[name, 'collegeEmail']} rules={[EMAIL_RULE]} noStyle>
+                          <Form.Item {...field} name={[name, 'designation']} noStyle>
+                            <Input placeholder="e.g. Placement Officer" />
+                          </Form.Item>
+                        </td>
+                        <td style={{ paddingRight: 8, paddingBottom: 8 }}>
+                          <Form.Item {...field} name={[name, 'email']} rules={[EMAIL_RULE]} noStyle>
                             <Input placeholder="Email" />
                           </Form.Item>
                         </td>
                         <td style={{ paddingRight: 8, paddingBottom: 8 }}>
-                          <Form.Item {...field} name={[name, 'phoneNumber']} rules={[PHONE_RULE]} noStyle>
+                          <Form.Item {...field} name={[name, 'phone']} rules={[PHONE_RULE]} noStyle>
                             <Input placeholder="Phone" />
                           </Form.Item>
                         </td>

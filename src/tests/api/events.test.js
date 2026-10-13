@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { getEvents, getEvent, createEvent, updateEventStatus, getRounds, createRound, getEventPositions, setEventPositionTypes, getCandidatesByEvent, getGroups, generateGroups, updateGroup, deleteAllGroups } from '../../api/events'
+import { getEvents, getEvent, createEvent, updateEventStatus, updateEventMode, getRounds, createRound, getEventPositions, setEventPositionTypes, getCandidatesByEvent, getGroups, generateGroups, updateGroup, deleteAllGroups } from '../../api/events'
 import { getColleges } from '../../api/colleges'
 import { createPosition, deletePosition, getPositionTypes } from '../../api/positions'
 
@@ -239,6 +239,19 @@ describe('Events API', () => {
       const res = await getEventPositions(createdId)
       expect(res.data.status).toBe('success')
       expect(res.data.data.length).toBe(0)
+    })
+
+    // ── mode ──────────────────────────────────────────────────────────────
+    it('POST /events — mode defaults to ON_CAMPUS and can be changed', async () => {
+      if (!linkedEventId) return
+      expect((await getEvent(linkedEventId)).data.data.mode).toBe('ON_CAMPUS')
+      const res = await updateEventMode(linkedEventId, 'HYBRID')
+      expect(res.data.data.mode).toBe('HYBRID')
+    })
+
+    it('PUT /events/:id/mode — an unknown mode is rejected with 400', async () => {
+      if (!linkedEventId) return
+      await expect(updateEventMode(linkedEventId, 'UNDERWATER')).rejects.toMatchObject({ response: { status: 400 } })
     })
 
     // ── PUT /events/:id/positions/:positionId/types ───────────────────────

@@ -17,13 +17,14 @@ const expectHttpOrConnectionError = async (promise, httpStatus) => {
     }
   }
 }
-import { getApplyForm, submitApplication, uploadResume, getPublicEventPositions } from '../../api/candidates'
+import { getApplyForm, submitApplication, uploadResume, getPublicEventPositions, checkApplication } from '../../api/candidates'
 import { getEvents, generateLink } from '../../api/events'
 
 describe('Apply Flow', () => {
   let applyToken = null
   let preference = null
   let candidateId = null
+  const firstEmail = `applicant_${Date.now()}@example.com`
 
   // ── Setup: obtain a real apply token and an event-linked position ID ──────
   beforeAll(async () => {
@@ -63,7 +64,7 @@ describe('Apply Flow', () => {
     if (!applyToken || !preference) return
     const res = await submitApplication(applyToken, {
       name: '_Test Applicant',
-      email: `applicant_${Date.now()}@example.com`,
+      email: firstEmail,
       phone: '9000000001',
       rollNo: 'TEST001',
       branch: 'Computer Science & Engineering',
@@ -72,10 +73,38 @@ describe('Apply Flow', () => {
       twelfthMark: 88,
       backlogs: 0,
       preferences: [preference],
+      consent: true,
     })
     expect(res.data.status).toBe('success')
     expect(typeof res.data.data.candidateId).toBe('number')
     candidateId = res.data.data.candidateId
+  })
+
+  // ── Existing candidates go through the candidate page, never this form ──
+  it('checkApplication — an email already on file is reported, masked', async () => {
+    if (!applyToken || !candidateId) return
+    const res = await checkApplication(applyToken, { email: firstEmail.toUpperCase() })
+    expect(res.data.data.exists).toBe(true)
+    expect(res.data.data.matchedBy).toBe('EMAIL')
+    expect(res.data.data.maskedEmail).toMatch(/^a\*\*\*\d@example\.com$/)
+    expect(res.data.data.prefill).toBeUndefined()
+  })
+
+  it('checkApplication — a new person is not a match', async () => {
+    if (!applyToken) return
+    const res = await checkApplication(applyToken, { email: `new_${Date.now()}@example.com` })
+    expect(res.data.data.exists).toBe(false)
+  })
+
+  it('submitApplication — the same email again returns 409 instead of overwriting', async () => {
+    if (!applyToken || !candidateId) return
+    await expect(submitApplication(applyToken, {
+      name: '_Someone Else',
+      email: firstEmail,
+      branch: 'Civil Engineering',
+      preferences: [preference],
+      consent: true,
+    })).rejects.toMatchObject({ response: { status: 409 } })
   })
 
   it('submitApplication — response includes eventId and positionId', async () => {
@@ -86,6 +115,7 @@ describe('Apply Flow', () => {
       branch: 'Information Technology',
       backlogs: 0,
       preferences: [preference],
+      consent: true,
     })
     expect(res.data.status).toBe('success')
     expect(res.data.data.eventId).toBeDefined()
@@ -99,6 +129,19 @@ describe('Apply Flow', () => {
         email: `noemail_${Date.now()}@example.com`,
         branch: 'Electrical Engineering',
         preferences: [preference],
+        consent: true,
+      })
+    ).rejects.toMatchObject({ response: { status: 400 } })
+  })
+
+  it('submitApplication — without ticking consent returns 400', async () => {
+    if (!applyToken || !preference) return
+    await expect(
+      submitApplication(applyToken, {
+        name: '_No Consent',
+        email: `noconsent_${Date.now()}@example.com`,
+        branch: 'Civil Engineering',
+        preferences: [preference],
       })
     ).rejects.toMatchObject({ response: { status: 400 } })
   })
@@ -111,6 +154,7 @@ describe('Apply Flow', () => {
         email: 'not-an-email',
         branch: 'Electrical Engineering',
         preferences: [preference],
+        consent: true,
       })
     ).rejects.toMatchObject({ response: { status: 400 } })
   })
@@ -134,6 +178,7 @@ describe('Apply Flow', () => {
         email: `badpos_${Date.now()}@example.com`,
         branch: 'Civil Engineering',
         preferences: ['999999:1'],
+        consent: true,
       })
     ).rejects.toMatchObject({ response: { status: 400 } })
   })
@@ -146,6 +191,7 @@ describe('Apply Flow', () => {
         email: 'ghost@example.com',
         branch: 'Information Technology',
         preferences: [preference],
+        consent: true,
       })
     ).rejects.toMatchObject({ response: { status: 404 } })
   })
@@ -190,6 +236,7 @@ describe('Apply Flow', () => {
       ugCgpa: 8.5,
       backlogs: 0,
       preferences: [preference],
+      consent: true,
     })
     expect(res.data.status).toBe('success')
     expect(typeof res.data.data.candidateId).toBe('number')
@@ -208,6 +255,7 @@ describe('Apply Flow', () => {
       branch: 'Information Technology',
       backlogs: 0,
       preferences: [preference],
+      consent: true,
     })
     expect(res.data.status).toBe('success')
   })
@@ -223,6 +271,7 @@ describe('Apply Flow', () => {
         branch: 'Electrical Engineering',
         backlogs: -1,
         preferences: [preference],
+        consent: true,
       })
     ).rejects.toMatchObject({ response: { status: 400 } })
   })
@@ -240,6 +289,7 @@ describe('Apply Flow', () => {
         ugCgpa: 11,
         backlogs: 0,
         preferences: [preference],
+        consent: true,
       })
     ).rejects.toMatchObject({ response: { status: 400 } })
   })
@@ -254,6 +304,7 @@ describe('Apply Flow', () => {
         tenthMark: 105,
         backlogs: 0,
         preferences: [preference],
+        consent: true,
       })
     ).rejects.toMatchObject({ response: { status: 400 } })
   })
@@ -268,6 +319,7 @@ describe('Apply Flow', () => {
         ugCgpa: -1,
         backlogs: 0,
         preferences: [preference],
+        consent: true,
       })
     ).rejects.toMatchObject({ response: { status: 400 } })
   })
@@ -285,6 +337,7 @@ describe('Apply Flow', () => {
         ugCgpa: NaN,
         backlogs: 0,
         preferences: [preference],
+        consent: true,
       })
     ).rejects.toMatchObject({ response: { status: 400 } })
   })
@@ -301,6 +354,7 @@ describe('Apply Flow', () => {
       branch: 'Information Technology',
       backlogs: 0,
       preferences: [preference],
+      consent: true,
     })
     // Second submission with same email
     try {
@@ -310,6 +364,7 @@ describe('Apply Flow', () => {
         branch: 'Information Technology',
         backlogs: 0,
         preferences: [preference],
+        consent: true,
       })
       // If the backend silently accepts duplicates, that is also a valid outcome
       // but the test documents the behavior.
@@ -361,6 +416,7 @@ describe('Apply Flow', () => {
         branch: 'Computer Science & Engineering',
         backlogs: 0,
         preferences: [preference],
+        consent: true,
       })
       status = res.status
     } catch (err) {
@@ -377,6 +433,7 @@ describe('Apply Flow', () => {
       branch: 'Computer Science & Engineering',
       backlogs: 0,
       preferences: [preference],
+      consent: true,
     })
     expect(res.data.status).toBe('success')
   })
@@ -391,6 +448,7 @@ describe('Apply Flow', () => {
         branch: 'Computer Science & Engineering',
         backlogs: 0,
         preferences: [preference],
+        consent: true,
       })
       status = res.status
     } catch (err) {

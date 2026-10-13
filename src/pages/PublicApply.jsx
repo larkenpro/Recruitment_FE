@@ -1,10 +1,16 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
-import { Form, Input, Select, Button, Card, Row, Col, Typography, Divider, Upload, Alert, Steps, Result, DatePicker, Tag, Space, Modal, Checkbox } from 'antd'
-import { UploadOutlined, UserOutlined, BookOutlined, AimOutlined, ArrowUpOutlined, ArrowDownOutlined, ThunderboltOutlined } from '@ant-design/icons'
+import { Form, Input, Select, Button, Card, Row, Col, Typography, Divider, Upload, Alert, Steps, Result, DatePicker, Modal } from 'antd'
+import { UploadOutlined, UserOutlined, BookOutlined, AimOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { getApplyForm, submitApplication, checkApplication, getPublicEventPositions } from '../api/candidates'
+import { requestSignInLink } from '../api/portal'
 import { eventPairs, preferenceKey } from '../utils/preferences'
-import { EMAIL_RULE, PHONE_RULE, URL_RULE, CGPA_RULE, SCORE_RULE, NON_NEGATIVE_RULE, requiredRule } from '../components/validation/rules'
+import { academicPayload } from '../utils/academic'
+import { EMAIL_RULE, PHONE_RULE, URL_RULE, requiredRule } from '../components/validation/rules'
+import AcademicFields, { BRANCH_OPTIONS, JOB_LOCATION_OPTIONS } from '../components/AcademicFields'
+import PreferenceRanker from '../components/PreferenceRanker'
+import ConsentField from '../components/ConsentField'
+import { eventMode } from '../utils/eventModes'
 import DevOnly from '../components/DevOnly'
 import { SPACE, GUTTER } from '../theme'
 
@@ -16,24 +22,18 @@ export default function PublicApply() {
   const [eventInfo, setEventInfo] = useState(null)
   // Every (position, type) pair the event is hiring for, in the candidate's ranked order;
   // only the ticked ones are submitted.
-  const [rankedPositions, setRankedPositions] = useState([])
-  const [included, setIncluded] = useState(new Set())
+  const [rankedPairs, setRankedPairs] = useState([])
+  const [selected, setSelected] = useState(new Set())
   const [positionsLoaded, setPositionsLoaded] = useState(false)
-
-  const movePosition = (index, dir) => {
-    const next = index + dir
-    if (next < 0 || next >= rankedPositions.length) return
-    const updated = [...rankedPositions]
-    ;[updated[index], updated[next]] = [updated[next], updated[index]]
-    setRankedPositions(updated)
-  }
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [resumeFile, setResumeFile] = useState(null)
   const [step, setStep] = useState(0)
   const [checking, setChecking] = useState(false)
-  const [duplicate, setDuplicate] = useState(null)
+  // { matchedBy, maskedEmail, linkSent } when the email or roll number is already on file.
+  const [existing, setExisting] = useState(null)
+  const [sendingLink, setSendingLink] = useState(false)
 
   useEffect(() => {
     getApplyForm(token)
@@ -41,33 +41,27 @@ export default function PublicApply() {
         setEventInfo(r.data)
         return getPublicEventPositions(r.data.data.event.id)
       })
-      .then(r => { setRankedPositions(eventPairs(r.data.data)); setPositionsLoaded(true) })
+      .then(r => { setRankedPairs(eventPairs(r.data.data)); setPositionsLoaded(true) })
       .catch(() => setError('Invalid or expired link'))
   }, [token])
 
-  useEffect(() => {
-    console.log(eventInfo)
-  }, [eventInfo]);
+  // An existing candidate updates their details from the candidate page, not this form —
+  // so check before they fill everything in.
+  const lookUpExisting = async () => {
+    const { data } = await checkApplication(token, {
+      email: form.getFieldValue('email'),
+      rollNo: form.getFieldValue('rollNo') || null,
+    })
+    const result = data.data
+    if (result.exists) setExisting({ ...result, linkSent: false })
+    return result.exists
+  }
 
-  /**
-   * Runs before the candidate leaves step 0. A repeat application is not blocked —
-   * submitting again overwrites the earlier details, so the point is to make that
-   * overwrite a conscious choice rather than something that happens silently.
-   */
   const handleFirstStepNext = async () => {
-    const values = await form.validateFields(['name', 'email', 'branch'])
-    const rollNo = form.getFieldValue('rollNo')
-    if (!rollNo) { setStep(1); return }
-
+    await form.validateFields(['name', 'email', 'branch'])
     setChecking(true)
     try {
-      const { data } = await checkApplication(token, { rollNo, email: values.email })
-      const result = data.data
-      if (result.alreadyApplied || result.sameEmailNewRollNo) {
-        setDuplicate(result)
-        return
-      }
-      setStep(1)
+      if (!(await lookUpExisting())) setStep(1)
     } catch (err) {
       // An expired link is the one hard stop; anything else shouldn't block applying.
       const message = err.response?.data?.message
@@ -78,24 +72,25 @@ export default function PublicApply() {
     }
   }
 
-  const continueWithUpdate = () => {
-    if (duplicate?.prefill) {
-      const { email, ...rest } = duplicate.prefill
-      form.setFieldsValue(rest)
+  const sendSignInLink = async () => {
+    setSendingLink(true)
+    try {
+      await requestSignInLink({
+        applyToken: token,
+        email: form.getFieldValue('email'),
+        rollNo: form.getFieldValue('rollNo') || null,
+      })
+      setExisting(prev => ({ ...prev, linkSent: true }))
+    } catch (err) {
+      setError(err.response?.data?.message || 'Could not send the link. Please try again.')
+      setExisting(null)
+    } finally {
+      setSendingLink(false)
     }
-    setDuplicate(null)
-    setStep(1)
   }
 
-  const toggleIncluded = (key, checked) => setIncluded(prev => {
-    const next = new Set(prev)
-    if (checked) next.add(key)
-    else next.delete(key)
-    return next
-  })
-
   const handleSubmit = async (values) => {
-    if (included.size === 0) {
+    if (selected.size === 0) {
       setError('Tick at least one position you want to apply for.')
       return
     }
@@ -106,33 +101,16 @@ export default function PublicApply() {
     setLoading(true)
     setError('')
     try {
-      const [start, end] = values.internshipAvailability ?? []
-      const internshipAvailability = start && end
-        ? `${start.format('MMMM-YYYY')} to ${end.format('MMMM-YYYY')}`
-        : null
-
       await submitApplication(token, {
-        ...values,
-        internshipAvailability,
-        ugCgpa: values.ugCgpa ? Number(values.ugCgpa) : null,
-        tenthMark: values.tenthMark ? Number(values.tenthMark) : null,
-        twelfthMark: values.twelfthMark ? Number(values.twelfthMark) : null,
-        diplomaMark: values.diplomaMark ? Number(values.diplomaMark) : null,
-        pgCgpa: values.pgCgpa ? Number(values.pgCgpa) : null,
-        keamRank: values.keamRank ? Number(values.keamRank) : null,
-        arrears: values.arrears ? Number(values.arrears) : 0,
-        backlogs: values.backlogs ? Number(values.backlogs) : 0,
-        preferences: rankedPositions.map(preferenceKey).filter(key => included.has(key)),
+        ...academicPayload(values),
+        preferences: rankedPairs.map(preferenceKey).filter(key => selected.has(key)),
       }, resumeFile)
       setSubmitted(true)
     } catch (err) {
+      // 409: they became a known candidate since the first check (or skipped it).
       if (err.response?.status === 409) {
-        // A conflict is now either the roll number or the email — attribute it to the
-        // field the backend actually named, rather than always blaming rollNo.
-        const message = err.response.data?.message || 'That application conflicts with an existing one'
-        const field = message.toLowerCase().includes('email') ? 'email' : 'rollNo'
-        form.setFields([{ name: field, errors: [message] }])
         setStep(0)
+        await lookUpExisting().catch(() => setError(err.response.data?.message))
       } else {
         setError(err.response?.data?.message || 'Submission failed. Please try again.')
       }
@@ -159,7 +137,7 @@ export default function PublicApply() {
     </div>
   )
 
-  if (positionsLoaded && rankedPositions.length === 0) return (
+  if (positionsLoaded && rankedPairs.length === 0) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f6fa' }}>
       <Result status="warning" title="No Open Positions" subTitle="This event doesn't have any positions open for applications yet. Please check back later or contact the recruiter." />
     </div>
@@ -176,72 +154,37 @@ export default function PublicApply() {
       <div style={{ maxWidth: 720, margin: '0 auto' }}>
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: 24, color: 'white' }}>
-          {/* <div style={{ fontSize: 40, marginBottom: 8 }}>🎯</div>q¯ */}
           <Title level={2} style={{ color: 'black', margin: 0 }}>Campus Recruitment</Title>
           <Text style={{ color: 'black', fontSize: 16 }}>
             {eventInfo.data.event?.college?.name} — {eventInfo.data.event?.recruitmentYear}
+            {eventInfo.data.event?.mode && ` · ${eventMode(eventInfo.data.event.mode).label}`}
           </Text>
         </div>
 
         <Modal
-          open={!!duplicate}
-          title={duplicate?.alreadyApplied ? 'You have already applied to this event' : 'Welcome back'}
-          onCancel={() => setDuplicate(null)}
-          footer={duplicate?.alreadyApplied ? [
-            <Button key="cancel" onClick={() => setDuplicate(null)}>Cancel</Button>,
-            <Button key="continue" type="primary" onClick={continueWithUpdate}>
-              Continue and update my application
-            </Button>,
+          open={!!existing}
+          title="You're already registered with us"
+          onCancel={() => setExisting(null)}
+          footer={existing?.linkSent ? [
+            <Button key="close" type="primary" onClick={() => setExisting(null)}>Close</Button>,
           ] : [
-            <Button key="cancel" onClick={() => setDuplicate(null)}>Go back</Button>,
-            <Button key="continue" type="primary" onClick={continueWithUpdate}>
-              Yes, that's me — continue
-            </Button>,
+            <Button key="cancel" onClick={() => setExisting(null)}>Cancel</Button>,
+            <Button key="send" type="primary" loading={sendingLink} onClick={sendSignInLink}>Send me a link</Button>,
           ]}
         >
-          {duplicate?.alreadyApplied ? (
-            <>
-              <p>
-                An application for roll number <strong>{form.getFieldValue('rollNo')}</strong> already
-                exists for this event, registered to <strong>{duplicate.maskedEmail}</strong>.
-              </p>
-              {duplicate.emailMatches ? (
-                <p>
-                  Continuing will <strong>replace your previous details and resume</strong> with what you
-                  submit now. Your earlier answers have been filled in below so you only need to change
-                  what's different.
-                </p>
-              ) : (
-                <Alert
-                  type="warning"
-                  showIcon
-                  message="This isn't the email on that application"
-                  description={
-                    "For your privacy we can't show you the existing details. If this is your application, " +
-                    "go back and enter the email you originally applied with. Continuing will still replace " +
-                    "the previous submission."
-                  }
-                />
-              )}
-            </>
+          {existing?.linkSent ? (
+            <Alert
+              type="success"
+              showIcon
+              message="Check your inbox"
+              description={`We've emailed a sign-in link to ${existing.maskedEmail}. Open it to update your details and apply to this event from your candidate page. The link expires in 30 minutes.`}
+            />
           ) : (
-            <>
-              <p>
-                We already have you registered under roll number <strong>{duplicate?.knownRollNo}</strong> with
-                the email <strong>{duplicate?.maskedEmail}</strong>. Applying now with a new roll number —
-                for a PG intake, for example — updates that same record rather than creating a second one.
-              </p>
-              <Alert
-                type="info"
-                showIcon
-                message="Your details carry over"
-                description={
-                  "Your existing record keeps your earlier marks and history. Fill in the form with your " +
-                  "current details and anything you change will be saved against you. If this email isn't " +
-                  "yours, go back and use your own — it's where every update is sent."
-                }
-              />
-            </>
+            <p>
+              A candidate with this {existing?.matchedBy === 'ROLL_NO' ? 'roll number' : 'email'} already exists.
+              We can email a sign-in link to <strong>{existing?.maskedEmail}</strong> so you can update your
+              details and apply to this event from your candidate page.
+            </p>
           )}
         </Modal>
 
@@ -305,26 +248,7 @@ export default function PublicApply() {
                     label="Branch"
                     rules={[{ required: true, message: 'Please select your branch!' }]}
                   >
-                    <Select
-                      showSearch
-                      size="large"
-                      placeholder="Select your branch"
-                      options={[
-                        'Computer Science & Engineering',
-                        'Electronics & Communication Engineering',
-                        'Electrical Engineering',
-                        'Mechanical Engineering',
-                        'Chemical Engineering',
-                        'Civil Engineering',
-                        'Information Technology',
-                        'Production Engineering',
-                        'Biomedical Engineering',
-                        'Biotechnology',
-                        'Instrumentation Engineering',
-                        'Metallurgical Engineering',
-                        'Others',
-                      ].map(v => ({ value: v, label: v }))}
-                    />
+                    <Select showSearch size="large" placeholder="Select your branch" options={BRANCH_OPTIONS} />
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12}>
@@ -346,6 +270,7 @@ export default function PublicApply() {
                     icon={<ThunderboltOutlined />}
                     style={{ marginLeft: SPACE.sm, flexShrink: 0 }}
                     onClick={() => form.setFieldsValue({
+                      graduationYear: '2026',
                       tenthMark: '92.5',
                       twelfthMark: '88.0',
                       ugDegree: 'B.Tech Computer Science',
@@ -358,63 +283,12 @@ export default function PublicApply() {
                   </Button>
                 </DevOnly>
               </div>
-              <Row gutter={GUTTER}>
-                <Col xs={24} sm={12}>
-                  <Form.Item name="tenthMark" label="10th Mark %" rules={[SCORE_RULE]}>
-                    <Input type="number" step="0.01" placeholder="92.5" size="large" />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} sm={12}>
-                  <Form.Item name="twelfthMark" label="12th Mark %" rules={[SCORE_RULE]}>
-                    <Input type="number" step="0.01" placeholder="88.0" size="large" />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} sm={12}>
-                  <Form.Item name="diplomaMark" label="Diploma Mark % (if applicable)" rules={[SCORE_RULE]}>
-                    <Input type="number" step="0.01" placeholder="85.0" size="large" />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} sm={12}>
-                  <Form.Item name="keamRank" label="KEAM Rank (if applicable)" rules={[NON_NEGATIVE_RULE]}>
-                    <Input type="number" placeholder="1234" size="large" />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} sm={12}>
-                  <Form.Item name="ugDegree" label="UG Specialization (if applicable)">
-                    <Input placeholder="B.Tech Computer Science" size="large" />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} sm={12}>
-                  <Form.Item name="ugCgpa" label="UG CGPA" rules={[{ required: true, message: 'UG CGPA is required' }, CGPA_RULE]}>
-                    <Input type="number" step="0.01" placeholder="8.5" size="large" />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} sm={12}> 
-                  <Form.Item name="pgDegree" label="PG Degree (if applicable)">
-                    <Input placeholder="M.Tech CSE" size="large" />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} sm={12}>
-                  <Form.Item name="pgCgpa" label="PG CGPA (if applicable)" rules={[CGPA_RULE]}>
-                    <Input type="number" step="0.01" placeholder="9.0" size="large" />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} sm={12}>
-                  <Form.Item name="arrears" label="Active Backlogs" rules={[NON_NEGATIVE_RULE]}>
-                    <Input type="number" placeholder="0" size="large" />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} sm={12}>
-                  <Form.Item name="backlogs" label="Total Backlogs" rules={[NON_NEGATIVE_RULE]}>
-                    <Input type="number" placeholder="0" size="large" />
-                  </Form.Item>
-                </Col>
-              </Row>
+              <AcademicFields />
               <Row gutter={8}>
                 <Col span={12}><Button size="large" block onClick={() => setStep(0)}>← Back</Button></Col>
                 <Col span={12}>
                   <Button type="primary" size="large" block onClick={() => {
-                    form.validateFields(['ugCgpa']).then(() => setStep(2))
+                    form.validateFields(['graduationYear', 'ugCgpa']).then(() => setStep(2))
                   }}>Next →</Button>
                 </Col>
               </Row>
@@ -432,43 +306,16 @@ export default function PublicApply() {
                     <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 12 }}>
                       Tick each position and type you want to apply for, then use the arrows to reorder — your top choice goes first.
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {rankedPositions.map((pair, index) => {
-                        const key = preferenceKey(pair)
-                        const isIncluded = included.has(key)
-                        const rank = rankedPositions.slice(0, index + 1).filter(p => included.has(preferenceKey(p))).length
-                        return (
-                          <div
-                            key={key}
-                            style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', border: '1.5px solid #e5e7eb', borderRadius: 10, background: isIncluded ? '#fff' : '#fafafa' }}
-                          >
-                            <Checkbox
-                              checked={isIncluded}
-                              onChange={e => toggleIncluded(key, e.target.checked)}
-                              aria-label={`Apply for ${pair.position.title} as ${pair.type.name}`}
-                            />
-                            <Tag style={{ fontWeight: 600, minWidth: 36, textAlign: 'center', flexShrink: 0 }}>{isIncluded ? rank : '—'}</Tag>
-                            <span style={{ fontWeight: 500, color: isIncluded ? '#1e1b4b' : '#9ca3af', fontSize: 14, flex: 1 }}>
-                              {pair.position.title}
-                              <span style={{ fontWeight: 400, color: '#6b7280', marginLeft: 6 }}>— {pair.type.name}</span>
-                            </span>
-                            <Space size={4}>
-                              <Button size="small" icon={<ArrowUpOutlined />} disabled={index === 0} onClick={() => movePosition(index, -1)} />
-                              <Button size="small" icon={<ArrowDownOutlined />} disabled={index === rankedPositions.length - 1} onClick={() => movePosition(index, 1)} />
-                            </Space>
-                          </div>
-                        )
-                      })}
-                    </div>
+                    <PreferenceRanker
+                      ranked={rankedPairs}
+                      selected={selected}
+                      onChange={(ranked, nextSelected) => { setRankedPairs(ranked); setSelected(nextSelected) }}
+                    />
                   </div>
                 </Col>
                 <Col xs={24} sm={12}>
                   <Form.Item name="jobLocation" label="Preferred Job Location">
-                    <Select size="large" placeholder="Select location" options={[
-                      { value: 'Gurugram NCR', label: 'Gurugram NCR' },
-                      { value: 'Coimbatore', label: 'Coimbatore' },
-                      { value: 'Both', label: 'Both' },
-                    ]} />
+                    <Select size="large" placeholder="Select location" options={JOB_LOCATION_OPTIONS} />
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12}>
@@ -507,6 +354,7 @@ export default function PublicApply() {
                   </Form.Item>
                 </Col>
               </Row>
+              <ConsentField />
               <Row gutter={8}>
                 <Col span={12}><Button size="large" block onClick={() => setStep(1)}>← Back</Button></Col>
                 <Col span={12}>

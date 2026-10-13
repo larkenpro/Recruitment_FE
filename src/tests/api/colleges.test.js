@@ -12,23 +12,25 @@ describe('Colleges API', () => {
   })
 
   // ── POST ──────────────────────────────────────────────────────────────────
-  it('POST /colleges — creates a new college with contact fields', async () => {
+  it('POST /colleges — creates a new college with ordered contacts and designations', async () => {
     const res = await createCollege({
       name: '_Test College',
       city: 'Test City',
       state: 'Test State',
       tier: 'Tier 3',
-      contactPerson: 'Jane Doe',
-      collegeEmail: 'jane@test.edu',
-      phoneNumber: '9876543210',
+      contacts: [
+        { name: 'Jane Doe', designation: 'Head, Training & Placement', email: 'jane@test.edu', phone: '9876543210' },
+        { name: 'John Roe', designation: 'Assistant Professor, CSE' },
+      ],
     })
     expect(res.data.status).toBe('success')
     expect(res.data.data).toMatchObject({
       name: '_Test College',
       city: 'Test City',
-      contactPerson: 'Jane Doe',
-      collegeEmail: 'jane@test.edu',
-      phoneNumber: '9876543210',
+      contacts: [
+        { name: 'Jane Doe', designation: 'Head, Training & Placement', email: 'jane@test.edu', phone: '9876543210' },
+        { name: 'John Roe', designation: 'Assistant Professor, CSE', email: null, phone: null },
+      ],
     })
     expect(typeof res.data.data.id).toBe('number')
     createdId = res.data.data.id

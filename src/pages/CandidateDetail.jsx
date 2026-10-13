@@ -60,7 +60,8 @@ import {
   getCandidateStageHistory,
   getExitRecord,
   getOffer,
-  updateCandidate,
+  getCandidateApplications,
+  updateCandidateApplication,
   updateExitRecord,
   updateRoundResult,
   upsertOffer,
@@ -144,7 +145,14 @@ export default function CandidateDetail() {
         .catch((e) => (e.response?.status === 404 ? null : Promise.reject(e))),
   })
 
-  const activeEventId = selectedEventId ?? stageHistory?.[0]?.eventId
+  const { data: applications } = useQuery({
+    queryKey: ['applications', id],
+    queryFn: () => getCandidateApplications(id).then((r) => r.data.data),
+  })
+
+  const activeEventId = selectedEventId ?? stageHistory?.[0]?.eventId ?? applications?.[0]?.eventId
+  // What they submitted for the selected event; the profile is the fallback when there's no application.
+  const selectedApplication = applications?.find((a) => a.eventId === activeEventId)
 
   const { data: offerData } = useQuery({
     queryKey: ['offer', id, activeEventId],
@@ -161,8 +169,9 @@ export default function CandidateDetail() {
   })
 
   const prefMutation = useMutation({
-    mutationFn: (data) => updateCandidate(id, data),
+    mutationFn: (preferences) => updateCandidateApplication(id, selectedApplication.eventId, { ...selectedApplication, preferences }),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['applications', id] })
       queryClient.invalidateQueries({ queryKey: ['candidate', id] })
       setEditingPrefs(false)
       message.success('Preferences updated!')
@@ -244,18 +253,12 @@ export default function CandidateDetail() {
   })
 
   const openEditPrefs = () => {
-    setRankedPositions(candidate.preferredPositions ?? [])
+    setRankedPositions(selectedApplication?.preferences ?? [])
     setEditingPrefs(true)
   }
 
   const savePrefs = () => {
-    prefMutation.mutate({
-      username: candidate.username,
-      name: candidate.name,
-      email: candidate.email,
-      collegeId: candidate.college?.id,
-      preferences: rankedPositions.map((p) => ({ positionId: p.position.id, typeId: p.type.id })),
-    })
+    prefMutation.mutate(rankedPositions.map((p) => ({ positionId: p.position.id, typeId: p.type.id })))
   }
 
   const openEditRound = (eventId, round) => {
@@ -272,6 +275,8 @@ export default function CandidateDetail() {
   if (!candidate) return <Empty />
 
   const selectedEvent = stageHistory?.find((e) => e.eventId === selectedEventId) ?? stageHistory?.[0]
+
+  const shown = selectedApplication ?? candidate
 
   const getStageData = (stageName) => {
     if (!selectedEvent) return null
@@ -482,15 +487,20 @@ export default function CandidateDetail() {
         <Descriptions column={{ xs: 1, sm: 2 }} bordered size="small">
           <Descriptions.Item label="Full Name">{candidate.name}</Descriptions.Item>
           <Descriptions.Item label="Email">{candidate.email}</Descriptions.Item>
+          <Descriptions.Item label="Recruitment data consent">
+            {selectedApplication?.consentedAt
+              ? `Given ${new Date(selectedApplication.consentedAt).toLocaleString()}`
+              : 'Not recorded'}
+          </Descriptions.Item>
           <Descriptions.Item label="Phone">{candidate.phone}</Descriptions.Item>
-          <Descriptions.Item label="Roll No">{candidate.rollNo}</Descriptions.Item>
-          <Descriptions.Item label="Branch">{candidate.branch}</Descriptions.Item>
+          <Descriptions.Item label="Roll No">{shown.rollNo}</Descriptions.Item>
+          <Descriptions.Item label="Branch">{shown.branch}</Descriptions.Item>
           <Descriptions.Item label="College">{candidate.college?.name ?? '—'}</Descriptions.Item>
-          <Descriptions.Item label="Job Location">{candidate.jobLocation}</Descriptions.Item>
+          <Descriptions.Item label="Job Location">{shown.jobLocation}</Descriptions.Item>
           <Descriptions.Item label="GitHub">{candidate.githubLink ? <a href={candidate.githubLink} target="_blank" rel="noreferrer">{candidate.githubLink}</a> : '—'}</Descriptions.Item>
           <Descriptions.Item label="LinkedIn">{candidate.linkedInLink ? <a href={candidate.linkedInLink} target="_blank" rel="noreferrer">{candidate.linkedInLink}</a> : '—'}</Descriptions.Item>
-          <Descriptions.Item label="Internship Availability">{candidate.internshipAvailability}</Descriptions.Item>
-          <Descriptions.Item label="Leadership Positions" span={2}>{candidate.leadershipPositions}</Descriptions.Item>
+          <Descriptions.Item label="Internship Availability">{shown.internshipAvailability}</Descriptions.Item>
+          <Descriptions.Item label="Leadership Positions" span={2}>{shown.leadershipPositions}</Descriptions.Item>
         </Descriptions>
       ),
     },
@@ -499,19 +509,20 @@ export default function CandidateDetail() {
       label: 'Academic',
       children: (
         <Descriptions column={{ xs: 1, sm: 2 }} bordered size="small">
-          <Descriptions.Item label="10th Mark %">{candidate.tenthMark}</Descriptions.Item>
-          <Descriptions.Item label="12th Mark %">{candidate.twelfthMark}</Descriptions.Item>
-          <Descriptions.Item label="Diploma Mark %">{candidate.diplomaMark ?? '—'}</Descriptions.Item>
-          <Descriptions.Item label="KEAM Rank">{candidate.keamRank ?? '—'}</Descriptions.Item>
-          <Descriptions.Item label="UG Degree">{candidate.ugDegree}</Descriptions.Item>
-          <Descriptions.Item label="UG CGPA">{candidate.ugCgpa}</Descriptions.Item>
-          <Descriptions.Item label="PG Degree">{candidate.pgDegree ?? '—'}</Descriptions.Item>
-          <Descriptions.Item label="PG CGPA">{candidate.pgCgpa ?? '—'}</Descriptions.Item>
+          <Descriptions.Item label="Year of Graduation">{shown.graduationYear ?? '—'}</Descriptions.Item>
+          <Descriptions.Item label="10th Mark %">{shown.tenthMark}</Descriptions.Item>
+          <Descriptions.Item label="12th Mark %">{shown.twelfthMark}</Descriptions.Item>
+          <Descriptions.Item label="Diploma Mark %">{shown.diplomaMark ?? '—'}</Descriptions.Item>
+          <Descriptions.Item label="KEAM Rank">{shown.keamRank ?? '—'}</Descriptions.Item>
+          <Descriptions.Item label="UG Degree">{shown.ugDegree}</Descriptions.Item>
+          <Descriptions.Item label="UG CGPA">{shown.ugCgpa}</Descriptions.Item>
+          <Descriptions.Item label="PG Degree">{shown.pgDegree ?? '—'}</Descriptions.Item>
+          <Descriptions.Item label="PG CGPA">{shown.pgCgpa ?? '—'}</Descriptions.Item>
           <Descriptions.Item label="Total Backlogs">
-            <Tag color={candidate.backlogs === 0 ? 'green' : 'red'}>{candidate.backlogs}</Tag>
+            <Tag color={shown.backlogs === 0 ? 'green' : 'red'}>{shown.backlogs}</Tag>
           </Descriptions.Item>
           <Descriptions.Item label="Active Backlogs">
-            <Tag color={candidate.arrears === 0 ? 'green' : 'red'}>{candidate.arrears}</Tag>
+            <Tag color={shown.arrears === 0 ? 'green' : 'red'}>{shown.arrears}</Tag>
           </Descriptions.Item>
         </Descriptions>
       ),
@@ -571,7 +582,7 @@ export default function CandidateDetail() {
           </Space>
         </div>
       ) : (() => {
-        const preferred = candidate.preferredPositions ?? []
+        const preferred = selectedApplication?.preferences ?? []
         return preferred.length > 0 ? (
           <div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
@@ -600,11 +611,7 @@ export default function CandidateDetail() {
             </div>
           </div>
         ) : (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-            <Button size="small" icon={<EditOutlined />} onClick={openEditPrefs}>
-              Edit
-            </Button>
-          </div>
+          <Empty description="No application for the selected event" />
         )
       })(),
     },
@@ -763,7 +770,7 @@ export default function CandidateDetail() {
                       <Select
                         placeholder="Select position"
                         allowClear
-                        options={(candidate.preferredPositions ?? []).map((p) => ({
+                        options={(selectedApplication?.preferences ?? []).map((p) => ({
                           value: preferenceKey(p),
                           label: preferenceLabel(p),
                         }))}
@@ -956,8 +963,9 @@ export default function CandidateDetail() {
   const profileItems = [
     candidate.email && { icon: <MailOutlined />, value: candidate.email },
     candidate.phone && { icon: <PhoneOutlined />, value: candidate.phone },
-    candidate.branch && { icon: <BookOutlined />, value: candidate.branch },
-    candidate.rollNo && { icon: <UserOutlined />, value: `Roll No: ${candidate.rollNo}` },
+    shown.branch && { icon: <BookOutlined />, value: shown.branch },
+    shown.rollNo && { icon: <UserOutlined />, value: `Roll No: ${shown.rollNo}` },
+    shown.graduationYear && { icon: <BookOutlined />, value: `Batch of ${shown.graduationYear}` },
     candidate.githubLink && {
       icon: <GithubOutlined />,
       value: (
@@ -1097,27 +1105,29 @@ export default function CandidateDetail() {
           <Card
             bordered={false}
             style={{ borderRadius: 12, height: '100%' }}
-            title="Academic Snapshot"
+            title={selectedApplication
+              ? `Academic Snapshot · ${selectedApplication.collegeName} ${selectedApplication.recruitmentYear}`
+              : 'Academic Snapshot'}
           >
             <Row gutter={[16, 20]}>
               <Col span={12}>
                 <Statistic
                   title="UG CGPA"
-                  value={candidate.ugCgpa ?? '—'}
+                  value={shown.ugCgpa ?? '—'}
                   valueStyle={{ fontSize: 22, color: '#4f46e5' }}
                 />
               </Col>
               <Col span={12}>
                 <Statistic
                   title="10th %"
-                  value={candidate.tenthMark ?? '—'}
+                  value={shown.tenthMark ?? '—'}
                   valueStyle={{ fontSize: 22 }}
                 />
               </Col>
               <Col span={12}>
                 <Statistic
                   title="12th %"
-                  value={candidate.twelfthMark ?? '—'}
+                  value={shown.twelfthMark ?? '—'}
                   valueStyle={{ fontSize: 22 }}
                 />
               </Col>
@@ -1127,11 +1137,11 @@ export default function CandidateDetail() {
                     Backlogs
                   </Text>
                   <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <Tag color={candidate.backlogs === 0 ? 'green' : 'red'} style={{ width: 'fit-content' }}>
-                      {candidate.backlogs ?? 0} Total
+                    <Tag color={shown.backlogs === 0 ? 'green' : 'red'} style={{ width: 'fit-content' }}>
+                      {shown.backlogs ?? 0} Total
                     </Tag>
-                    <Tag color={candidate.arrears === 0 ? 'green' : 'orange'} style={{ width: 'fit-content' }}>
-                      {candidate.arrears ?? 0} Active
+                    <Tag color={shown.arrears === 0 ? 'green' : 'orange'} style={{ width: 'fit-content' }}>
+                      {shown.arrears ?? 0} Active
                     </Tag>
                   </div>
                 </div>

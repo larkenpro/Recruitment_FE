@@ -6,3 +6,6 @@ import api from './axios'
  * stageName, status }`, the same shape the per-event stage-summary returns.
  */
 export const getStageSummaries = () => api.get('/analytics/stage-summary')
+
+/** Every event application with its ranked (position, type) preferences. */
+export const getAllApplications = () => api.get('/analytics/applications')

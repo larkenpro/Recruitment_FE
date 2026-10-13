@@ -120,7 +120,6 @@ describe('computeAnalytics', () => {
     tenthMark: 90,
     twelfthMark: 85,
     backlogs: 0,
-    preferredPositions: [{ position: { title: 'Software Engineer' }, type: { name: 'FTE' } }],
   }
 
   it('returns null for an empty array', () => {
@@ -355,9 +354,9 @@ describe('buildPositionPreferenceTable', () => {
   // A preference is a (position, type) pair; columns are labelled "<title> — <type>".
   const pref = (title, type = 'FTE') => ({ position: { title }, type: { name: type } })
   const candidates = [
-    { preferredPositions: [pref('SDE'), pref('BA')] },
-    { preferredPositions: [pref('SDE'), pref('QA'), pref('BA')] },
-    { preferredPositions: [pref('BA')] },
+    { preferences: [pref('SDE'), pref('BA')] },
+    { preferences: [pref('SDE'), pref('QA'), pref('BA')] },
+    { preferences: [pref('BA')] },
   ]
 
   it('cross-tabulates counts by rank, ordering columns by total descending', () => {
@@ -372,7 +371,7 @@ describe('buildPositionPreferenceTable', () => {
 
   it('counts the same position under two types as separate columns', () => {
     const { positions, rows } = buildPositionPreferenceTable([
-      { preferredPositions: [pref('SDE', 'Internship'), pref('SDE', 'FTE')] },
+      { preferences: [pref('SDE', 'Internship'), pref('SDE', 'FTE')] },
     ])
 
     expect(positions).toEqual(['SDE — FTE', 'SDE — Internship'])
@@ -382,7 +381,7 @@ describe('buildPositionPreferenceTable', () => {
 
   it('gives a rank past the old two-slot limit its own row', () => {
     const { rows } = buildPositionPreferenceTable([
-      { preferredPositions: [pref('A'), pref('B'), pref('C'), pref('D')] },
+      { preferences: [pref('A'), pref('B'), pref('C'), pref('D')] },
     ])
 
     expect(rows).toHaveLength(4)
@@ -392,8 +391,8 @@ describe('buildPositionPreferenceTable', () => {
   it('ignores candidates with no preferences and entries with no title', () => {
     const { positions, rows } = buildPositionPreferenceTable([
       {},
-      { preferredPositions: [] },
-      { preferredPositions: [null, pref(''), pref('SDE')] },
+      { preferences: [] },
+      { preferences: [null, pref(''), pref('SDE')] },
     ])
 
     expect(positions).toEqual(['SDE — FTE'])

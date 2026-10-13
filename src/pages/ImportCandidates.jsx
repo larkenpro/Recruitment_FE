@@ -21,6 +21,8 @@ const GUESSES = {
   name: 'name',
   email: 'email', personalemail: 'email',
   retnumber: 'rollNo', rollno: 'rollNo', registrationnumber: 'rollNo',
+  batch: 'graduationYear', graduationyear: 'graduationYear', yearofgraduation: 'graduationYear',
+  yearofpassing: 'graduationYear', passoutyear: 'graduationYear', passingyear: 'graduationYear',
   phone: 'phone', phonenumber: 'phone',
   ugprogramme: 'branch', branch: 'branch',
   '10th': 'tenthMark', '12th': 'twelfthMark',

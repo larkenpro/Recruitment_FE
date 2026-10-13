@@ -101,6 +101,7 @@ Providers wrap in this order: `ConfigProvider` (Ant Design theme) → `QueryClie
 Routes:
 - `/login` — public, no layout
 - `/apply/:token` — public, no layout, candidate application form
+- `/candidate` — public, no layout, the candidate's own page (sign in by emailed link)
 - `/` — redirects to `/colleges`
 - `/colleges`, `/events`, `/positions`, `/candidates`, `/candidates/:id`, `/analytics` — all protected; wrapped in `ProtectedRoute` + `AppLayout`
 
@@ -154,7 +155,8 @@ Renders dropdowns (or number inputs for min/max) from `optionMap`. Active filter
 ## Pages
 
 ### Colleges (`src/pages/Colleges.jsx`)
-- Lists colleges with City / State / Tier columns.
+- Lists colleges with City / State / Tier / Status columns and a contacts count.
+- Contacts modal edits the ordered `contacts` list (name, designation, email, phone) and saves it with `updateCollege`.
 - Add and Edit via modal (no delete).
 - Filter keys: city, state, tier.
 - API: `getColleges`, `createCollege`, `updateCollege` from `src/api/colleges.js`.
@@ -167,8 +169,8 @@ Renders dropdowns (or number inputs for min/max) from `optionMap`. Active filter
   - **Rounds modal** — lists existing rounds, add new round (name, type, sequence).
   - **Positions modal** — lists linked positions with remove (Popconfirm), add more via multi-select.
   - **Candidates modal** — table of candidates who applied; clicking a name navigates to `CandidateDetail`.
-- Create Event modal includes position multi-select at creation time.
-- Filter keys: college name, year, status.
+- Create Event modal includes the mode (On-campus / Virtual / Hybrid, default On-campus; `utils/eventModes.js`) and position multi-select at creation time. The list shows a Mode column; EventDetail changes it via `updateEventMode`.
+- Filter keys: college name, year, status, mode.
 - API: `src/api/events.js` — `getEvents`, `createEvent`, `updateEventStatus`, `generateLink`, `getRounds`, `createRound`, `getEventPositions`, `addEventPositions`, `removeEventPosition`, `getCandidatesByEvent`.
 
 ### Positions (`src/pages/Positions.jsx`)
@@ -178,12 +180,10 @@ Renders dropdowns (or number inputs for min/max) from `optionMap`. Active filter
 - API: `src/api/positions.js` — `getPositions`, `createPosition`, `updatePosition`, `deletePosition`.
 
 ### Candidates (`src/pages/Candidates.jsx`)
-- Lists all candidates. Name cell is a link to `CandidateDetail`.
-- Edit modal: full candidate form (personal, academic, role preferences).
-  - On open, fetches the full candidate record; its `preferredPositions` are ranked (position, type) pairs.
-  - Pairs are reordered with up/down arrows or removed; saved as `preferences: [{ positionId, typeId }]` (ordered). Labels come from `utils/preferences.js`.
-- Filter keys: college, branch, ugCgpa (min), backlogs (max).
-- API: `getCandidates`, `getCandidate`, `getCandidateEvent`, `updateCandidate`, `deleteCandidate` + `getEventPositions`.
+- Lists all candidates with their **current profile** (latest application's details). Name cell is a link to `CandidateDetail`.
+- Edit modal: the profile only (personal + academic). Per-event marks and preferences are edited on `CandidateDetail`.
+- Filter keys: college, branch, batch (graduationYear), ugCgpa (min), backlogs (max).
+- API: `getCandidates`, `getCandidate`, `updateCandidate`, `deleteCandidate`.
 
 ### CandidateDetail (`src/pages/CandidateDetail.jsx`)
 The most complex page. Displays a 3-column top row + two tabbed sections.
@@ -191,14 +191,14 @@ The most complex page. Displays a 3-column top row + two tabbed sections.
 **Top row cards:**
 1. Profile card — avatar initial, name, college, contact details
 2. Pipeline Status card — current stage + `Steps` progress through `PIPELINE_STAGES`; if candidate has multiple events, a `Select` switches between them
-3. Academic Snapshot card — CGPA, marks, backlogs statistics
+3. Academic Snapshot card — CGPA, marks, backlogs **as submitted for the selected event** (falls back to the profile when there's no application)
 
 **Pipeline stages (ordered):** Resume → Rounds → Offer → Joining → 6 Month Review → 12 Month Retained → Exit
 
 **Candidate Information tabs:**
 - Personal Info — `Descriptions` table
 - Academic — `Descriptions` table
-- Preferences — ranked preferred positions list (editable via up/down arrows)
+- Personal Info / Academic / Preferences read the selected event's application (`getCandidateApplications`); Preferences are reordered/removed and saved via `updateCandidateApplication`. The Offer form's pair options come from the same application.
 
 **Recruitment Pipeline tabs** (tabs are added dynamically — only visible if that stage has been reached):
 - **Resume** — shows uploaded resume with download button; "Begin Resume Review" triggers stage start; decision radio (SHORTLISTED / HOLD / REJECTED)
@@ -211,25 +211,31 @@ The most complex page. Displays a 3-column top row + two tabbed sections.
 - `stageDecision(stageName)` renders decision controls only for the current active stage; completed stages show a static tag.
 - Setting status to SHORTLISTED auto-advances to the next stage via `addStageEntry`.
 
-API calls in this page: `getCandidate`, `getCandidateResume`, `getCandidateRoundResults`, `getCandidateStageHistory`, `getCandidateEvent`, `getEventPositions`, `getExitRecord`, `updateCandidate`, `updateRoundResult`, `addStageEntry`, `updateStageStatus`, `createExitRecord`, `updateExitRecord`, `deleteExitRecord`.
+API calls in this page: `getCandidate`, `getCandidateApplications`, `updateCandidateApplication`, `getCandidateResume`, `getCandidateRoundResults`, `getCandidateStageHistory`, `getExitRecord`, `updateRoundResult`, `addStageEntry`, `updateStageStatus`, `createExitRecord`, `updateExitRecord`, `deleteExitRecord`.
 
 ### PublicApply (`src/pages/PublicApply.jsx`)
-Token-based public form — no auth required.
+Token-based public form — no auth required. **Only for new candidates.**
 
-- On load, validates the token via `getApplyForm(token)` (plain axios, no auth header) → gets event info; also fetches event positions for the preference ranking UI.
-- 3-step wizard (Ant Design `Steps`): Personal Info → Academic Details → Preferences.
-- Step navigation via state (`step` 0/1/2); steps are shown/hidden with `display` style (all in one `Form` so validation state is preserved).
-- Position preference ranking: lists every (position, type) pair the event is hiring for (`getPublicEventPositions`, no auth). The candidate ticks the pairs they want and ranks them with up/down arrows; the ticked ones are sent in order as `preferences[]` = `"positionId:typeId"`.
-- Resume upload: file held in `resumeFile` state; submitted as `multipart/form-data` via `submitApplication`.
-- "Fill Test Data" button (development aid) pre-fills the form with random Indian names/data.
-- On success: shows Ant Design `Result` success screen.
-- Invalid/expired token: shows `Result` error screen.
+- On load, validates the token via `getApplyForm(token)` and fetches the event's (position, type) pairs with `getPublicEventPositions` (plain axios).
+- 3-step wizard: Personal Info → Academic Details (`components/AcademicFields`, including the required Year of Graduation / batch) → Preferences (`components/PreferenceRanker`: tick pairs and rank them; sent as `preferences[]` = `"positionId:typeId"`).
+- Leaving step 0 calls `checkApplication(token, { email, rollNo })`. If they're already a candidate, a modal says "A candidate with this email/roll number already exists" with **[Cancel]** / **[Send me a link]** — the link goes to the masked email on file (`requestSignInLink`) and leads to the candidate page. A 409 from submit shows the same modal.
+- Form values go through `academicPayload` (`utils/academic.js`) before submit.
+- `components/ConsentField` (required checkbox: information may be used for recruitment) sits above Submit; the candidate page's "Apply to …" form uses it too. CandidateDetail shows when consent was given.
+- "Fill Test Data" buttons are `DevOnly`.
+
+### CandidatePortal (`src/pages/CandidatePortal.jsx`)
+The candidate's own page at `/candidate?token=…&apply=…`.
+
+- `?token=` (from the emailed link) is swapped for a session token (`createCandidateSession`), kept in `sessionStorage` and stripped from the URL. No session → email box that asks for a sign-in link. A 401 signs them out.
+- Shows: **Apply to {event}** when the link carried an apply token for an event they haven't applied to (pre-filled from the profile); one card per application — editable while the event is ACTIVE, read-only otherwise; contact details; resume upload.
+- API: `src/api/portal.js` — plain axios + `X-Candidate-Token`, never the admin instance.
 
 ### Analytics (`src/pages/Analytics.jsx`)
 - Reads from the shared `['candidates']` query key (same cache as Candidates page).
 - Passes data through `computeAnalytics` (`src/utils/analyticsHelpers.js`) via `useMemo`.
 - Displays: total candidates, avg UG CGPA, avg 10th mark, active/total backlog counts.
 - Charts (Recharts): candidates by branch (horizontal bar), position preferences (horizontal bar), candidates by college (horizontal bar), job location preference (pie chart).
+- The position preference table is fed from `getAllApplications` (`/analytics/applications`), since preferences belong to applications.
 
 ---
 
@@ -238,7 +244,8 @@ Token-based public form — no auth required.
 | File | Base | Key exports |
 |---|---|---|
 | `axios.js` | `VITE_API_BASE_URL` | Default axios instance with auth interceptor |
-| `candidates.js` | mix | All candidate CRUD + stages + resume + exit + public apply |
+| `candidates.js` | mix | All candidate CRUD + per-event applications + stages + resume + exit + public apply/check |
+| `portal.js` | public + candidate session | Candidate page: sign-in link, session, own page, profile/application edits, resume |
 | `colleges.js` | authenticated | `getColleges`, `createCollege`, `updateCollege` |
 | `events.js` | authenticated | Events CRUD + rounds + positions + link generation |
 | `positions.js` | authenticated | `getPositions`, `createPosition`, `updatePosition`, `deletePosition` |
