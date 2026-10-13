@@ -327,10 +327,10 @@ export default function PublicApply() {
                     <Select size="large" placeholder="Select location" options={JOB_LOCATION_OPTIONS} />
                   </Form.Item>
                 </Col>
-                {/* Only asked when the event is hiring for an IT position. */}
-                {hasItPosition(rankedPairs) && (
+                {/* Only asked once an IT position is ticked; unticking it drops the field and its value. */}
+                {hasItPosition(rankedPairs.filter(p => selected.has(preferenceKey(p)))) && (
                   <Col xs={24} sm={12}>
-                    <Form.Item name="githubLink" label="GitHub Link" rules={[URL_RULE]}>
+                    <Form.Item name="githubLink" label="GitHub Link" rules={[URL_RULE]} preserve={false}>
                       <Input placeholder="https://github.com/username" size="large" />
                     </Form.Item>
                   </Col>
