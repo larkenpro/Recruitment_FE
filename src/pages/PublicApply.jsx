@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { Form, Input, Select, Button, Card, Row, Col, Typography, Divider, Upload, Alert, Steps, Result, DatePicker, Modal } from 'antd'
 import { UploadOutlined, UserOutlined, BookOutlined, AimOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { getApplyForm, submitApplication, checkApplication, getPublicEventPositions } from '../api/candidates'
 import { requestSignInLink } from '../api/portal'
-import { eventPairs, preferenceKey } from '../utils/preferences'
+import { eventPairs, hasItPosition, preferenceKey } from '../utils/preferences'
 import { academicPayload } from '../utils/academic'
 import { EMAIL_RULE, PHONE_RULE, URL_RULE, requiredRule } from '../components/validation/rules'
 import AcademicFields, { BRANCH_OPTIONS, JOB_LOCATION_OPTIONS } from '../components/AcademicFields'
@@ -34,6 +34,9 @@ export default function PublicApply() {
   // { matchedBy, maskedEmail, linkSent } when the email or roll number is already on file.
   const [existing, setExisting] = useState(null)
   const [sendingLink, setSendingLink] = useState(false)
+  // Set by a submit with nothing ticked; the prompt shows by the ranker until one is ticked.
+  const [prefError, setPrefError] = useState(false)
+  const rankerRef = useRef(null)
 
   useEffect(() => {
     getApplyForm(token)
@@ -91,7 +94,8 @@ export default function PublicApply() {
 
   const handleSubmit = async (values) => {
     if (selected.size === 0) {
-      setError('Tick at least one position you want to apply for.')
+      setPrefError(true)
+      rankerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
     if (!resumeFile) {
@@ -193,7 +197,7 @@ export default function PublicApply() {
 
           {error && <Alert message={error} type="error" showIcon style={{ marginBottom: 16 }} closable onClose={() => setError('')} />}
 
-          <Form form={form} layout="vertical" onFinish={handleSubmit}>
+          <Form form={form} layout="vertical" onFinish={handleSubmit} onFinishFailed={() => setPrefError(selected.size === 0)}>
 
             {/* Step 0 - Personal Info */}
             <div style={{ display: step === 0 ? 'block' : 'none' }}>
@@ -299,9 +303,9 @@ export default function PublicApply() {
               <Divider orientation="left">Role Preferences</Divider>
               <Row gutter={GUTTER}>
                 <Col xs={24}>
-                  <div style={{ marginBottom: 16 }}>
+                  <div ref={rankerRef} style={{ marginBottom: 16 }}>
                     <div style={{ fontWeight: 600, marginBottom: 6, color: '#1e1b4b' }}>
-                      Rank Positions by Preference
+                      Rank Positions by Preference <span style={{ color: '#ff4d4f' }}>*</span>
                     </div>
                     <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 12 }}>
                       Tick each position and type you want to apply for, then use the arrows to reorder — your top choice goes first.
@@ -311,6 +315,11 @@ export default function PublicApply() {
                       selected={selected}
                       onChange={(ranked, nextSelected) => { setRankedPairs(ranked); setSelected(nextSelected) }}
                     />
+                    {prefError && selected.size === 0 && (
+                      <div role="alert" style={{ color: '#ff4d4f', fontSize: 14, marginTop: 8 }}>
+                        Tick at least one position you want to apply for.
+                      </div>
+                    )}
                   </div>
                 </Col>
                 <Col xs={24} sm={12}>
@@ -318,11 +327,14 @@ export default function PublicApply() {
                     <Select size="large" placeholder="Select location" options={JOB_LOCATION_OPTIONS} />
                   </Form.Item>
                 </Col>
-                <Col xs={24} sm={12}>
-                  <Form.Item name="githubLink" label="GitHub Link (for Technical BA)" rules={[URL_RULE]}>
-                    <Input placeholder="https://github.com/username" size="large" />
-                  </Form.Item>
-                </Col>
+                {/* Only asked when the event is hiring for an IT position. */}
+                {hasItPosition(rankedPairs) && (
+                  <Col xs={24} sm={12}>
+                    <Form.Item name="githubLink" label="GitHub Link" rules={[URL_RULE]}>
+                      <Input placeholder="https://github.com/username" size="large" />
+                    </Form.Item>
+                  </Col>
+                )}
                 <Col xs={24}>
                   <Form.Item name="leadershipPositions" label="Leadership Positions Held">
                     <Input.TextArea rows={3} placeholder="Class Representative, Coding Club Lead..." size="large" />
