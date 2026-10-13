@@ -66,7 +66,8 @@ describe('Apply Flow', () => {
       name: '_Test Applicant',
       email: firstEmail,
       phone: '9000000001',
-      rollNo: 'TEST001',
+      // Unique per run: a roll number already on file at this college is a returning candidate (409).
+      rollNo: `TEST${Date.now()}`,
       branch: 'Computer Science & Engineering',
       ugCgpa: 8.5,
       tenthMark: 90,
@@ -385,6 +386,7 @@ describe('Apply Flow', () => {
       branch: 'Computer Science & Engineering',
       backlogs: 0,
       preferences: [preference],
+      consent: true,
       internshipAvailability: 'June-2025 to August-2025',
     })
     expect(res.data.status).toBe('success')
@@ -399,6 +401,7 @@ describe('Apply Flow', () => {
       branch: 'Computer Science & Engineering',
       backlogs: 0,
       preferences: [preference],
+      consent: true,
       internshipAvailability: null,
     })
     expect(res.data.status).toBe('success')
@@ -464,7 +467,7 @@ describe('Apply Flow', () => {
       name: '_Test Full Payload',
       email: `full_${Date.now()}@example.com`,
       phone: '9876543210',
-      rollNo: 'CS2024001',
+      rollNo: `CS${Date.now()}`,
       branch: 'Computer Science & Engineering',
       tenthMark: 92.5,
       twelfthMark: 88.0,
@@ -476,6 +479,7 @@ describe('Apply Flow', () => {
       pgCgpa: 9.0,
       backlogs: 0,
       preferences: [preference],
+      consent: true,
       jobLocation: 'Both',
       githubLink: 'https://github.com/testuser',
       leadershipPositions: 'Class Representative, Coding Club Lead',

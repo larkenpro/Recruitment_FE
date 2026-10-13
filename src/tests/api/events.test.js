@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { getEvents, getEvent, createEvent, updateEventStatus, updateEventMode, getRounds, createRound, getEventPositions, setEventPositionTypes, getCandidatesByEvent, getGroups, generateGroups, updateGroup, deleteAllGroups } from '../../api/events'
+import { getEvents, getEvent, createEvent, updateEventStatus, updateEventMode, addEventApplication, updateEventApplication, getRounds, createRound, getEventPositions, setEventPositionTypes, getCandidatesByEvent, getGroups, generateGroups, updateGroup, deleteAllGroups } from '../../api/events'
 import { getColleges } from '../../api/colleges'
 import { createPosition, deletePosition, getPositionTypes } from '../../api/positions'
 
@@ -239,6 +239,29 @@ describe('Events API', () => {
       const res = await getEventPositions(createdId)
       expect(res.data.status).toBe('success')
       expect(res.data.data.length).toBe(0)
+    })
+
+    // ── admin candidate entry ─────────────────────────────────────────────
+    it('POST /events/:id/applications — adds a candidate, refuses a repeat, and edits them', async () => {
+      if (!linkedEventId || !positionId) return
+      const typeId = (await getEventPositions(linkedEventId)).data.data.find(p => p.id === positionId).types[0].id
+      const walkIn = {
+        name: '_Walk-in', email: `walkin_${Date.now()}@example.com`, rollNo: `W${Date.now()}`,
+        ugCgpa: 8.1, consent: true, preferences: [{ positionId, typeId }],
+      }
+
+      await expect(addEventApplication(linkedEventId, { ...walkIn, consent: false }))
+        .rejects.toMatchObject({ response: { status: 400 } })
+
+      const added = await addEventApplication(linkedEventId, walkIn)
+      expect(added.status).toBe(201)
+      expect(added.data.data.consentedAt).toBeTruthy()
+
+      await expect(addEventApplication(linkedEventId, walkIn)).rejects.toMatchObject({ response: { status: 409 } })
+
+      const edited = await updateEventApplication(linkedEventId, added.data.data.candidateId,
+        { ...walkIn, name: '_Walk-in Edited', ugCgpa: 8.6 })
+      expect(edited.data.data).toMatchObject({ name: '_Walk-in Edited', ugCgpa: 8.6, email: walkIn.email })
     })
 
     // ── mode ──────────────────────────────────────────────────────────────

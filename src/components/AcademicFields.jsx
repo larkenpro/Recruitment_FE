@@ -20,15 +20,16 @@ export const BRANCH_OPTIONS = [
 
 export const JOB_LOCATION_OPTIONS = ['Gurugram NCR', 'Coimbatore', 'Both'].map((v) => ({ value: v, label: v }))
 
-// Marks, degrees and backlogs — shared by the apply form and the candidate page.
-export default function AcademicFields({ size = 'large' }) {
+// Marks, degrees and backlogs — shared by the apply form, the candidate page and the admin entry form.
+// Candidates must give a batch and CGPA; an admin entering someone may not have them to hand.
+export default function AcademicFields({ size = 'large', requireCore = true }) {
   return (
     <Row gutter={GUTTER}>
       <Col xs={24} sm={12}>
         <Form.Item
           name="graduationYear"
           label="Year of Graduation (Batch)"
-          rules={[{ required: true, message: 'Year of graduation is required' }, GRADUATION_YEAR_RULE]}
+          rules={[{ required: requireCore, message: 'Year of graduation is required' }, GRADUATION_YEAR_RULE]}
         >
           <Input type="number" placeholder="2026" size={size} />
         </Form.Item>
@@ -59,7 +60,7 @@ export default function AcademicFields({ size = 'large' }) {
         </Form.Item>
       </Col>
       <Col xs={24} sm={12}>
-        <Form.Item name="ugCgpa" label="UG CGPA" rules={[{ required: true, message: 'UG CGPA is required' }, CGPA_RULE]}>
+        <Form.Item name="ugCgpa" label="UG CGPA" rules={[{ required: requireCore, message: 'UG CGPA is required' }, CGPA_RULE]}>
           <Input type="number" step="0.01" placeholder="8.5" size={size} />
         </Form.Item>
       </Col>

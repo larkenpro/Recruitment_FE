@@ -8,6 +8,7 @@ import PageGuard from './routes/PageGuard'
 import AppLayout from './components/Layout'
 import Login from './pages/Login'
 import Colleges from './pages/Colleges'
+import CollegeDetail from './pages/CollegeDetail'
 import Events from './pages/Events'
 import Positions from './pages/Positions'
 import CandidateDetail from './pages/CandidateDetail'
@@ -50,6 +51,7 @@ export default function App() {
               <Route path="/candidate" element={<CandidatePortal />} />
               <Route path="/" element={<Navigate to="/colleges" replace />} />
               <Route path="/colleges" element={<P page="COLLEGES"><Colleges /></P>} />
+              <Route path="/colleges/:id" element={<P page="COLLEGES"><CollegeDetail /></P>} />
               <Route path="/events" element={<P page="EVENTS"><Events/></P>} />
               <Route path="/events/:id" element={<P page="EVENTS"><EventDetail /></P>} />
               <Route path="/positions" element={<P page="POSITIONS"><Positions /></P>} />

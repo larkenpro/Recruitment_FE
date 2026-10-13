@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getColleges, getCollege, createCollege } from '../../api/colleges'
+import { getColleges, getCollege, createCollege, getCollegeEvents } from '../../api/colleges'
 
 describe('Colleges API', () => {
   let createdId = null
@@ -44,12 +44,23 @@ describe('Colleges API', () => {
     expect(res.data.data.name).toBe('_Test College')
   })
 
+  // ── events at a college ───────────────────────────────────────────────────
+  it('GET /colleges/:id/events — a new college has no events yet', async () => {
+    const res = await getCollegeEvents(createdId)
+    expect(res.data.status).toBe('success')
+    expect(res.data.data).toEqual([])
+  })
+
+  it('GET /colleges/999999/events — returns 404 for unknown college', async () => {
+    await expect(getCollegeEvents(999999)).rejects.toMatchObject({
+      response: { status: 404 },
+    })
+  })
+
   // ── not found ─────────────────────────────────────────────────────────────
-  // BACKEND BUG: /colleges/:id returns 500 instead of 404 for missing records.
-  // Update this to { status: 404 } once the backend handles it correctly.
-  it('GET /colleges/999999 — returns error for unknown id', async () => {
+  it('GET /colleges/999999 — returns 404 for unknown id', async () => {
     await expect(getCollege(999999)).rejects.toMatchObject({
-      response: { status: 500 },
+      response: { status: 404 },
     })
   })
 })

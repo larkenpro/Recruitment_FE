@@ -103,7 +103,7 @@ Routes:
 - `/apply/:token` — public, no layout, candidate application form
 - `/candidate` — public, no layout, the candidate's own page (sign in by emailed link)
 - `/` — redirects to `/colleges`
-- `/colleges`, `/events`, `/positions`, `/candidates`, `/candidates/:id`, `/analytics` — all protected; wrapped in `ProtectedRoute` + `AppLayout`
+- `/colleges`, `/colleges/:id`, `/events`, `/positions`, `/candidates`, `/candidates/:id`, `/analytics` — all protected; wrapped in `ProtectedRoute` + `AppLayout`
 
 The `P` shorthand component (`<ProtectedRoute><AppLayout>{children}</AppLayout></ProtectedRoute>`) is used inline on every protected route.
 
@@ -160,6 +160,12 @@ Renders dropdowns (or number inputs for min/max) from `optionMap`. Active filter
 - Add and Edit via modal (no delete).
 - Filter keys: city, state, tier.
 - API: `getColleges`, `createCollege`, `updateCollege` from `src/api/colleges.js`.
+- The name links to the college's detail page. Tier/status colours live in `utils/colleges.js`.
+
+### CollegeDetail (`src/pages/CollegeDetail.jsx`, `/colleges/:id`)
+- Laid out like EventDetail: college card (tier/status), summary (events, applicants, offers — summed from the event list), contacts card, then every event held there, newest first (upcoming included) with mode, status, positions with their types, applicant and offer counts.
+- The year links to `/events/:id` only for users with the EVENTS page. Unknown id → "College not found".
+- API: `getCollege`, `getCollegeEvents`.
 
 ### Events (`src/pages/Events.jsx`)
 - Lists recruitment events. Each event belongs to a college and year.
@@ -173,11 +179,16 @@ Renders dropdowns (or number inputs for min/max) from `optionMap`. Active filter
 - Filter keys: college name, year, status, mode.
 - API: `src/api/events.js` — `getEvents`, `createEvent`, `updateEventStatus`, `generateLink`, `getRounds`, `createRound`, `getEventPositions`, `addEventPositions`, `removeEventPosition`, `getCandidatesByEvent`.
 
+### EventDetail admin entry (`components/EventApplicationModal.jsx`)
+- Resume tab: **Add Candidate** opens the modal (contact details, academic details, preference ranker over the event's open pairs, required admin consent checkbox) → `addEventApplication`. A 409 means they already applied.
+- Each row's **Edit** opens the same modal pre-filled from that application (email read-only, no consent) → `updateEventApplication`.
+
 ### Positions (`src/pages/Positions.jsx`)
 - CRUD for job positions (title, department, job description — required, sent to colleges in automated emails; the table flags positions without one as "Missing"). One row per title — the type (Internship / FTE / Intern-to-FTE) is chosen per event on EventDetail, not here.
 - Delete with Popconfirm.
+- JD PDF column: Upload / Replace (PDF only), the file name opens it in a new tab (fetched as a blob — the endpoint needs the JWT), and a remove button.
 - Filter keys: department.
-- API: `src/api/positions.js` — `getPositions`, `createPosition`, `updatePosition`, `deletePosition`.
+- API: `src/api/positions.js` — `getPositions`, `createPosition`, `updatePosition`, `deletePosition`, `uploadPositionJd`, `getPositionJd`, `deletePositionJd`.
 
 ### Candidates (`src/pages/Candidates.jsx`)
 - Lists all candidates with their **current profile** (latest application's details). Name cell is a link to `CandidateDetail`.
@@ -246,9 +257,9 @@ The candidate's own page at `/candidate?token=…&apply=…`.
 | `axios.js` | `VITE_API_BASE_URL` | Default axios instance with auth interceptor |
 | `candidates.js` | mix | All candidate CRUD + per-event applications + stages + resume + exit + public apply/check |
 | `portal.js` | public + candidate session | Candidate page: sign-in link, session, own page, profile/application edits, resume |
-| `colleges.js` | authenticated | `getColleges`, `createCollege`, `updateCollege` |
+| `colleges.js` | authenticated | `getColleges`, `getCollege`, `getCollegeEvents`, `createCollege`, `updateCollege` |
 | `events.js` | authenticated | Events CRUD + rounds + positions + link generation |
-| `positions.js` | authenticated | `getPositions`, `createPosition`, `updatePosition`, `deletePosition` |
+| `positions.js` | authenticated | `getPositions`, `createPosition`, `updatePosition`, `deletePosition`, `uploadPositionJd`, `getPositionJd`, `deletePositionJd` |
 | `stages.js` | authenticated | Stage-related helpers (if separate) |
 
 Public endpoints in `candidates.js` use plain `axios` directly (not the instance) to bypass the auth interceptor.

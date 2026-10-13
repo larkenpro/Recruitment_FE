@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Card, Table, Button, Modal, Form, Input, message, Space, Popconfirm, Tag } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined, ExperimentOutlined } from '@ant-design/icons'
+import { Card, Table, Button, Modal, Form, Input, message, Space, Popconfirm, Tag, Upload } from 'antd'
+import { PlusOutlined, EditOutlined, DeleteOutlined, ExperimentOutlined, FilePdfOutlined, UploadOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getPositions, createPosition, updatePosition, deletePosition } from '../api/positions'
+import { getPositions, createPosition, updatePosition, deletePosition, uploadPositionJd, getPositionJd, deletePositionJd } from '../api/positions'
+import { getErrorMessage } from '../utils/errorUtils'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
 import DevOnly from '../components/DevOnly'
@@ -40,6 +41,30 @@ export default function Positions() {
     mutationFn: deletePosition,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['positions'] }); message.success('Position deleted!') }
   })
+
+  const jdUploadMutation = useMutation({
+    mutationFn: ({ id, file }) => uploadPositionJd(id, file),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['positions'] }); message.success('JD PDF uploaded') },
+    onError: (err) => message.error(getErrorMessage(err)),
+  })
+
+  const jdDeleteMutation = useMutation({
+    mutationFn: deletePositionJd,
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['positions'] }); message.success('JD PDF removed') },
+    onError: (err) => message.error(getErrorMessage(err)),
+  })
+
+  // The tab is opened before the fetch so the popup blocker treats it as part of the click.
+  const viewJd = async (id) => {
+    const tab = window.open('', '_blank')
+    try {
+      const res = await getPositionJd(id)
+      tab.location = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
+    } catch (err) {
+      tab.close()
+      message.error(getErrorMessage(err))
+    }
+  }
 
   const fillTestData = () => {
     const titles = ['Software Engineer', 'Business Analyst', 'Data Analyst', 'QA Engineer', 'DevOps Engineer', 'Product Manager', 'Technical BA', 'Cloud Engineer']
@@ -85,6 +110,23 @@ export default function Positions() {
       // Sent to colleges in automated emails, so a missing one is flagged rather than hidden.
       title: 'Job Description', dataIndex: 'jobDescription', width: 360, ellipsis: true,
       render: jd => jd || <Tag color="red">Missing</Tag>,
+    },
+    {
+      title: 'JD PDF', dataIndex: 'jdFileName', render: (name, r) => (
+        <Space size={4}>
+          {name && <Button size="small" type="link" icon={<FilePdfOutlined />} onClick={() => viewJd(r.id)} style={{ padding: 0 }}>{name}</Button>}
+          <Upload accept="application/pdf,.pdf" showUploadList={false} beforeUpload={(file) => { jdUploadMutation.mutate({ id: r.id, file }); return false }}>
+            <Button size="small" icon={<UploadOutlined />} loading={jdUploadMutation.isPending && jdUploadMutation.variables?.id === r.id}>
+              {name ? 'Replace' : 'Upload'}
+            </Button>
+          </Upload>
+          {name && (
+            <Popconfirm title="Remove this JD PDF?" onConfirm={() => jdDeleteMutation.mutate(r.id)} okText="Remove" cancelText="No">
+              <Button size="small" type="text" danger icon={<DeleteOutlined />} aria-label="Remove JD PDF" />
+            </Popconfirm>
+          )}
+        </Space>
+      ),
     },
     {
       title: 'Actions', render: (_, r) => (

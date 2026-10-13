@@ -11,6 +11,7 @@ import {
   TeamOutlined,
   ThunderboltOutlined,
   UnorderedListOutlined,
+  UserAddOutlined,
   UsergroupAddOutlined,
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -74,6 +75,7 @@ import { GUTTER, useLayoutMetrics } from '../theme'
 import { useStageDecision } from '../hooks/useStageDecision'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
+import EventApplicationModal from '../components/EventApplicationModal'
 
 const { Title, Text } = Typography
 
@@ -138,6 +140,8 @@ export default function EventDetail() {
   const [roundTableEdits, setRoundTableEdits] = useState({})
   const [pendingRoundCandidateId, setPendingRoundCandidateId] = useState(null)
   const [pendingPipelineCandidateId, setPendingPipelineCandidateId] = useState(null)
+  // { application: null } to add a candidate, { application: row } to edit theirs; null when closed.
+  const [applicationModal, setApplicationModal] = useState(null)
 
   const { data: event, isLoading } = useQuery({
     queryKey: ['event', id],
@@ -1305,6 +1309,11 @@ export default function EventDetail() {
       ),
       children: (
         <>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+            <Button icon={<UserAddOutlined />} onClick={() => setApplicationModal({ application: null })}>
+              Add Candidate
+            </Button>
+          </div>
           <FilterBar
             filterKeys={CANDIDATE_FILTER_KEYS}
             optionMap={candidateOptionMap}
@@ -1371,6 +1380,14 @@ export default function EventDetail() {
                     }}
                     options={RESUME_STATUS_OPTIONS}
                   />
+                ),
+              },
+              {
+                title: 'Details',
+                render: (_, r) => (
+                  <Button size="small" icon={<EditOutlined />} onClick={() => setApplicationModal({ application: r })}>
+                    Edit
+                  </Button>
                 ),
               },
             ]}
@@ -1659,6 +1676,20 @@ export default function EventDetail() {
           </div>
         )}
       </Modal>
+
+      <EventApplicationModal
+        open={!!applicationModal}
+        eventId={id}
+        eventPositions={eventPositions}
+        application={applicationModal?.application}
+        onClose={() => setApplicationModal(null)}
+        onSaved={() => {
+          setApplicationModal(null)
+          queryClient.invalidateQueries({ queryKey: ['eventCandidates', id] })
+          queryClient.invalidateQueries({ queryKey: ['eventStageSummary', id] })
+          queryClient.invalidateQueries({ queryKey: ['eventGroups', id] })
+        }}
+      />
 
       {/* Edit group modal */}
       <Modal

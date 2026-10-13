@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Card, Table, Button, Modal, Form, Input, Select, Tag, message } from 'antd'
 import { PlusOutlined, EditOutlined, ExperimentOutlined, DeleteOutlined, TeamOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { getColleges, createCollege, updateCollege } from '../api/colleges'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
@@ -9,10 +10,10 @@ import { EMAIL_RULE, PHONE_RULE } from '../components/validation/rules'
 import DevOnly from '../components/DevOnly'
 import { SPACE } from '../theme'
 import { isSimilar, isSimilarOrBlank } from '../utils/similarity'
+import { COLLEGE_STATUS_COLOR, tierColor } from '../utils/colleges'
 
 const STATUS_OPTIONS = ['Not Contacted', 'Contacted', 'In Conversation', 'Confirmed', 'Dropped']
 const TIERS = ['Tier 1', 'Tier 2', 'Tier 3', 'Tier 4']
-const STATUS_COLOR = { 'Not Contacted': 'default', Contacted: 'blue', 'In Conversation': 'gold', Confirmed: 'green', Dropped: 'red' }
 
 const FILTER_KEYS = [
   { key: 'city',  label: 'City',  getVal: r => r.city },
@@ -26,6 +27,7 @@ const contactsOf = (r) => (r?.contacts?.length ? r.contacts : [{}])
 
 export default function Colleges() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [editingCollege, setEditingCollege] = useState(null)
   const [form] = Form.useForm()
@@ -120,11 +122,11 @@ export default function Colleges() {
   })
 
   const columns = [
-    { title: 'Name', dataIndex: 'name', render: t => <strong>{t}</strong> },
+    { title: 'Name', dataIndex: 'name', render: (t, r) => <a onClick={() => navigate(`/colleges/${r.id}`)}><strong>{t}</strong></a> },
     { title: 'City', dataIndex: 'city' },
     { title: 'State', dataIndex: 'state' },
-    { title: 'Tier', dataIndex: 'tier', render: t => <Tag color={t === 'Tier 1' ? 'blue' : t === 'Tier 2' ? 'green' : 'default'}>{t}</Tag> },
-    { title: 'Status', dataIndex: 'status', render: t => t && <Tag color={STATUS_COLOR[t] ?? 'default'}>{t}</Tag> },
+    { title: 'Tier', dataIndex: 'tier', render: t => <Tag color={tierColor(t)}>{t}</Tag> },
+    { title: 'Status', dataIndex: 'status', render: t => t && <Tag color={COLLEGE_STATUS_COLOR[t] ?? 'default'}>{t}</Tag> },
     {
       title: 'Contacts', width: 140, render: (_, record) => {
         const n = record.contacts?.length ?? 0
