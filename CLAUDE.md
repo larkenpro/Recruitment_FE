@@ -172,12 +172,19 @@ Renders dropdowns (or number inputs for min/max) from `optionMap`. Active filter
 - Status can be changed inline via a `Select` in the table (UPCOMING → ACTIVE → COMPLETED / CANCELLED).
 - **Generate Link** button (only enabled when status = ACTIVE) calls `generateLink(eventId)` → returns a tokenized URL. The URL is stored in local `links` state and a Copy button appears.
 - Four action modals per event row:
-  - **Rounds modal** — lists existing rounds, add new round (name, type, sequence).
   - **Positions modal** — lists linked positions with remove (Popconfirm), add more via multi-select.
   - **Candidates modal** — table of candidates who applied; clicking a name navigates to `CandidateDetail`.
 - Create Event modal includes the mode (On-campus / Virtual / Hybrid, default On-campus; `utils/eventModes.js`) and position multi-select at creation time. The list shows a Mode column; EventDetail changes it via `updateEventMode`.
 - Filter keys: college name, year, status, mode.
-- API: `src/api/events.js` — `getEvents`, `createEvent`, `updateEventStatus`, `generateLink`, `getRounds`, `createRound`, `getEventPositions`, `addEventPositions`, `removeEventPosition`, `getCandidatesByEvent`.
+- API: `src/api/events.js` — `getEvents`, `createEvent`, `updateEventStatus`, `generateLink`, `getEventPositions`, `addEventPositions`, `removeEventPosition`, `getCandidatesByEvent`.
+
+### EventDetail pipeline (`components/PipelineGraph.jsx`, `components/RoundGraphEditor.jsx`, `utils/roundGraph.js`)
+- The **Pipeline** card is one React Flow (`@xyflow/react`) graph with a View / Edit rounds switch; it replaced the Pipeline Stages tabs and the Event Details Rounds and Groups tabs (Event Details keeps Positions).
+- **View** (default, read-only): Resume → one node per (position, type) pair the event hires for → the rounds → Offer → Joining → 6 Month Review → 12 Month Retained → Exit (`pipelineLayout`; only pair and round arrows are stored, the rest follows the fixed stage order). Nodes show counts (applicants at Resume, candidates at a round right now, everyone at each later stage). Clicking Resume, a round or a later stage lists its candidates under the graph (`selectedStage`): the Resume table, the round's scoring table (status filter, default Open + On hold), or the later stage's table. Pair nodes aren't clickable.
+- A **Group Discussion** round's panel has Scores and Groups tabs. Groups belong to that round (`getGroups(eventId, roundId)` etc.): generate a number of random groups from the candidates who reached it, drag members between groups, rename / set a topic. Each GD round's groups are separate.
+- **Edit rounds**: drag from a pair to the round its candidates start at, and from a round to the round passing it unlocks; candidates take every round reachable from their pairs. Add round / select + Delete / **Clear arrows** (removes every arrow, to redraw from scratch); the side panel edits the selected round's name and type. Arrows into a pair or that would close a loop are refused while dragging (`createsCycle`). Nothing is stored until **Save rounds**, which sends the whole canvas (`saveRoundGraph`; new rounds carry a temporary `key`, pair arrows start from `pair:<positionId>:<typeId>`); **Discard changes** reverts to the saved graph, and leaving Edit with unsaved changes asks first. Removing a round that has results asks first. **Default template** (no rounds yet) lays out GD → Interview → HR with every pair starting at GD.
+- Who has reached which round comes from the backend (`getRoundProgress`; statuses `NOT_APPLICABLE`/`LOCKED`/`OPEN`/`PASS`/`FAIL`/`ON_HOLD`). Recording a result moves the Rounds stage on the backend; no follow-up stage call. Rounds with no arrow out show the manual Rounds Decision column.
+- API: `getRoundGraph`, `saveRoundGraph`, `getRoundProgress`, `getEventRoundResults`.
 
 ### EventDetail admin entry (`components/EventApplicationModal.jsx`)
 - Resume tab: **Add Candidate** opens the modal (contact details, academic details, preference ranker over the event's open pairs, required admin consent checkbox) → `addEventApplication`. A 409 means they already applied.
@@ -213,7 +220,7 @@ The most complex page. Displays a 3-column top row + two tabbed sections.
 
 **Recruitment Pipeline tabs** (tabs are added dynamically — only visible if that stage has been reached):
 - **Resume** — shows uploaded resume with download button; "Begin Resume Review" triggers stage start; decision radio (SHORTLISTED / HOLD / REJECTED)
-- **Rounds** — per-round cards (locked if previous round wasn't passed); each has score, result, interviewer, comments; Edit Score modal
+- **Rounds** — per-round cards in graph order (`order`), locked when the API says `LOCKED`, rounds on another position's track (`NOT_APPLICABLE`) hidden; each has score, result, interviewer, comments; Edit Score modal
 - **Offer / Joining / 6 Month Review / 12 Month Retained** — placeholder + decision radio
 - **Exit** — create/edit/delete exit record (exit date + reason)
 - **Stage History** — `Timeline` of all stage transitions across all events
@@ -263,6 +270,5 @@ The candidate's own page at `/candidate?token=…&apply=…`.
 | `colleges.js` | authenticated | `getColleges`, `getCollege`, `getCollegeEvents`, `createCollege`, `updateCollege` |
 | `events.js` | authenticated | Events CRUD + rounds + positions + link generation |
 | `positions.js` | authenticated | `getPositions`, `createPosition`, `updatePosition`, `deletePosition`, `uploadPositionJd`, `getPositionJd`, `deletePositionJd` |
-| `stages.js` | authenticated | Stage-related helpers (if separate) |
 
 Public endpoints in `candidates.js` use plain `axios` directly (not the instance) to bypass the auth interceptor.

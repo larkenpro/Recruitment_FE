@@ -1,7 +1,5 @@
 import {
   AppstoreOutlined,
-  ArrowDownOutlined,
-  ArrowUpOutlined,
   CalendarOutlined,
   CopyOutlined,
   DeleteOutlined,
@@ -9,7 +7,6 @@ import {
   FileTextOutlined,
   LinkOutlined,
   TeamOutlined,
-  ThunderboltOutlined,
   UnorderedListOutlined,
   UserAddOutlined,
   UsergroupAddOutlined,
@@ -47,10 +44,6 @@ import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   addEventPositions,
-  createRound,
-  updateRound,
-  deleteRound,
-  reorderRounds,
   generateLink,
   getCandidatesByEvent,
   getEvent,
@@ -61,7 +54,8 @@ import {
   generateGroups,
   updateGroup,
   moveGroupMember,
-  getRounds,
+  getRoundGraph,
+  getRoundProgress,
   removeEventPosition,
   setEventPositionTypes,
   updateEventMode,
@@ -78,7 +72,8 @@ import { useStageDecision } from '../hooks/useStageDecision'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
 import EventApplicationModal from '../components/EventApplicationModal'
-import { SEQUENCE_RULE } from '../components/validation/rules'
+import PipelineGraph from '../components/PipelineGraph'
+import { hasReached, isStageKey, stageKey, stageOf } from '../utils/roundGraph'
 
 const { Title, Text } = Typography
 
@@ -111,6 +106,14 @@ const RESUME_STATUS_OPTIONS = [
 
 const ROUND_DECISION_OPTIONS = RESUME_STATUS_OPTIONS
 
+// Which candidates a round's list shows, by where they stand in it. Defaults to who is there now.
+const ROUND_STATUS_OPTIONS = [
+  { value: 'OPEN', label: 'Open' },
+  { value: 'ON_HOLD', label: 'On hold' },
+  { value: 'PASS', label: 'Passed' },
+  { value: 'FAIL', label: 'Failed' },
+]
+
 const ROUND_RESULT_OPTIONS = [
   { value: 'PASS', label: 'Pass' },
   { value: 'FAIL', label: 'Fail' },
@@ -118,7 +121,6 @@ const ROUND_RESULT_OPTIONS = [
 ]
 
 const STATUS_COLOR = { UPCOMING: 'blue', ACTIVE: 'green', COMPLETED: 'default', CANCELLED: 'red' }
-const ROUND_TYPE_COLOR = { WRITTEN: 'purple', TECHNICAL: 'blue', HR: 'green', GROUP_DISCUSSION: 'orange', CODING: 'cyan' }
 
 export default function EventDetail() {
   const { id } = useParams()
@@ -129,10 +131,6 @@ export default function EventDetail() {
   // { url, until } once generated; `until` is the expiry it was generated with.
   const [link, setLink] = useState(null)
   const [linkExpiry, setLinkExpiry] = useState(() => dayjs().add(30, 'day'))
-  const [templateLoading, setTemplateLoading] = useState(false)
-  const [editingRound, setEditingRound] = useState(null)
-  const [roundForm] = Form.useForm()
-  const [editRoundForm] = Form.useForm()
   const [positionForm] = Form.useForm()
   const [resumeModal, setResumeModal] = useState({ open: false, candidateId: null, fileName: null, blobUrl: null })
   const [pendingCandidateId, setPendingCandidateId] = useState(null)
@@ -147,15 +145,25 @@ export default function EventDetail() {
   const [pendingPipelineCandidateId, setPendingPipelineCandidateId] = useState(null)
   // { application: null } to add a candidate, { application: row } to edit theirs; null when closed.
   const [applicationModal, setApplicationModal] = useState(null)
+  // The pipeline graph node whose candidates are listed: a stage key, or a round id as text.
+  const [selectedStage, setSelectedStage] = useState(stageKey('Resume'))
+  const [roundStatusFilter, setRoundStatusFilter] = useState(['OPEN', 'ON_HOLD'])
 
   const { data: event, isLoading } = useQuery({
     queryKey: ['event', id],
     queryFn: () => getEvent(id).then((r) => r.data.data),
   })
 
-  const { data: rounds } = useQuery({
-    queryKey: ['rounds', id],
-    queryFn: () => getRounds(id).then((r) => r.data.data),
+  // { rounds (in graph order), edges }; see utils/roundGraph.js
+  const { data: roundGraph } = useQuery({
+    queryKey: ['roundGraph', id],
+    queryFn: () => getRoundGraph(id).then((r) => r.data.data),
+  })
+
+  // Who has reached which round, decided by the backend from the graph.
+  const { data: roundProgress } = useQuery({
+    queryKey: ['roundProgress', id],
+    queryFn: () => getRoundProgress(id).then((r) => r.data.data),
   })
 
   const { data: eventPositions } = useQuery({
@@ -184,10 +192,13 @@ export default function EventDetail() {
     queryFn: () => getEventStageSummary(id).then((r) => r.data.data),
   })
 
+  // Each Group Discussion round has its own groups; the one picked in the pipeline graph is loaded.
+  const selectedGdRoundId = (roundGraph?.rounds ?? [])
+    .find((r) => String(r.id) === selectedStage && r.roundType === 'GROUP_DISCUSSION')?.id
   const { data: groups } = useQuery({
-    queryKey: ['eventGroups', id],
-    queryFn: () => getGroups(id).then((r) => r.data.data),
-    enabled: (rounds ?? []).some((r) => r.roundType === 'GROUP_DISCUSSION'),
+    queryKey: ['roundGroups', id, selectedGdRoundId],
+    queryFn: () => getGroups(id, selectedGdRoundId).then((r) => r.data.data),
+    enabled: !!selectedGdRoundId,
   })
 
   const { data: eventRoundResults } = useQuery({
@@ -241,6 +252,11 @@ export default function EventDetail() {
 
   const candidateOptionMap = { ...rawCandidateOptionMap, resumeStatus: RESUME_STATUS_OPTIONS }
 
+  const roundStatusByCandidate = useMemo(
+    () => Object.fromEntries((roundProgress ?? []).map((p) => [p.candidateId, p.rounds])),
+    [roundProgress]
+  )
+
   const roundResultMap = useMemo(() => {
     const map = {}
     ;(eventRoundResults ?? []).forEach((r) => {
@@ -284,6 +300,18 @@ export default function EventDetail() {
       Object.fromEntries(list.map((s) => [s.candidateId, s])),
     ])
   ), [lateStageLists])
+
+  // What each pipeline graph node shows as its count: applicants at Resume, the candidates at a
+  // round right now (open or on hold), and everyone at each later stage.
+  const stageCounts = useMemo(() => {
+    const counts = { [stageKey('Resume')]: candidates?.length ?? 0 }
+    ;(roundGraph?.rounds ?? []).forEach((r) => {
+      counts[String(r.id)] = shortlistedCandidates
+        .filter((c) => ['OPEN', 'ON_HOLD'].includes(roundStatusByCandidate[c.id]?.[r.id])).length
+    })
+    Object.entries(lateStageLists).forEach(([stage, list]) => { counts[stageKey(stage)] = list.length })
+    return counts
+  }, [candidates, roundGraph, shortlistedCandidates, roundStatusByCandidate, lateStageLists])
 
   const shortlistedWithRoundsDecision = useMemo(
     () => shortlistedCandidates.map((c) => ({ ...c, roundsDecision: roundsStageSummaryMap[c.id]?.status ?? null })),
@@ -341,55 +369,11 @@ export default function EventDetail() {
     onError: (err) => message.error(getErrorMessage(err)),
   })
 
-  const roundMutation = useMutation({
-    mutationFn: (data) => createRound(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rounds', id] })
-      roundForm.resetFields()
-      message.success('Round added!')
-    },
-    onError: (err) => message.error(getErrorMessage(err)),
-  })
-
-  const updateRoundMutation = useMutation({
-    mutationFn: ({ roundId, data }) => updateRound(id, roundId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rounds', id] })
-      setEditingRound(null)
-      editRoundForm.resetFields()
-      message.success('Round updated!')
-    },
-    onError: (err) => message.error(getErrorMessage(err)),
-  })
-
-  const deleteRoundMutation = useMutation({
-    mutationFn: (roundId) => deleteRound(id, roundId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rounds', id] })
-      message.success('Round deleted!')
-    },
-    onError: (err) => message.error(getErrorMessage(err)),
-  })
-
-  const reorderRoundsMutation = useMutation({
-    mutationFn: (roundIds) => reorderRounds(id, roundIds),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['rounds', id] }),
-    onError: (err) => message.error(getErrorMessage(err)),
-  })
-
-  const moveRound = (round, direction) => {
-    const idx = sortedRounds.findIndex((r) => r.id === round.id)
-    const swapIdx = idx + direction
-    if (swapIdx < 0 || swapIdx >= sortedRounds.length) return
-    const reordered = [...sortedRounds]
-    ;[reordered[idx], reordered[swapIdx]] = [reordered[swapIdx], reordered[idx]]
-    reorderRoundsMutation.mutate(reordered.map((r) => r.id))
-  }
-
   const addPositionsMutation = useMutation({
     mutationFn: (positions) => addEventPositions(id, positions),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['eventPositions', id] })
+      queryClient.invalidateQueries({ queryKey: ['roundGraph', id] })
       positionForm.resetFields()
       message.success('Position(s) added!')
     },
@@ -400,6 +384,8 @@ export default function EventDetail() {
     mutationFn: (positionId) => removeEventPosition(id, positionId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['eventPositions', id] })
+      // Its (position, type) pairs leave the round graph, with their arrows.
+      queryClient.invalidateQueries({ queryKey: ['roundGraph', id] })
       message.success('Position removed!')
     },
     onError: (err) => message.error(getErrorMessage(err)),
@@ -407,8 +393,12 @@ export default function EventDetail() {
 
   const positionTypesMutation = useMutation({
     mutationFn: ({ positionId, typeIds }) => setEventPositionTypes(id, positionId, typeIds),
-    // Returns every event position with its types, so it goes straight into the cache.
-    onSuccess: (res) => queryClient.setQueryData(['eventPositions', id], res.data.data),
+    // Returns every event position with its types, so it goes straight into the cache. The round
+    // graph's pair nodes follow the types.
+    onSuccess: (res) => {
+      queryClient.setQueryData(['eventPositions', id], res.data.data)
+      queryClient.invalidateQueries({ queryKey: ['roundGraph', id] })
+    },
     onError: (err) => message.error(getErrorMessage(err)),
   })
 
@@ -425,25 +415,25 @@ export default function EventDetail() {
   })
 
   const generateGroupsMutation = useMutation({
-    mutationFn: (count) => generateGroups(id, count),
+    mutationFn: (count) => generateGroups(id, selectedGdRoundId, count),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['eventGroups', id] })
+      queryClient.invalidateQueries({ queryKey: ['roundGroups', id, selectedGdRoundId] })
       message.success('Groups generated!')
     },
     onError: (err) => message.error(getErrorMessage(err)),
   })
 
   const moveMemberMutation = useMutation({
-    mutationFn: ({ groupId, candidateId }) => moveGroupMember(id, groupId, candidateId),
-    // The endpoint returns every group, so drop it straight into the cache — no refetch.
-    onSuccess: (res) => queryClient.setQueryData(['eventGroups', id], res.data.data),
+    mutationFn: ({ groupId, candidateId }) => moveGroupMember(id, selectedGdRoundId, groupId, candidateId),
+    // The endpoint returns every group of the round, so drop it straight into the cache — no refetch.
+    onSuccess: (res) => queryClient.setQueryData(['roundGroups', id, selectedGdRoundId], res.data.data),
     onError: (err) => message.error(getErrorMessage(err)),
   })
 
   const updateGroupMutation = useMutation({
-    mutationFn: ({ groupId, data }) => updateGroup(id, groupId, data),
+    mutationFn: ({ groupId, data }) => updateGroup(id, selectedGdRoundId, groupId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['eventGroups', id] })
+      queryClient.invalidateQueries({ queryKey: ['roundGroups', id, selectedGdRoundId] })
       setEditingGroup(null)
       groupForm.resetFields()
       message.success('Group updated!')
@@ -479,23 +469,12 @@ export default function EventDetail() {
   const eventRoundScoreMutation = useMutation({
     mutationFn: ({ candidateId, roundId, ...data }) =>
       updateRoundResult(candidateId, Number(id), roundId, data),
-    onSuccess: (_, { candidateId, roundId, result }) => {
+    // The backend settles the Rounds stage (and opens Offer) from the round graph on every save.
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['eventRoundResults', id] })
+      queryClient.invalidateQueries({ queryKey: ['roundProgress', id] })
+      queryClient.invalidateQueries({ queryKey: ['eventStageSummary', id] })
       message.success('Score saved!')
-
-      if (result === 'FAIL') {
-        roundsDecisionMutation.mutate({ candidateId, eventId: Number(id), stageName: 'Rounds', status: 'REJECTED', ensureStarted: true })
-      } else if (result === 'PASS') {
-        const currentRound = sortedRounds.find((r) => r.id === roundId)
-        const isLast = currentRound?.id === sortedRounds[sortedRounds.length - 1]?.id
-        if (isLast) {
-          const priorRounds = sortedRounds.filter((r) => r.sequence < currentRound.sequence)
-          const allPriorPassed = priorRounds.every((pr) => roundResultMap[pr.id]?.[candidateId]?.result === 'PASS')
-          if (allPriorPassed) {
-            roundsDecisionMutation.mutate({ candidateId, eventId: Number(id), stageName: 'Rounds', status: 'SHORTLISTED', ensureStarted: true })
-          }
-        }
-      }
     },
     onError: (err) => message.error(getErrorMessage(err)),
   })
@@ -527,7 +506,7 @@ export default function EventDetail() {
       message.warning('Add at least one position before generating the application link.')
       return
     }
-    if ((rounds?.length ?? 0) === 0) {
+    if ((roundGraph?.rounds?.length ?? 0) === 0) {
       message.warning('Add at least one interview round before generating the application link.')
       return
     }
@@ -544,39 +523,17 @@ export default function EventDetail() {
     }
   }
 
-  const handleDefaultTemplate = async () => {
-    setTemplateLoading(true)
-    try {
-      await Promise.all([
-        createRound(id, { name: 'Group Discussion', roundType: 'GROUP_DISCUSSION', sequence: 1 }),
-        createRound(id, { name: 'Interview', roundType: 'TECHNICAL', sequence: 2 }),
-        createRound(id, { name: 'HR Round', roundType: 'HR', sequence: 3 }),
-      ])
-      queryClient.invalidateQueries({ queryKey: ['rounds', id] })
-      message.success('Default rounds added!')
-    } catch (err) {
-      message.error(getErrorMessage(err))
-    } finally {
-      setTemplateLoading(false)
-    }
-  }
-
   if (isLoading) return <Card loading style={{ borderRadius: 12 }} />
   if (!event) return <Empty />
 
-  const sortedRounds = [...(rounds ?? [])].sort((a, b) => a.sequence - b.sequence)
+  const sortedRounds = roundGraph?.rounds ?? []
   const untypedPositions = (eventPositions ?? []).filter((p) => !(p.types?.length))
-  const hasGroupDiscussion = sortedRounds.some((r) => r.roundType === 'GROUP_DISCUSSION')
 
-  // Candidates who reached a round: PASSed every round sequenced before it.
-  const candidatesReachingRound = (base, round) => {
-    const priorRounds = sortedRounds.filter((r) => r.sequence < round.sequence)
-    return priorRounds.length === 0
-      ? base
-      : base.filter((c) => priorRounds.every((pr) => roundResultMap[pr.id]?.[c.id]?.result === 'PASS'))
-  }
+  // Candidates the round graph has brought to this round (it's open for them, or already marked).
+  const candidatesReachingRound = (base, round) =>
+    base.filter((c) => hasReached(roundStatusByCandidate[c.id]?.[round.id]))
 
-  const gdRound = sortedRounds.find((r) => r.roundType === 'GROUP_DISCUSSION')
+  const gdRound = sortedRounds.find((r) => r.id === selectedGdRoundId)
   const gdEligible = gdRound ? candidatesReachingRound(shortlistedCandidates, gdRound) : []
   const availablePositions = (allPositions ?? []).filter(
     (p) => !(eventPositions ?? []).some((ep) => ep.id === p.id)
@@ -731,339 +688,202 @@ export default function EventDetail() {
         </div>
       ),
     },
-    {
-      key: 'rounds',
-      label: (
-        <span>
-          <UnorderedListOutlined style={{ marginRight: 4 }} />
-          Rounds
-          {sortedRounds.length > 0 && (
-            <Tag style={{ marginLeft: 6, fontSize: 10, padding: '0 4px', lineHeight: '16px' }}>
-              {sortedRounds.length}
-            </Tag>
-          )}
-        </span>
-      ),
-      children: (
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-            <Button
-              icon={<ThunderboltOutlined />}
-              onClick={handleDefaultTemplate}
-              loading={templateLoading}
-              disabled={sortedRounds.length > 0}
-            >
-              Use Default Template
-            </Button>
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              {sortedRounds.length > 0
-                ? 'Remove existing rounds to use the template'
-                : 'Adds Group Discussion · Interview · HR rounds'}
-            </Text>
-          </div>
-          {sortedRounds.length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 24 }}>
-              {sortedRounds.map((r, index) => (
-                <div
-                  key={r.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    padding: '8px 12px',
-                    borderRadius: 8,
-                    border: '1.5px solid #e5e7eb',
-                    background: '#fafafa',
-                  }}
-                >
-                  <Tag style={{ fontWeight: 700, minWidth: 28, textAlign: 'center', margin: 0 }}>#{r.sequence}</Tag>
-                  <Text strong style={{ fontSize: 14, flex: 1 }}>{r.name}</Text>
-                  {r.roundType && (
-                    <Tag color={ROUND_TYPE_COLOR[r.roundType] ?? 'default'} style={{ margin: 0 }}>{r.roundType}</Tag>
-                  )}
-                  <Space size={4}>
-                    <Button
-                      size="small"
-                      type="text"
-                      icon={<ArrowUpOutlined />}
-                      disabled={index === 0 || reorderRoundsMutation.isPending}
-                      onClick={() => moveRound(r, -1)}
-                    />
-                    <Button
-                      size="small"
-                      type="text"
-                      icon={<ArrowDownOutlined />}
-                      disabled={index === sortedRounds.length - 1 || reorderRoundsMutation.isPending}
-                      onClick={() => moveRound(r, 1)}
-                    />
-                    <Button
-                      size="small"
-                      type="text"
-                      icon={<EditOutlined />}
-                      onClick={() => {
-                        setEditingRound(r)
-                        editRoundForm.setFieldsValue({ name: r.name, roundType: r.roundType ?? undefined, sequence: r.sequence })
-                      }}
-                    />
-                    <Popconfirm
-                      title="Delete this round?"
-                      description="All round results for this round will also be deleted."
-                      onConfirm={() => deleteRoundMutation.mutate(r.id)}
-                      okText="Delete"
-                      cancelText="Cancel"
-                      okButtonProps={{ danger: true }}
-                    >
-                      <Button
-                        size="small"
-                        type="text"
-                        danger
-                        icon={<DeleteOutlined />}
-                        loading={deleteRoundMutation.isPending && deleteRoundMutation.variables === r.id}
-                      />
-                    </Popconfirm>
-                  </Space>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <Empty description="No rounds added yet" style={{ marginBottom: 24 }} />
-          )}
-          <Divider>Add Round</Divider>
-          <Form
-            form={roundForm}
-            layout="vertical"
-            style={{ maxWidth: 480 }}
-            onFinish={(v) => roundMutation.mutate({ ...v, sequence: Number(v.sequence) })}
+  ]
+
+  // The selected Group Discussion round's groups: generate them at random, rename, move people.
+  const groupsContent = (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+        <InputNumber
+          min={1}
+          precision={0}
+          max={gdEligible.length || undefined}
+          placeholder="Number of groups"
+          value={groupCount}
+          onChange={setGroupCount}
+          style={{ width: 160 }}
+        />
+        {gdEligible.length > 0 && (
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            Max {gdEligible.length} group{gdEligible.length === 1 ? '' : 's'} ({gdEligible.length} candidate{gdEligible.length === 1 ? '' : 's'} in {gdRound?.name})
+          </Text>
+        )}
+        {(groups?.length ?? 0) > 0 ? (
+          <Popconfirm
+            title="Regenerate groups?"
+            description="This will delete all existing groups and randomly assign new ones."
+            onConfirm={() => generateGroupsMutation.mutate(groupCount)}
+            okText="Regenerate"
+            cancelText="Cancel"
+            okButtonProps={{ danger: true }}
+            disabled={!groupCount || !gdEligible.length}
           >
-            <Form.Item name="name" label="Round Name" rules={[{ required: true }]}>
-              <Input placeholder="e.g. Technical Round 1" />
-            </Form.Item>
-            <Form.Item name="roundType" label="Round Type">
-              <Select
-                options={['WRITTEN', 'TECHNICAL', 'HR', 'GROUP_DISCUSSION', 'CODING'].map((s) => ({ value: s }))}
-              />
-            </Form.Item>
-            <Form.Item name="sequence" label="Sequence" rules={[{ required: true }, SEQUENCE_RULE]}>
-              <InputNumber style={{ width: '100%' }} min={1} />
-            </Form.Item>
-            <Button type="primary" htmlType="submit" loading={roundMutation.isPending}>
-              Add Round
+            <Button
+              type="primary"
+              loading={generateGroupsMutation.isPending}
+              disabled={!groupCount || !gdEligible.length}
+            >
+              Regenerate Groups
             </Button>
-          </Form>
-        </div>
-      ),
-    },
-    ...(hasGroupDiscussion
-      ? [
-          {
-            key: 'groups',
-            label: (
-              <span>
-                <UsergroupAddOutlined style={{ marginRight: 4 }} />
-                Groups
-                {(groups?.length ?? 0) > 0 && (
-                  <Tag style={{ marginLeft: 6, fontSize: 10, padding: '0 4px', lineHeight: '16px' }}>
-                    {groups.length}
-                  </Tag>
-                )}
-              </span>
-            ),
-            children: (
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-                  <InputNumber
-                    min={1}
-                    precision={0}
-                    max={gdEligible.length || undefined}
-                    placeholder="Number of groups"
-                    value={groupCount}
-                    onChange={setGroupCount}
-                    style={{ width: 160 }}
-                  />
-                  {gdEligible.length > 0 && (
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      Max {gdEligible.length} group{gdEligible.length === 1 ? '' : 's'} ({gdEligible.length} candidate{gdEligible.length === 1 ? '' : 's'} in the Group Discussion round)
+          </Popconfirm>
+        ) : (
+          <Button
+            type="primary"
+            onClick={() => generateGroupsMutation.mutate(groupCount)}
+            loading={generateGroupsMutation.isPending}
+            disabled={!groupCount || !gdEligible.length}
+          >
+            Generate Groups
+          </Button>
+        )}
+      </div>
+      {!gdEligible.length ? (
+        <Empty description={`No candidates have reached ${gdRound?.name ?? 'this round'} yet`} />
+      ) : (groups?.length ?? 0) === 0 ? (
+        <Empty description="No groups generated yet" />
+      ) : (
+        <>
+        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 10 }}>
+          Drag a candidate onto another group to move them, or use the group picker on their row.
+        </Text>
+        <Row gutter={GUTTER}>
+          {groups.map((g) => (
+            <Col key={g.id} xs={24} sm={12} lg={8}>
+              <div
+                style={{ height: '100%' }}
+                onDragOver={(e) => {
+                  e.preventDefault()
+                  e.dataTransfer.dropEffect = 'move'
+                  setDragOverGroupId(g.id)
+                }}
+                onDragLeave={() => setDragOverGroupId((cur) => (cur === g.id ? null : cur))}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  setDragOverGroupId(null)
+                  if (draggingMember && draggingMember.fromGroupId !== g.id) {
+                    moveMemberMutation.mutate({ groupId: g.id, candidateId: draggingMember.candidateId })
+                  }
+                  setDraggingMember(null)
+                }}
+              >
+              <Card
+                size="small"
+                title={<Text strong>Group {g.name}</Text>}
+                extra={
+                  <Button
+                    size="small"
+                    icon={<EditOutlined />}
+                    onClick={() => {
+                      setEditingGroup(g)
+                      groupForm.setFieldsValue({ name: g.name, topic: g.topic ?? '' })
+                    }}
+                  >
+                    Edit
+                  </Button>
+                }
+                style={{
+                  height: '100%',
+                  outline: dragOverGroupId === g.id ? '2px dashed #1677ff' : undefined,
+                }}
+              >
+                <div style={{ marginBottom: 10 }}>
+                  <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 2 }}>
+                    TOPIC
+                  </Text>
+                  {g.topic ? (
+                    <Text>{g.topic}</Text>
+                  ) : (
+                    <Text type="secondary" italic style={{ fontSize: 13 }}>
+                      No topic set
                     </Text>
                   )}
-                  {(groups?.length ?? 0) > 0 ? (
-                    <Popconfirm
-                      title="Regenerate groups?"
-                      description="This will delete all existing groups and randomly assign new ones."
-                      onConfirm={() => generateGroupsMutation.mutate(groupCount)}
-                      okText="Regenerate"
-                      cancelText="Cancel"
-                      okButtonProps={{ danger: true }}
-                      disabled={!groupCount || !gdEligible.length}
-                    >
-                      <Button
-                        type="primary"
-                        loading={generateGroupsMutation.isPending}
-                        disabled={!groupCount || !gdEligible.length}
-                      >
-                        Regenerate Groups
-                      </Button>
-                    </Popconfirm>
-                  ) : (
-                    <Button
-                      type="primary"
-                      onClick={() => generateGroupsMutation.mutate(groupCount)}
-                      loading={generateGroupsMutation.isPending}
-                      disabled={!groupCount || !gdEligible.length}
-                    >
-                      Generate Groups
-                    </Button>
-                  )}
                 </div>
-                {!gdEligible.length ? (
-                  <Empty description="No candidates have reached the Group Discussion round yet" />
-                ) : (groups?.length ?? 0) === 0 ? (
-                  <Empty description="No groups generated yet" />
-                ) : (
-                  <>
-                  <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 10 }}>
-                    Drag a candidate onto another group to move them, or use the group picker on their row.
-                  </Text>
-                  <Row gutter={GUTTER}>
-                    {groups.map((g) => (
-                      <Col key={g.id} xs={24} sm={12} lg={8}>
-                        <div
-                          style={{ height: '100%' }}
-                          onDragOver={(e) => {
-                            e.preventDefault()
-                            e.dataTransfer.dropEffect = 'move'
-                            setDragOverGroupId(g.id)
-                          }}
-                          onDragLeave={() => setDragOverGroupId((cur) => (cur === g.id ? null : cur))}
-                          onDrop={(e) => {
-                            e.preventDefault()
-                            setDragOverGroupId(null)
-                            if (draggingMember && draggingMember.fromGroupId !== g.id) {
-                              moveMemberMutation.mutate({ groupId: g.id, candidateId: draggingMember.candidateId })
-                            }
-                            setDraggingMember(null)
-                          }}
-                        >
-                        <Card
-                          size="small"
-                          title={<Text strong>Group {g.name}</Text>}
-                          extra={
-                            <Button
-                              size="small"
-                              icon={<EditOutlined />}
-                              onClick={() => {
-                                setEditingGroup(g)
-                                groupForm.setFieldsValue({ name: g.name, topic: g.topic ?? '' })
-                              }}
-                            >
-                              Edit
-                            </Button>
-                          }
-                          style={{
-                            height: '100%',
-                            outline: dragOverGroupId === g.id ? '2px dashed #1677ff' : undefined,
-                          }}
-                        >
-                          <div style={{ marginBottom: 10 }}>
-                            <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 2 }}>
-                              TOPIC
-                            </Text>
-                            {g.topic ? (
-                              <Text>{g.topic}</Text>
-                            ) : (
-                              <Text type="secondary" italic style={{ fontSize: 13 }}>
-                                No topic set
-                              </Text>
-                            )}
-                          </div>
-                          <Divider style={{ margin: '10px 0' }} />
-                          {(() => {
-                            const visibleMembers = g.members.filter((m) => shortlistedIds.has(m.id))
-                            return (
-                              <>
-                                <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 6 }}>
-                                  MEMBERS ({visibleMembers.length})
+                <Divider style={{ margin: '10px 0' }} />
+                {(() => {
+                  const visibleMembers = g.members.filter((m) => shortlistedIds.has(m.id))
+                  return (
+                    <>
+                      <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 6 }}>
+                        MEMBERS ({visibleMembers.length})
+                      </Text>
+                      {visibleMembers.length === 0 ? (
+                        <Text type="secondary" italic style={{ fontSize: 12 }}>
+                          No shortlisted members
+                        </Text>
+                      ) : (
+                        visibleMembers.map((m) => (
+                          <div
+                            key={m.id}
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.effectAllowed = 'move'
+                              e.dataTransfer.setData('text/plain', String(m.id))
+                              setDraggingMember({ candidateId: m.id, fromGroupId: g.id })
+                            }}
+                            onDragEnd={() => {
+                              setDraggingMember(null)
+                              setDragOverGroupId(null)
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              marginBottom: 4,
+                              cursor: 'grab',
+                              opacity: draggingMember?.candidateId === m.id ? 0.4 : 1,
+                            }}
+                          >
+                            <Text style={{ fontSize: 13, flex: 1 }}>
+                              {m.name}
+                              {m.rollNo && (
+                                <Text type="secondary" style={{ fontSize: 11, marginLeft: 6 }}>
+                                  {m.rollNo}
                                 </Text>
-                                {visibleMembers.length === 0 ? (
-                                  <Text type="secondary" italic style={{ fontSize: 12 }}>
-                                    No shortlisted members
-                                  </Text>
-                                ) : (
-                                  visibleMembers.map((m) => (
-                                    <div
-                                      key={m.id}
-                                      draggable
-                                      onDragStart={(e) => {
-                                        e.dataTransfer.effectAllowed = 'move'
-                                        e.dataTransfer.setData('text/plain', String(m.id))
-                                        setDraggingMember({ candidateId: m.id, fromGroupId: g.id })
-                                      }}
-                                      onDragEnd={() => {
-                                        setDraggingMember(null)
-                                        setDragOverGroupId(null)
-                                      }}
-                                      style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 6,
-                                        marginBottom: 4,
-                                        cursor: 'grab',
-                                        opacity: draggingMember?.candidateId === m.id ? 0.4 : 1,
-                                      }}
-                                    >
-                                      <Text style={{ fontSize: 13, flex: 1 }}>
-                                        {m.name}
-                                        {m.rollNo && (
-                                          <Text type="secondary" style={{ fontSize: 11, marginLeft: 6 }}>
-                                            {m.rollNo}
-                                          </Text>
-                                        )}
-                                      </Text>
-                                      {m.branch && (
-                                        <Tag style={{ fontSize: 11, margin: 0 }}>{m.branch}</Tag>
-                                      )}
-                                      {/* Keyboard-reachable equivalent of dragging the row. */}
-                                      <Select
-                                        size="small"
-                                        variant="borderless"
-                                        value={g.id}
-                                        options={groups.map((x) => ({ value: x.id, label: x.name }))}
-                                        onChange={(toGroupId) =>
-                                          moveMemberMutation.mutate({ groupId: toGroupId, candidateId: m.id })
-                                        }
-                                        style={{ width: 62 }}
-                                        aria-label={`Group for ${m.name}`}
-                                      />
-                                    </div>
-                                  ))
-                                )}
-                              </>
-                            )
-                          })()}
-                        </Card>
-                        </div>
-                      </Col>
-                    ))}
-                  </Row>
-                  </>
-                )}
+                              )}
+                            </Text>
+                            {m.branch && (
+                              <Tag style={{ fontSize: 11, margin: 0 }}>{m.branch}</Tag>
+                            )}
+                            {/* Keyboard-reachable equivalent of dragging the row. */}
+                            <Select
+                              size="small"
+                              variant="borderless"
+                              value={g.id}
+                              options={groups.map((x) => ({ value: x.id, label: x.name }))}
+                              onChange={(toGroupId) =>
+                                moveMemberMutation.mutate({ groupId: toGroupId, candidateId: m.id })
+                              }
+                              style={{ width: 62 }}
+                              aria-label={`Group for ${m.name}`}
+                            />
+                          </div>
+                        ))
+                      )}
+                    </>
+                  )
+                })()}
+              </Card>
               </div>
-            ),
-          },
-        ]
-      : []),
-  ]
+            </Col>
+          ))}
+        </Row>
+        </>
+      )}
+    </div>
+  )
 
   const renderRoundTabContent = (round) => {
     if (shortlistedCandidates.length === 0) {
       return <Empty description="No candidates have passed the Resume stage yet" />
     }
 
-    const isLastRound = round.id === sortedRounds[sortedRounds.length - 1]?.id
+    const isLastRound = !(roundGraph?.edges ?? []).some((e) => e.from === String(round.id))
     const roundFilterKeys = isLastRound
       ? ROUND_FILTER_KEYS
       : ROUND_FILTER_KEYS.filter((k) => k.key !== 'roundsDecision')
 
     const displayCandidates = candidatesReachingRound(filteredShortlisted, round)
+      .filter((c) => roundStatusFilter.length === 0 || roundStatusFilter.includes(roundStatusByCandidate[c.id]?.[round.id]))
 
     const isEditing = editingRoundId === round.id
 
@@ -1096,7 +916,17 @@ export default function EventDetail() {
     }
 
     const editControls = (
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+        <Select
+          mode="multiple"
+          size="small"
+          style={{ minWidth: 260 }}
+          value={roundStatusFilter}
+          onChange={setRoundStatusFilter}
+          options={ROUND_STATUS_OPTIONS}
+          placeholder="Every status"
+          maxTagCount="responsive"
+        />
         {isEditing ? (
           <Space>
             <Button size="small" onClick={() => { setEditingRoundId(null); setRoundTableEdits({}) }}>Cancel</Button>
@@ -1300,140 +1130,124 @@ export default function EventDetail() {
     )
   }
 
-  const pipelineTabItems = [
-    {
-      key: 'pipeline-resume',
-      label: (
-        <span>
-          <TeamOutlined style={{ marginRight: 4 }} />
-          Resume
-          {(candidates?.length ?? 0) > 0 && (
-            <Tag style={{ marginLeft: 6, fontSize: 10, padding: '0 4px', lineHeight: '16px' }}>
-              {candidates.length}
-            </Tag>
-          )}
-        </span>
-      ),
-      children: (
-        <>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-            <Button icon={<UserAddOutlined />} onClick={() => setApplicationModal({ application: null })}>
-              Add Candidate
-            </Button>
-          </div>
-          <FilterBar
-            filterKeys={CANDIDATE_FILTER_KEYS}
-            optionMap={candidateOptionMap}
-            filters={candidateFilters}
-            setFilter={setCandidateFilter}
-            removeFilter={removeCandidateFilter}
-          />
-          <Table
-            dataSource={filteredCandidates}
-            loading={candidatesLoading}
-            rowKey="id"
-            size="small"
-            pagination={{ pageSize: 10 }}
-            scroll={{ x: 'max-content' }}
-            locale={{ emptyText: 'No candidates have applied yet' }}
-            columns={[
-              {
-                title: 'Name',
-                dataIndex: 'name',
-                render: (t, r) => (
-                  <a onClick={() => navigate(`/candidates/${r.id}`)}>
-                    <strong>{t}</strong>
-                  </a>
-                ),
-              },
-              { title: 'Roll No', dataIndex: 'rollNo', render: (v) => v || '—' },
-              { title: 'Email', dataIndex: 'email' },
-              { title: 'Phone', dataIndex: 'phone', render: (v) => v || '—' },
-              { title: 'Branch', dataIndex: 'branch', render: (v) => v || '—' },
-              { title: 'Batch', dataIndex: 'graduationYear', render: (v) => v ?? '—' },
-              { title: 'UG CGPA', dataIndex: 'ugCgpa', render: (v) => v ?? '—' },
-              {
-                title: 'Preferences',
-                render: (_, r) => (r.preferences ?? []).map((p, i) => (
-                  <div key={i} style={{ whiteSpace: 'nowrap' }}>{i + 1}. {preferenceLabel(p)}</div>
-                )),
-              },
-              {
-                title: 'Backlogs',
-                dataIndex: 'backlogs',
-                render: (v) => <Tag color={(v ?? 0) === 0 ? 'green' : 'red'}>{v ?? 0}</Tag>,
-              },
-              {
-                title: 'Resume',
-                render: (_, r) => (
-                  <Button size="small" icon={<FileTextOutlined />} onClick={() => handleViewResume(r.id)}>
-                    View
-                  </Button>
-                ),
-              },
-              {
-                title: 'Resume Result',
-                render: (_, r) => (
-                  <Select
-                    size="small"
-                    style={{ width: 140 }}
-                    value={r.resumeStatus ?? null}
-                    placeholder="Set decision"
-                    loading={pendingCandidateId === r.id && shortlistMutation.isPending}
-                    disabled={shortlistMutation.isPending && pendingCandidateId !== r.id}
-                    onChange={(status) => {
-                      setPendingCandidateId(r.id)
-                      shortlistMutation.mutate({ candidateId: r.id, eventId: Number(id), stageName: 'Resume', status, ensureStarted: true })
-                    }}
-                    options={RESUME_STATUS_OPTIONS}
-                  />
-                ),
-              },
-              {
-                title: 'Details',
-                render: (_, r) => (
-                  <Button size="small" icon={<EditOutlined />} onClick={() => setApplicationModal({ application: r })}>
-                    Edit
-                  </Button>
-                ),
-              },
-            ]}
-          />
-        </>
-      ),
-    },
-    ...sortedRounds.map((round) => ({
-      key: `pipeline-${round.id}`,
-      label: (
-        <span>
-          <Tag style={{ fontWeight: 700, fontSize: 10, padding: '0 4px', lineHeight: '16px', marginRight: 4 }}>
-            #{round.sequence}
-          </Tag>
-          {round.name}
-          {round.roundType && (
-            <Tag color={ROUND_TYPE_COLOR[round.roundType] ?? 'default'} style={{ marginLeft: 4, fontSize: 10, padding: '0 4px', lineHeight: '16px' }}>
-              {round.roundType}
-            </Tag>
-          )}
-        </span>
-      ),
-      children: renderRoundTabContent(round),
-    })),
-    ...LATE_STAGE_NAMES.map((stageName) => ({
-      key: `pipeline-${stageName.replace(/ /g, '-').toLowerCase()}`,
-      label: (
-        <span>
-          {stageName}
-          {(lateStageLists[stageName]?.length ?? 0) > 0 && (
-            <Tag style={{ marginLeft: 6, fontSize: 10, padding: '0 4px', lineHeight: '16px' }}>
-              {lateStageLists[stageName].length}
-            </Tag>
-          )}
-        </span>
-      ),
-      children: renderLateStageTab(stageName),
-    })),
-  ]
+  const resumeContent = (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+        <Button icon={<UserAddOutlined />} onClick={() => setApplicationModal({ application: null })}>
+          Add Candidate
+        </Button>
+      </div>
+      <FilterBar
+        filterKeys={CANDIDATE_FILTER_KEYS}
+        optionMap={candidateOptionMap}
+        filters={candidateFilters}
+        setFilter={setCandidateFilter}
+        removeFilter={removeCandidateFilter}
+      />
+      <Table
+        dataSource={filteredCandidates}
+        loading={candidatesLoading}
+        rowKey="id"
+        size="small"
+        pagination={{ pageSize: 10 }}
+        scroll={{ x: 'max-content' }}
+        locale={{ emptyText: 'No candidates have applied yet' }}
+        columns={[
+          {
+            title: 'Name',
+            dataIndex: 'name',
+            render: (t, r) => (
+              <a onClick={() => navigate(`/candidates/${r.id}`)}>
+                <strong>{t}</strong>
+              </a>
+            ),
+          },
+          { title: 'Roll No', dataIndex: 'rollNo', render: (v) => v || '—' },
+          { title: 'Email', dataIndex: 'email' },
+          { title: 'Phone', dataIndex: 'phone', render: (v) => v || '—' },
+          { title: 'Branch', dataIndex: 'branch', render: (v) => v || '—' },
+          { title: 'Batch', dataIndex: 'graduationYear', render: (v) => v ?? '—' },
+          { title: 'UG CGPA', dataIndex: 'ugCgpa', render: (v) => v ?? '—' },
+          {
+            title: 'Preferences',
+            render: (_, r) => (r.preferences ?? []).map((p, i) => (
+              <div key={i} style={{ whiteSpace: 'nowrap' }}>{i + 1}. {preferenceLabel(p)}</div>
+            )),
+          },
+          {
+            title: 'Backlogs',
+            dataIndex: 'backlogs',
+            render: (v) => <Tag color={(v ?? 0) === 0 ? 'green' : 'red'}>{v ?? 0}</Tag>,
+          },
+          {
+            title: 'Resume',
+            render: (_, r) => (
+              <Button size="small" icon={<FileTextOutlined />} onClick={() => handleViewResume(r.id)}>
+                View
+              </Button>
+            ),
+          },
+          {
+            title: 'Resume Result',
+            render: (_, r) => (
+              <Select
+                size="small"
+                style={{ width: 140 }}
+                value={r.resumeStatus ?? null}
+                placeholder="Set decision"
+                loading={pendingCandidateId === r.id && shortlistMutation.isPending}
+                disabled={shortlistMutation.isPending && pendingCandidateId !== r.id}
+                onChange={(status) => {
+                  setPendingCandidateId(r.id)
+                  shortlistMutation.mutate({ candidateId: r.id, eventId: Number(id), stageName: 'Resume', status, ensureStarted: true })
+                }}
+                options={RESUME_STATUS_OPTIONS}
+              />
+            ),
+          },
+          {
+            title: 'Details',
+            render: (_, r) => (
+              <Button size="small" icon={<EditOutlined />} onClick={() => setApplicationModal({ application: r })}>
+                Edit
+              </Button>
+            ),
+          },
+        ]}
+      />
+    </>
+  )
+
+  const selectedRound = sortedRounds.find((r) => String(r.id) === selectedStage)
+  const selectedLaterStage = isStageKey(selectedStage) && LATE_STAGE_NAMES.includes(stageOf(selectedStage))
+    ? stageOf(selectedStage)
+    : null
+  const stagePanel = selectedRound
+    ? {
+        title: selectedRound.name,
+        content: selectedRound.roundType === 'GROUP_DISCUSSION'
+          ? (
+            <Tabs
+              items={[
+                { key: 'scores', label: 'Scores', children: renderRoundTabContent(selectedRound) },
+                {
+                  key: 'groups',
+                  label: (
+                    <span>
+                      <UsergroupAddOutlined style={{ marginRight: 4 }} />
+                      Groups{(groups?.length ?? 0) > 0 ? ` (${groups.length})` : ''}
+                    </span>
+                  ),
+                  children: groupsContent,
+                },
+              ]}
+            />
+          )
+          : renderRoundTabContent(selectedRound),
+      }
+    : selectedLaterStage
+      ? { title: selectedLaterStage, content: renderLateStageTab(selectedLaterStage) }
+      : { title: 'Resume', content: resumeContent }
 
   const missingPositions = (eventPositions?.length ?? 0) === 0
   const missingRounds = sortedRounds.length === 0
@@ -1448,7 +1262,7 @@ export default function EventDetail() {
           description={
             <>
               {missingPositions && <div>Add at least one position in the Positions tab.</div>}
-              {missingRounds && <div>Add at least one interview round in the Rounds tab.</div>}
+              {missingRounds && <div>Add at least one interview round: Pipeline → Edit rounds.</div>}
               {untypedPositions.length > 0 && (
                 <div>Choose at least one type in the Positions tab for: {untypedPositions.map((p) => p.title).join(', ')}.</div>
               )}
@@ -1617,44 +1431,29 @@ export default function EventDetail() {
         <Tabs items={eventTabItems} />
       </Card>
 
-      {/* Pipeline stages */}
+      {/* The pipeline as one graph; the clicked stage's candidates are listed under it */}
       <Card
         bordered={false}
         style={{ borderRadius: 12 }}
-        title={<Text strong style={{ fontSize: 15 }}>Pipeline Stages</Text>}
+        title={<Text strong style={{ fontSize: 15 }}>Pipeline</Text>}
       >
-        <Tabs items={pipelineTabItems} />
+        <PipelineGraph
+          eventId={id}
+          graph={roundGraph}
+          counts={stageCounts}
+          selectedStage={selectedStage}
+          onSelectStage={setSelectedStage}
+          onSaved={(graph) => {
+            queryClient.setQueryData(['roundGraph', id], graph)
+            queryClient.invalidateQueries({ queryKey: ['roundProgress', id] })
+            queryClient.invalidateQueries({ queryKey: ['eventRoundResults', id] })
+          }}
+        />
+        <div style={{ marginTop: 20 }}>
+          <Title level={5} style={{ marginTop: 0 }}>{stagePanel.title}</Title>
+          {stagePanel.content}
+        </div>
       </Card>
-
-      {/* Edit round modal */}
-      <Modal
-        open={!!editingRound}
-        title="Edit Round"
-        onCancel={() => { setEditingRound(null); editRoundForm.resetFields() }}
-        onOk={() => editRoundForm.submit()}
-        confirmLoading={updateRoundMutation.isPending}
-        destroyOnClose
-      >
-        <Form
-          form={editRoundForm}
-          layout="vertical"
-          style={{ marginTop: 16 }}
-          onFinish={(v) => updateRoundMutation.mutate({ roundId: editingRound.id, data: { ...v, sequence: Number(v.sequence) } })}
-        >
-          <Form.Item name="name" label="Round Name" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="roundType" label="Round Type">
-            <Select
-              allowClear
-              options={['WRITTEN', 'TECHNICAL', 'HR', 'GROUP_DISCUSSION', 'CODING'].map((s) => ({ value: s }))}
-            />
-          </Form.Item>
-          <Form.Item name="sequence" label="Sequence" rules={[{ required: true }, SEQUENCE_RULE]}>
-            <InputNumber style={{ width: '100%' }} min={1} />
-          </Form.Item>
-        </Form>
-      </Modal>
 
       {/* Resume viewer modal */}
       <Modal
@@ -1708,7 +1507,7 @@ export default function EventDetail() {
           setApplicationModal(null)
           queryClient.invalidateQueries({ queryKey: ['eventCandidates', id] })
           queryClient.invalidateQueries({ queryKey: ['eventStageSummary', id] })
-          queryClient.invalidateQueries({ queryKey: ['eventGroups', id] })
+          queryClient.invalidateQueries({ queryKey: ['roundGroups', id] })
         }}
       />
 

@@ -183,6 +183,8 @@ export default function CandidateDetail() {
     mutationFn: ({ eventId, roundId, ...data }) => updateRoundResult(id, eventId, roundId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['round-results', id] })
+      // The backend moves the Rounds stage to match.
+      queryClient.invalidateQueries({ queryKey: ['stage-history', id] })
       setEditingRound(null)
       scoreForm.resetFields()
       message.success('Score saved!')
@@ -374,17 +376,21 @@ export default function CandidateDetail() {
 
   // ── Rounds tab ──
   const eventRounds = roundResults?.find((e) => e.eventId === selectedEvent?.eventId)
-  const sortedRounds = [...(eventRounds?.rounds ?? [])].sort((a, b) => a.sequence - b.sequence)
+  // In graph order; rounds on another position's track don't apply to this candidate.
+  const sortedRounds = (eventRounds?.rounds ?? [])
+    .filter((r) => r.status !== 'NOT_APPLICABLE')
+    .sort((a, b) => a.order - b.order)
 
   const roundsContent =
     sortedRounds.length > 0 ? (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {sortedRounds.map((round, idx) => {
-          const prevPassed = idx === 0 || sortedRounds[idx - 1]?.result === 'PASS'
+        {sortedRounds.map((round) => {
+          // LOCKED: no round leading here has been passed yet (decided by the backend's round graph).
+          const locked = round.status === 'LOCKED'
           const isPending = round.result == null
           const resultColor = round.result === 'PASS' ? 'green' : round.result === 'FAIL' ? 'red' : 'orange'
 
-          if (!prevPassed) {
+          if (locked) {
             return (
               <Card
                 key={round.roundId}
@@ -397,7 +403,7 @@ export default function CandidateDetail() {
                 }}
                 title={
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <Tag style={{ fontWeight: 700, minWidth: 28, textAlign: 'center' }}>#{round.sequence}</Tag>
+                    <Tag style={{ fontWeight: 700, minWidth: 28, textAlign: 'center' }}>#{round.order}</Tag>
                     <span style={{ fontWeight: 600, fontSize: 14, color: '#9ca3af' }}>{round.roundName}</span>
                     {round.roundType && <Tag>{round.roundType}</Tag>}
                     <Tag>Locked</Tag>
@@ -426,7 +432,7 @@ export default function CandidateDetail() {
               }}
               title={
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <Tag style={{ fontWeight: 700, minWidth: 28, textAlign: 'center' }}>#{round.sequence}</Tag>
+                  <Tag style={{ fontWeight: 700, minWidth: 28, textAlign: 'center' }}>#{round.order}</Tag>
                   <span style={{ fontWeight: 600, fontSize: 14 }}>{round.roundName}</span>
                   {round.roundType && <Tag color="blue">{round.roundType}</Tag>}
                   {round.result ? <Tag color={resultColor}>{round.result}</Tag> : <Tag>Pending</Tag>}

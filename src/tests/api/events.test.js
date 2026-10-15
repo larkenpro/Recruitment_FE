@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { getEvents, getEvent, createEvent, updateEventStatus, updateEventMode, addEventApplication, updateEventApplication, getRounds, createRound, getEventPositions, setEventPositionTypes, getCandidatesByEvent, getGroups, generateGroups, updateGroup, deleteAllGroups } from '../../api/events'
+import { getEvents, getEvent, createEvent, updateEventStatus, updateEventMode, addEventApplication, updateEventApplication, getRoundGraph, saveRoundGraph, getRoundProgress, getEventPositions, setEventPositionTypes, getCandidatesByEvent, getGroups, generateGroups, updateGroup, deleteAllGroups } from '../../api/events'
 import { getColleges } from '../../api/colleges'
 import { createPosition, deletePosition, getPositionTypes } from '../../api/positions'
 
@@ -57,84 +57,54 @@ describe('Events API', () => {
     expect(res.data.data.status).toBe('ACTIVE')
   })
 
-  // ── Rounds ────────────────────────────────────────────────────────────────
-  // BACKEND BUG: /events/:id/rounds returns 500 for both GET and POST.
-  // Unskip these once the backend rounds endpoints are fixed.
-  describe('Rounds', () => {
-    let createdRoundId = null
+  // ── Round graph ───────────────────────────────────────────────────────────
+  describe('Round graph', () => {
+    let saved = null
 
-    // ── GET rounds (empty) ──────────────────────────────────────────────────
-    it('GET /events/:id/rounds — returns success with an array', async () => {
+    it('GET /events/:id/round-graph — an event starts with no rounds', async () => {
       if (!createdId) return
-      const res = await getRounds(createdId)
+      const res = await getRoundGraph(createdId)
+      expect(res.data.status).toBe('success')
+      expect(Array.isArray(res.data.data.rounds)).toBe(true)
+      expect(Array.isArray(res.data.data.edges)).toBe(true)
+    })
+
+    it('PUT /events/:id/round-graph — saves rounds and arrows, returned in graph order', async () => {
+      if (!createdId) return
+      const res = await saveRoundGraph(createdId, {
+        rounds: [
+          { key: 'hr', name: 'HR Round', roundType: 'HR', x: 300, y: 0 },
+          { key: 'apt', name: 'Aptitude Test', roundType: 'WRITTEN', x: 0, y: 0 },
+          { key: 'gd', name: 'Group Discussion', roundType: 'GROUP_DISCUSSION', x: 0, y: 120 },
+        ],
+        edges: [{ from: 'apt', to: 'hr' }, { from: 'gd', to: 'hr' }],
+      })
+      expect(res.data.status).toBe('success')
+      saved = res.data.data
+      expect(saved.rounds.map((r) => r.name)).toEqual(['Aptitude Test', 'Group Discussion', 'HR Round'])
+      expect(saved.rounds.map((r) => r.order)).toEqual([1, 2, 3])
+      expect(saved.edges).toHaveLength(2)
+      saved.rounds.forEach((r) => expect(typeof r.id).toBe('number'))
+    })
+
+    it('PUT /events/:id/round-graph — rejects a loop with 400', async () => {
+      if (!saved) return
+      const [a, , hr] = saved.rounds
+      await expect(saveRoundGraph(createdId, {
+        rounds: saved.rounds.map(({ id, name }) => ({ id, name })),
+        edges: [{ from: String(a.id), to: String(hr.id) }, { from: String(hr.id), to: String(a.id) }],
+      })).rejects.toMatchObject({ response: { status: 400 } })
+    })
+
+    it('GET /events/:id/round-progress — returns success with an array', async () => {
+      if (!createdId) return
+      const res = await getRoundProgress(createdId)
       expect(res.data.status).toBe('success')
       expect(Array.isArray(res.data.data)).toBe(true)
     })
 
-    // ── POST round ──────────────────────────────────────────────────────────
-    it('POST /events/:id/rounds — creates a round and returns its fields', async () => {
-      if (!createdId) return
-      const res = await createRound(createdId, {
-        name: 'Aptitude Test',
-        roundType: 'WRITTEN',
-        sequence: 1,
-      })
-      expect(res.data.status).toBe('success')
-      const round = res.data.data
-      expect(round.name).toBe('Aptitude Test')
-      expect(round.roundType).toBe('WRITTEN')
-      expect(round.sequence).toBe(1)
-      expect(typeof round.id).toBe('number')
-      createdRoundId = round.id
-    })
-
-    // ── GET rounds (after create) ───────────────────────────────────────────
-    it('GET /events/:id/rounds — newly created round appears in the list', async () => {
-      if (!createdId || !createdRoundId) return
-      const res = await getRounds(createdId)
-      expect(res.data.status).toBe('success')
-      const ids = res.data.data.map((r) => r.id)
-      expect(ids).toContain(createdRoundId)
-    })
-
-    // ── Valid roundType values ──────────────────────────────────────────────
-    const roundTypes = ['TECHNICAL', 'HR', 'GROUP_DISCUSSION', 'CODING']
-    roundTypes.forEach((type, idx) => {
-      it(`POST /events/:id/rounds — accepts roundType "${type}"`, async () => {
-        if (!createdId) return
-        const res = await createRound(createdId, {
-          name: `${type} Round`,
-          roundType: type,
-          sequence: idx + 2, // sequence 2, 3, 4, 5
-        })
-        expect(res.data.status).toBe('success')
-        expect(res.data.data.roundType).toBe(type)
-      })
-    })
-
-    // ── Sequence ordering ───────────────────────────────────────────────────
-    it('GET /events/:id/rounds — rounds are returned in sequence order', async () => {
-      if (!createdId) return
-      const res = await getRounds(createdId)
-      expect(res.data.status).toBe('success')
-      const sequences = res.data.data.map((r) => r.sequence)
-      const sorted = [...sequences].sort((a, b) => a - b)
-      expect(sequences).toEqual(sorted)
-    })
-
-    // ── 404 for unknown event ───────────────────────────────────────────────
-    it('GET /events/999999/rounds — returns 404 for unknown event', async () => {
-      await expect(getRounds(999999)).rejects.toMatchObject({
-        response: { status: 404 },
-      })
-    })
-
-    it('POST /events/999999/rounds — returns 404 for unknown event', async () => {
-      await expect(
-        createRound(999999, { name: 'Ghost Round', roundType: 'HR', sequence: 1 })
-      ).rejects.toMatchObject({
-        response: { status: 404 },
-      })
+    it('GET /events/999999/round-graph — returns 404 for unknown event', async () => {
+      await expect(getRoundGraph(999999)).rejects.toMatchObject({ response: { status: 404 } })
     })
   })
 
@@ -307,6 +277,109 @@ describe('Events API', () => {
     })
 
     // ── 404 ───────────────────────────────────────────────────────────────
+    it('GET /events/999999/positions — returns 404 for unknown event', async () => {
+      await expect(getEventPositions(999999)).rejects.toMatchObject({
+        response: { status: 404 },
+      })
+    })
+  })
+
+  // ── Event Candidates ──────────────────────────────────────────────────────
+  describe('Event Candidates', () => {
+
+    // ── GET /events/:id/candidates — returns array ────────────────────────
+    it('GET /events/:id/candidates — returns success with an array', async () => {
+      if (!createdId) return
+      const res = await getCandidatesByEvent(createdId)
+      expect(res.data.status).toBe('success')
+      expect(Array.isArray(res.data.data)).toBe(true)
+    })
+
+    // ── No applications on a fresh event ─────────────────────────────────
+    it('GET /events/:id/candidates — empty array for event with no applications', async () => {
+      if (!createdId) return
+      const res = await getCandidatesByEvent(createdId)
+      expect(res.data.status).toBe('success')
+      expect(res.data.data.length).toBe(0)
+    })
+
+    // ── Candidate object shape (when candidates exist) ────────────────────
+    it('GET /events/:id/candidates — each candidate has expected fields', async () => {
+      if (!createdId) return
+      const res = await getCandidatesByEvent(createdId)
+      expect(res.data.status).toBe('success')
+      res.data.data.forEach(c => {
+        expect(typeof c.id).toBe('number')
+        expect(typeof c.name).toBe('string')
+        expect(typeof c.email).toBe('string')
+      })
+    })
+
+    // ── unknown event — backend returns 200 with empty array ─────────────
+    // NOTE: backend does not 404 on unknown eventId for this endpoint;
+    // it returns success with an empty candidates array instead.
+    it('GET /events/999999/candidates — returns success with empty array for unknown event', async () => {
+      const res = await getCandidatesByEvent(999999)
+      expect(res.data.status).toBe('success')
+      expect(Array.isArray(res.data.data)).toBe(true)
+      expect(res.data.data.length).toBe(0)
+    })
+  })
+
+  // ── Groups (per Group Discussion round) ───────────────────────────────────
+  describe('Groups', () => {
+    let gdRoundId = null
+
+    // The Round graph tests above saved a Group Discussion round on this event.
+    beforeAll(async () => {
+      if (!createdId) return
+      const res = await getRoundGraph(createdId)
+      gdRoundId = res.data.data.rounds.find((r) => r.roundType === 'GROUP_DISCUSSION')?.id ?? null
+    })
+
+    it('GET /events/:id/rounds/:roundId/groups — returns success with an array', async () => {
+      if (!gdRoundId) return
+      const res = await getGroups(createdId, gdRoundId)
+      expect(res.data.status).toBe('success')
+      expect(Array.isArray(res.data.data)).toBe(true)
+    })
+
+    it('POST /events/:id/rounds/:roundId/groups — returns 400 when nobody has reached the round', async () => {
+      if (!gdRoundId) return
+      await expect(generateGroups(createdId, gdRoundId, 2)).rejects.toMatchObject({
+        response: { status: 400 },
+      })
+    })
+
+    it('PUT /events/:id/rounds/:roundId/groups/:groupId — returns 404 for unknown group', async () => {
+      if (!gdRoundId) return
+      await expect(updateGroup(createdId, gdRoundId, 999999, { name: 'Group X', topic: 'Test' })).rejects.toMatchObject({
+        response: { status: 404 },
+      })
+    })
+
+    it('DELETE /events/:id/rounds/:roundId/groups — returns success', async () => {
+      if (!gdRoundId) return
+      const res = await deleteAllGroups(createdId, gdRoundId)
+      expect(res.data.status).toBe('success')
+    })
+
+    it('GET groups for a round that is not a Group Discussion round — returns 400', async () => {
+      if (!createdId) return
+      const graph = (await getRoundGraph(createdId)).data.data
+      const other = graph.rounds.find((r) => r.roundType !== 'GROUP_DISCUSSION')
+      if (!other) return
+      await expect(getGroups(createdId, other.id)).rejects.toMatchObject({ response: { status: 400 } })
+    })
+
+    it('GET /events/999999/rounds/1/groups — returns 404 for unknown event', async () => {
+      await expect(getGroups(999999, 1)).rejects.toMatchObject({
+        response: { status: 404 },
+      })
+    })
+  })
+
+  // ── 404 ───────────────────────────────────────────────────────────────
     it('GET /events/999999/positions — returns 404 for unknown event', async () => {
       await expect(getEventPositions(999999)).rejects.toMatchObject({
         response: { status: 404 },
