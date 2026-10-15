@@ -15,12 +15,14 @@ import {
   UsergroupAddOutlined,
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import dayjs from 'dayjs'
 import {
   Alert,
   Button,
   Card,
   Checkbox,
   Col,
+  DatePicker,
   Descriptions,
   Divider,
   Empty,
@@ -76,6 +78,7 @@ import { useStageDecision } from '../hooks/useStageDecision'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
 import EventApplicationModal from '../components/EventApplicationModal'
+import { SEQUENCE_RULE } from '../components/validation/rules'
 
 const { Title, Text } = Typography
 
@@ -123,7 +126,9 @@ export default function EventDetail() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
+  // { url, until } once generated; `until` is the expiry it was generated with.
   const [link, setLink] = useState(null)
+  const [linkExpiry, setLinkExpiry] = useState(() => dayjs().add(30, 'day'))
   const [templateLoading, setTemplateLoading] = useState(false)
   const [editingRound, setEditingRound] = useState(null)
   const [roundForm] = Form.useForm()
@@ -531,8 +536,8 @@ export default function EventDetail() {
       return
     }
     try {
-      const res = await generateLink(Number(id))
-      setLink(res.data.data)
+      const res = await generateLink(Number(id), linkExpiry.format('YYYY-MM-DD'))
+      setLink({ url: res.data.data, until: linkExpiry })
       message.success('Link generated!')
     } catch (err) {
       message.error(getErrorMessage(err))
@@ -838,7 +843,7 @@ export default function EventDetail() {
                 options={['WRITTEN', 'TECHNICAL', 'HR', 'GROUP_DISCUSSION', 'CODING'].map((s) => ({ value: s }))}
               />
             </Form.Item>
-            <Form.Item name="sequence" label="Sequence" rules={[{ required: true }]}>
+            <Form.Item name="sequence" label="Sequence" rules={[{ required: true }, SEQUENCE_RULE]}>
               <InputNumber style={{ width: '100%' }} min={1} />
             </Form.Item>
             <Button type="primary" htmlType="submit" loading={roundMutation.isPending}>
@@ -868,6 +873,7 @@ export default function EventDetail() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
                   <InputNumber
                     min={1}
+                    precision={0}
                     max={gdEligible.length || undefined}
                     placeholder="Number of groups"
                     value={groupCount}
@@ -1126,6 +1132,7 @@ export default function EventDetail() {
               min={0}
               max={100}
               step={0.5}
+              precision={2}
               value={roundTableEdits[r.id]?.score ?? null}
               onChange={(val) => updateRoundEdit(r.id, 'score', val)}
             />
@@ -1559,6 +1566,17 @@ export default function EventDetail() {
                 Generate a shareable link for candidates to apply. Only available when the event is{' '}
                 <Tag color="green" style={{ margin: 0 }}>ACTIVE</Tag> and has at least one position (each with a type) and round set up.
               </Text>
+              <div>
+                <Text style={{ fontSize: 13 }}>Accepts applications until</Text>
+                <DatePicker
+                  value={linkExpiry}
+                  onChange={setLinkExpiry}
+                  allowClear={false}
+                  format="D MMM YYYY"
+                  disabledDate={(d) => d.isBefore(dayjs(), 'day')}
+                  style={{ width: '100%', marginTop: 4 }}
+                />
+              </div>
               <Button
                 type="primary"
                 icon={<LinkOutlined />}
@@ -1568,19 +1586,22 @@ export default function EventDetail() {
                 Generate Link
               </Button>
               {link && (
-                <Space.Compact style={{ width: '100%' }}>
-                  <Input value={link} readOnly size="small" />
-                  <Button
-                    size="small"
-                    icon={<CopyOutlined />}
-                    onClick={() => {
-                      navigator.clipboard.writeText(link)
-                      message.success('Copied!')
-                    }}
-                  >
-                    Copy
-                  </Button>
-                </Space.Compact>
+                <>
+                  <Space.Compact style={{ width: '100%' }}>
+                    <Input value={link.url} readOnly size="small" />
+                    <Button
+                      size="small"
+                      icon={<CopyOutlined />}
+                      onClick={() => {
+                        navigator.clipboard.writeText(link.url)
+                        message.success('Copied!')
+                      }}
+                    >
+                      Copy
+                    </Button>
+                  </Space.Compact>
+                  <Text type="secondary" style={{ fontSize: 12 }}>Valid through {link.until.format('D MMM YYYY')}</Text>
+                </>
               )}
             </div>
           </Card>
@@ -1629,7 +1650,7 @@ export default function EventDetail() {
               options={['WRITTEN', 'TECHNICAL', 'HR', 'GROUP_DISCUSSION', 'CODING'].map((s) => ({ value: s }))}
             />
           </Form.Item>
-          <Form.Item name="sequence" label="Sequence" rules={[{ required: true }]}>
+          <Form.Item name="sequence" label="Sequence" rules={[{ required: true }, SEQUENCE_RULE]}>
             <InputNumber style={{ width: '100%' }} min={1} />
           </Form.Item>
         </Form>

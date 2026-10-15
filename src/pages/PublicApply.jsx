@@ -47,7 +47,7 @@ export default function PublicApply() {
         return getPublicEventPositions(r.data.data.event.id)
       })
       .then(r => { setRankedPairs(eventPairs(r.data.data)); setPositionsLoaded(true) })
-      .catch(() => setError('Invalid or expired link'))
+      .catch((err) => setError(err.response?.data?.message || 'Invalid or expired link'))
   }, [token])
 
   // An existing candidate updates their details from the candidate page, not this form —
@@ -224,7 +224,7 @@ export default function PublicApply() {
               </div>
               <Row gutter={GUTTER}>
                 <Col xs={24} sm={12}>
-                  <Form.Item name="name" label="Full Name" rules={[{ required: true }]}>
+                  <Form.Item name="name" label="Full Name" rules={[requiredRule('Name is required')]}>
                     <Input placeholder="John Doe" size="large" />
                   </Form.Item>
                 </Col>

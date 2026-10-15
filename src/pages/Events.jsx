@@ -13,6 +13,7 @@ import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
 import { getErrorMessage } from '../utils/errorUtils'
 import { EVENT_MODE_OPTIONS, eventMode } from '../utils/eventModes'
+import { GRADUATION_YEAR_RULE, requiredRule } from '../components/validation/rules'
 
 const FILTER_KEYS = [
   { key: 'college',         label: 'College', getVal: r => r.college?.name },
@@ -156,8 +157,8 @@ export default function Events() {
           <Form.Item name="collegeId" label="College" rules={[{ required: true }]}>
             <Select options={colleges?.map(c => ({ value: c.id, label: c.name })) ?? []} />
           </Form.Item>
-          <Form.Item name="recruitmentYear" label="Year" rules={[{ required: true }]}>
-            <Input type="number" />
+          <Form.Item name="recruitmentYear" label="Year" rules={[requiredRule('Year is required'), GRADUATION_YEAR_RULE]}>
+            <Input inputMode="numeric" />
           </Form.Item>
           <Form.Item name="startDate" label="Start Date"><Input type="date" /></Form.Item>
           <Form.Item name="mode" label="Mode" initialValue="ON_CAMPUS" rules={[{ required: true }]}>

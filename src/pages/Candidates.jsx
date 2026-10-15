@@ -10,7 +10,7 @@ import DevOnly from '../components/DevOnly'
 import { SPACE, GUTTER } from '../theme'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
-import { EMAIL_RULE, PHONE_RULE, URL_RULE, CGPA_RULE, SCORE_RULE, GRADUATION_YEAR_RULE, requiredRule } from '../components/validation/rules'
+import { EMAIL_RULE, PHONE_RULE, URL_RULE, CGPA_RULE, COUNT_RULE, SCORE_RULE, GRADUATION_YEAR_RULE, requiredRule } from '../components/validation/rules'
 
 const FILTER_KEYS = [
   { key: 'name',      label: 'Name',     getVal: r => r.name, type: 'text' },
@@ -188,7 +188,7 @@ export default function Candidates() {
           {/* ── Required fields ── */}
           <Row gutter={GUTTER}>
             <Col xs={24} sm={12}>
-              <Form.Item name="name" label="Full Name" rules={[{ required: true }]}>
+              <Form.Item name="name" label="Full Name" rules={[requiredRule('Name is required')]}>
                 <Input />
               </Form.Item>
             </Col>
@@ -281,7 +281,7 @@ export default function Candidates() {
               </Form.Item>
             </Col>
             <Col xs={24} sm={12} md={8}>
-              <Form.Item name="keamRank" label="KEAM Rank">
+              <Form.Item name="keamRank" label="KEAM Rank" rules={[COUNT_RULE]}>
                 <InputNumber style={{ width: '100%' }} min={0} />
               </Form.Item>
             </Col>
@@ -296,12 +296,12 @@ export default function Candidates() {
               </Form.Item>
             </Col>
             <Col xs={12} sm={8} md={4}>
-              <Form.Item name="backlogs" label="Total Backlogs">
+              <Form.Item name="backlogs" label="Total Backlogs" rules={[COUNT_RULE]}>
                 <InputNumber style={{ width: '100%' }} min={0} />
               </Form.Item>
             </Col>
             <Col xs={12} sm={8} md={4}>
-              <Form.Item name="arrears" label="Active Backlogs">
+              <Form.Item name="arrears" label="Active Backlogs" rules={[COUNT_RULE]}>
                 <InputNumber style={{ width: '100%' }} min={0} />
               </Form.Item>
             </Col>
