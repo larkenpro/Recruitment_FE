@@ -63,7 +63,7 @@ import {
 import { getPositions, getPositionTypes } from '../api/positions'
 import { EVENT_MODE_OPTIONS, eventMode } from '../utils/eventModes'
 import PositionTypeFields, { toEventPositions } from '../components/PositionTypeFields'
-import { getOffers, updateRoundResult, addStageEntry, updateStageStatusByName } from '../api/candidates'
+import { getOffers, updateRoundResult, pickRoundTrack, addStageEntry, updateStageStatusByName } from '../api/candidates'
 import { useAuth } from '../context/AuthContext'
 import { OfferResponseCell, OfferedPositionCell } from '../components/OfferPairSelect'
 import { getErrorMessage } from '../utils/errorUtils'
@@ -73,7 +73,7 @@ import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
 import { useCandidateColumns } from '../components/CandidateColumns'
 import PipelineGraph from '../components/PipelineGraph'
-import { hasReached, isStageKey, roundsBefore, stageKey, stageOf } from '../utils/roundGraph'
+import { DEFAULT_MAX_SCORE, hasReached, isStageKey, pairColors, pairLabel, roundsBefore, stageKey, stageOf } from '../utils/roundGraph'
 import { useColumnChoice } from '../components/ColumnPicker'
 import DownloadExcel from '../components/DownloadExcel'
 import { labelFor } from '../utils/columns'
@@ -256,6 +256,11 @@ export default function EventDetail() {
 
   const roundStatusByCandidate = useMemo(
     () => Object.fromEntries((roundProgress ?? []).map((p) => [p.candidateId, p.rounds])),
+    [roundProgress]
+  )
+  // At split rounds: { [candidateId]: { [roundId]: { track, options, picked } } }.
+  const tracksByCandidate = useMemo(
+    () => Object.fromEntries((roundProgress ?? []).map((p) => [p.candidateId, p.tracks ?? {}])),
     [roundProgress]
   )
 
@@ -470,6 +475,16 @@ export default function EventDetail() {
       queryClient.invalidateQueries({ queryKey: ['roundProgress', id] })
       queryClient.invalidateQueries({ queryKey: ['eventStageSummary', id] })
       message.success('Score saved!')
+    },
+    onError: (err) => message.error(getErrorMessage(err)),
+  })
+
+  const trackMutation = useMutation({
+    mutationFn: ({ candidateId, roundId, track }) => pickRoundTrack(candidateId, Number(id), roundId, track),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['roundProgress', id] })
+      queryClient.invalidateQueries({ queryKey: ['eventStageSummary', id] })
+      message.success('Track saved')
     },
     onError: (err) => message.error(getErrorMessage(err)),
   })
@@ -910,6 +925,11 @@ export default function EventDetail() {
     }
 
     const earlierRounds = roundsBefore(roundGraph, String(round.id))
+    // A split for someone here: they applied for more than one of the tracks it leads into.
+    const splitsHere = displayCandidates.some((c) => tracksByCandidate[c.id]?.[round.id])
+    const pairByKey = Object.fromEntries((roundGraph?.pairs ?? []).map((p) => [p.key, p]))
+    const colorOf = pairColors(roundGraph?.pairs ?? [])
+    const trackLabel = (key) => (pairByKey[key] ? pairLabel(pairByKey[key]) : key)
 
     const allRoundColumns = [
       {
@@ -934,11 +954,37 @@ export default function EventDetail() {
           return <Tag color={color}>{res.result}</Tag>
         },
       },
+      ...(splitsHere ? [{
+        key: 'track',
+        title: 'Next track',
+        exportValue: (r) => {
+          const t = tracksByCandidate[r.id]?.[round.id]
+          return t ? trackLabel(t.track) + (t.picked ? '' : ' (top preference)') : null
+        },
+        render: (_, r) => {
+          const t = tracksByCandidate[r.id]?.[round.id]
+          if (!t) return '—'
+          return (
+            <Space size={4}>
+              <Select
+                size="small"
+                style={{ width: 210 }}
+                value={t.track}
+                allowClear={t.picked}
+                loading={trackMutation.isPending && trackMutation.variables?.candidateId === r.id}
+                options={t.options.map((k) => ({ value: k, label: <span style={{ color: colorOf[k] }}>{trackLabel(k)}</span> }))}
+                onChange={(track) => trackMutation.mutate({ candidateId: r.id, roundId: round.id, track: track ?? null })}
+              />
+              {!t.picked && <Text type="secondary" style={{ fontSize: 11 }}>top preference</Text>}
+            </Space>
+          )
+        },
+      }] : []),
       col.name,
       col.rollNo,
       {
         key: 'score',
-        title: 'Score',
+        title: `Score (out of ${round.maxScore ?? DEFAULT_MAX_SCORE})`,
         exportValue: (r) => roundResultMap[round.id]?.[r.id]?.score,
         render: (_, r) => {
           if (isEditing) return (
@@ -946,7 +992,7 @@ export default function EventDetail() {
               size="small"
               style={{ width: 80 }}
               min={0}
-              max={100}
+              max={round.maxScore ?? DEFAULT_MAX_SCORE}
               step={0.5}
               precision={2}
               value={roundTableEdits[r.id]?.score ?? null}
@@ -959,7 +1005,7 @@ export default function EventDetail() {
       },
       ...earlierRounds.map((prev) => ({
         key: `score:${prev.key}`,
-        title: `${prev.name} score`,
+        title: `${prev.name} score (out of ${prev.maxScore ?? DEFAULT_MAX_SCORE})`,
         exportValue: (r) => roundResultMap[prev.id]?.[r.id]?.score,
         render: (_, r) => roundResultMap[prev.id]?.[r.id]?.score ?? '—',
       })),
@@ -1021,7 +1067,7 @@ export default function EventDetail() {
     const { shown: roundColumns, picker: roundColumnPicker } = columnsFor(
       `round:${round.id}`,
       allRoundColumns,
-      ['result', 'name', 'rollNo', 'score', ...earlierRounds.map((prev) => `score:${prev.key}`), 'interviewer'],
+      ['result', 'track', 'name', 'rollNo', 'score', ...earlierRounds.map((prev) => `score:${prev.key}`), 'interviewer'],
     )
 
     // A GD round shown as group cards downloads as one sheet, with each candidate's group first.

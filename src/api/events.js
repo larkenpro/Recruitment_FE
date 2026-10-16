@@ -11,7 +11,12 @@ export const generateLink = (eventId, expiresOn) => api.post(`/links/generate`, 
 export const getRoundGraph = (eventId) => api.get(`/events/${eventId}/round-graph`)
 // Replaces the whole graph; new rounds carry a temporary `key` that edges refer to.
 export const saveRoundGraph = (eventId, graph) => api.put(`/events/${eventId}/round-graph`, graph)
-// Per candidate: { candidateId, outcome, rounds: { [roundId]: 'NOT_APPLICABLE' | 'LOCKED' | 'OPEN' | 'PASS' | 'FAIL' | 'ON_HOLD' } }.
+// Round graphs saved by name, shared by everyone: [{ id, name, graph: { rounds, edges } }]. Fit one to an event with fitTemplate.
+export const getRoundGraphTemplates = () => api.get('/round-graph-templates')
+export const createRoundGraphTemplate = (name, graph) => api.post('/round-graph-templates', { name, graph })
+export const deleteRoundGraphTemplate = (id) => api.delete(`/round-graph-templates/${id}`)
+// Per candidate: { candidateId, outcome, rounds: { [roundId]: 'NOT_APPLICABLE' | 'LOCKED' | 'OPEN' | 'PASS' | 'FAIL' | 'ON_HOLD' },
+// tracks: { [splitRoundId]: { track, options, picked } } } — pair keys; options best preference first.
 export const getRoundProgress = (eventId) => api.get(`/events/${eventId}/round-progress`)
 export const getCandidatesByEvent = (eventId) => api.get(`/events/${eventId}/candidates`)
 export const addEventApplication = (eventId, data) => api.post(`/events/${eventId}/applications`, data)

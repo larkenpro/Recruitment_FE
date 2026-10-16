@@ -93,7 +93,7 @@ const DATA_SOURCES = {
     ],
     metrics: [
       { key: 'count', label: 'Count', get: null },
-      { key: 'avgScore', label: 'Avg Score', get: r => r.score },
+      { key: 'avgScore', label: 'Avg Score %', get: r => r.percent },
     ],
   },
 }
@@ -278,7 +278,7 @@ function RoundCell({ round }) {
   if (!round) return <span style={{ color: INK.faint }}>—</span>
   return (
     <Space size={SPACE.xs} wrap>
-      <span>{round.score ?? '—'}</span>
+      <span>{round.score != null ? `${round.score} / ${round.maxScore ?? 100}` : '—'}</span>
       {round.result && <Tag color={RESULT_COLOR[round.result]}>{round.result}</Tag>}
     </Space>
   )
@@ -597,9 +597,9 @@ export default function Analytics() {
       {/* Exam / round scores */}
       <Row gutter={GUTTER}>
         <Col xs={24}>
-          <Card title="Average Score by Round Type" bordered={false} style={{ borderRadius: RADIUS.card }}>
+          <Card title="Average Score % by Round Type" bordered={false} style={{ borderRadius: RADIUS.card }}>
             <CategoryBarChart
-              data={scoreByRoundType} seriesName="Avg Score"
+              data={scoreByRoundType} seriesName="Avg Score %"
               empty={<Empty description="No round scores recorded yet" />}
             />
           </Card>

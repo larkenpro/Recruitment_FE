@@ -3,6 +3,9 @@
 // candidates there. An edge between rounds means passing `from` can unlock `to`. Rounds are keyed
 // by their id as text once saved, or a temporary key for a round added but not saved yet.
 
+// What a round's scores are out of when nobody set it.
+export const DEFAULT_MAX_SCORE = 100
+
 export const ROUND_TYPES = ['WRITTEN', 'TECHNICAL', 'HR', 'GROUP_DISCUSSION', 'CODING']
 export const ROUND_TYPE_COLOR = { WRITTEN: 'purple', TECHNICAL: 'blue', HR: 'green', GROUP_DISCUSSION: 'orange', CODING: 'cyan' }
 
@@ -13,6 +16,66 @@ const PAIR_ROW_HEIGHT = 70
 export const isPairKey = (key) => key.startsWith('pair:')
 
 export const pairLabel = (pair) => `${pair.positionTitle} · ${pair.typeName}`
+
+// One colour per pair, in the event's pair order: its node's outline, its arrows, and the arrows
+// into rounds only it takes.
+// Mid-tone and evenly muted so they sit together, far enough apart in hue to tell apart.
+export const PAIR_COLORS = ['#2a9d8f', '#e76f51', '#4c7bb5', '#c9971c', '#8e6bbf', '#5f9e4a', '#c45b84', '#8d6e63']
+export const pairColors = (pairs) => Object.fromEntries(pairs.map((p, i) => [p.key, PAIR_COLORS[i % PAIR_COLORS.length]]))
+
+// Moves boxes ({ id, x, y, w, h }) down until none overlaps another, top ones first, keeping a
+// gap; returns each one's y by id. For the read-only view, where nodes can't be dragged apart.
+export const spreadOut = (boxes, gap = 16) => {
+  const placed = []
+  ;[...boxes].sort((a, b) => a.y - b.y || a.x - b.x).forEach((b) => {
+    let y = b.y
+    for (let hit = true; hit;) {
+      const over = placed.find((p) => b.x < p.x + p.w && p.x < b.x + b.w && y < p.y + p.h + gap && p.y < y + b.h + gap)
+      hit = Boolean(over)
+      if (over) y = over.y + over.h + gap
+    }
+    placed.push({ ...b, y })
+  })
+  return Object.fromEntries(placed.map((p) => [p.id, p.y]))
+}
+
+// Whose candidates can be at each round, by round key: `inherited` is every pair arriving along
+// its arrows (a pair's own arrow, or whoever can be at the round it comes from), `effective` that
+// narrowed by its own onlyFor (`explicit`). Pair keys keep `pairOrder`. Rounds are { key, onlyFor }.
+export const roundPairs = (rounds, edges, pairOrder = []) => {
+  const rank = (k) => { const i = pairOrder.indexOf(k); return i < 0 ? pairOrder.length : i }
+  const sorted = (keys) => [...keys].sort((a, b) => rank(a) - rank(b))
+  const byKey = Object.fromEntries(rounds.map((r) => [r.key, r]))
+  const at = {}
+  const visit = (key, path = new Set()) => {
+    if (at[key]) return at[key]
+    if (path.has(key)) return { inherited: [], effective: [], explicit: false }
+    path.add(key)
+    const inherited = new Set()
+    edges.filter((e) => e.to === key).forEach((e) => {
+      if (isPairKey(e.from)) inherited.add(e.from)
+      else if (byKey[e.from]) visit(e.from, path).effective.forEach((k) => inherited.add(k))
+    })
+    const only = byKey[key].onlyFor ?? []
+    const effective = only.length ? [...inherited].filter((k) => only.includes(k)) : [...inherited]
+    at[key] = { inherited: sorted(inherited), effective: sorted(effective), explicit: only.length > 0 }
+    return at[key]
+  }
+  rounds.forEach((r) => visit(r.key))
+  return at
+}
+
+// How to draw an arrow, from the pairs whose candidates travel along it (`at` from roundPairs): in
+// the pair's colour when it's one, dashed when it's several into a round limited to them, else plain.
+export const arrowStyle = (from, to, at, colors) => {
+  if (!at[to]) return undefined
+  const out = isPairKey(from) ? [from] : at[from]?.effective
+  if (!out) return undefined
+  const flow = at[to].effective.filter((k) => out.includes(k))
+  if (flow.length === 1) return { color: colors[flow[0]] ?? '#595959', dashed: false }
+  if (flow.length > 1 && at[to].explicit) return { color: '#595959', dashed: true }
+  return undefined
+}
 
 // Pair nodes go in one column to the left of every round.
 export const layoutPairs = (pairs, rounds) => {
@@ -64,24 +127,39 @@ export const toGraphPayload = (nodes, edges) => ({
     roundType: n.data.roundType ?? null,
     x: Math.round(n.position.x),
     y: Math.round(n.position.y),
+    onlyFor: n.data.onlyFor ?? [],
+    maxScore: n.data.maxScore ?? DEFAULT_MAX_SCORE,
   })),
   edges: edges.map((e) => ({ from: e.source, to: e.target })),
 })
 
-// Group Discussion -> Interview -> HR, with every pair starting at Group Discussion.
-export const defaultTemplate = (pairs) => ({
-  pairs,
+// Group Discussion -> Interview -> HR.
+export const DEFAULT_TEMPLATE = {
   rounds: [
     { key: 'gd', name: 'Group Discussion', roundType: 'GROUP_DISCUSSION', x: 0, y: 0 },
     { key: 'interview', name: 'Interview', roundType: 'TECHNICAL', x: COLUMN_WIDTH, y: 0 },
     { key: 'hr', name: 'HR Round', roundType: 'HR', x: 2 * COLUMN_WIDTH, y: 0 },
   ],
   edges: [
-    ...pairs.map((p) => ({ from: p.key, to: 'gd' })),
     { from: 'gd', to: 'interview' },
     { from: 'interview', to: 'hr' },
   ],
-})
+}
+
+// A template's rounds and the arrows between them as a new graph for an event with these pairs.
+// Arrows from pairs never come along: where each position starts is drawn per event. A round's
+// onlyFor keeps the pairs this event hires for. Rounds carry no id, so saving creates them.
+export const fitTemplate = (template, pairs) => {
+  const keys = new Set(template.rounds.map((r) => r.key))
+  const hired = new Set(pairs.map((p) => p.key))
+  return {
+    pairs,
+    rounds: template.rounds.map(({ key, name, roundType, x, y, onlyFor, maxScore }) => ({
+      key, name, roundType: roundType ?? null, x, y, onlyFor: (onlyFor ?? []).filter((k) => hired.has(k)), maxScore,
+    })),
+    edges: template.edges.filter((e) => keys.has(e.from) && keys.has(e.to)),
+  }
+}
 
 // Every round with a path of arrows into this one, in graph order: where a candidate's earlier scores come from.
 export const roundsBefore = (graph, key) => {

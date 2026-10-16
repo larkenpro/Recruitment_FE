@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { tally, avg, computeAnalytics, buildRoundComparisonRows, buildFunnel, buildCampusRows, buildPositionPreferenceTable } from '../../utils/analyticsHelpers'
+import { tally, avg, computeAnalytics, buildRoundComparisonRows, buildFunnel, buildCampusRows, buildPositionPreferenceTable, computeScoreByRoundType } from '../../utils/analyticsHelpers'
 
 // ── tally ─────────────────────────────────────────────────────────────────────
 
@@ -403,5 +403,17 @@ describe('buildPositionPreferenceTable', () => {
     const { positions, rows } = buildPositionPreferenceTable(candidates)
 
     rows.forEach(row => positions.forEach(title => expect(typeof row[title]).toBe('number')))
+  })
+})
+
+describe('computeScoreByRoundType', () => {
+  it('averages the percentage of each round\'s maximum marks, not raw scores', () => {
+    const rows = computeScoreByRoundType([
+      { roundType: 'WRITTEN', score: 40, percent: 80 },
+      { roundType: 'WRITTEN', score: 90, percent: 90 },
+      { roundType: 'HR', score: 7, percent: 70 },
+      { roundType: 'HR', score: null, percent: null },
+    ])
+    expect(rows).toEqual([{ name: 'HR', value: 70 }, { name: 'WRITTEN', value: 85 }])
   })
 })

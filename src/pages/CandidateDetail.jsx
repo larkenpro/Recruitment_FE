@@ -69,7 +69,7 @@ import { OFFER_RESPONSES, offerResponse } from '../utils/offers'
 import { getErrorMessage } from '../utils/errorUtils'
 import { GUTTER, useLayoutMetrics } from '../theme'
 import { PIPELINE_STAGES, useStageDecision } from '../hooks/useStageDecision'
-import { SCORE_RULE } from '../components/validation/rules'
+import { numberRule } from '../components/validation/rules'
 import { DATE_FORMAT, formatDate, formatDateTime } from '../utils/dates'
 
 const { Title, Text } = Typography
@@ -241,7 +241,7 @@ export default function CandidateDetail() {
   }
 
   const openEditRound = (eventId, round) => {
-    setEditingRound({ eventId, roundId: round.roundId, roundName: round.roundName })
+    setEditingRound({ eventId, roundId: round.roundId, roundName: round.roundName, maxScore: round.maxScore ?? 100 })
     scoreForm.setFieldsValue({
       score: round.score,
       result: round.result,
@@ -430,7 +430,9 @@ export default function CandidateDetail() {
                   <Text type="secondary" style={{ fontSize: 12 }}>
                     Score
                   </Text>
-                  <div style={{ fontWeight: 600, fontSize: 15 }}>{round.score ?? '—'}</div>
+                  <div style={{ fontWeight: 600, fontSize: 15 }}>
+                    {round.score != null ? `${round.score} / ${round.maxScore ?? 100}` : '—'}
+                  </div>
                 </Col>
                 <Col xs={12} sm={6}>
                   <Text type="secondary" style={{ fontSize: 12 }}>
@@ -1251,10 +1253,10 @@ export default function CandidateDetail() {
         <Form form={scoreForm} layout="vertical" style={{ marginTop: 8 }}>
           <Form.Item
             name="score"
-            label="Score"
-            rules={[SCORE_RULE]}
+            label={`Score (out of ${editingRound?.maxScore ?? 100})`}
+            rules={[numberRule({ max: editingRound?.maxScore ?? 100, decimals: 2, message: `Must be between 0 and ${editingRound?.maxScore ?? 100}` })]}
           >
-            <InputNumber style={{ width: '100%' }} min={0} max={100} step={0.5} />
+            <InputNumber style={{ width: '100%' }} min={0} max={editingRound?.maxScore ?? 100} step={0.5} />
           </Form.Item>
           <Form.Item name="result" label="Result" rules={[{ required: true, message: 'Select a result' }]}>
             <Select options={['PASS', 'FAIL', 'ON_HOLD'].map((v) => ({ value: v }))} />

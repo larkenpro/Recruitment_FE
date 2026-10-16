@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createsCycle, defaultTemplate, hasReached, isPairKey, isStageKey, layoutPairs, layoutRounds, pairLabel, pipelineLayout, roundsBefore, stageOf, toGraphPayload } from '../../utils/roundGraph'
+import { DEFAULT_TEMPLATE, PAIR_COLORS, arrowStyle, roundPairs, spreadOut, createsCycle, fitTemplate, pairColors, hasReached, isPairKey, isStageKey, layoutPairs, layoutRounds, pairLabel, pipelineLayout, roundsBefore, stageOf, toGraphPayload } from '../../utils/roundGraph'
 
 const edges = [{ from: 'coding', to: 'tech' }, { from: 'tech', to: 'hr' }, { from: 'aptitude', to: 'hr' }]
 
@@ -58,22 +58,83 @@ describe('toGraphPayload', () => {
 
     expect(toGraphPayload(nodes, [{ source: 'pair:4:2', target: '7' }, { source: '7', target: 'new-1' }])).toEqual({
       rounds: [
-        { id: 7, key: '7', name: 'Coding', roundType: 'CODING', x: 10, y: 0 },
-        { id: null, key: 'new-1', name: 'HR', roundType: null, x: 300, y: 0 },
+        { id: 7, key: '7', name: 'Coding', roundType: 'CODING', x: 10, y: 0, onlyFor: [], maxScore: 100 },
+        { id: null, key: 'new-1', name: 'HR', roundType: null, x: 300, y: 0, onlyFor: [], maxScore: 100 },
       ],
       edges: [{ from: 'pair:4:2', to: '7' }, { from: '7', to: 'new-1' }],
     })
   })
 })
 
-describe('defaultTemplate', () => {
-  it('is a three-round chain that every pair starts', () => {
-    const { rounds, edges: arrows } = defaultTemplate(pairs)
+describe('fitTemplate', () => {
+  it('lays out the default template\'s chain with no arrows from pairs', () => {
+    const { pairs: kept, rounds, edges: arrows } = fitTemplate(DEFAULT_TEMPLATE, pairs)
+    expect(kept).toBe(pairs)
     expect(rounds.map((r) => r.name)).toEqual(['Group Discussion', 'Interview', 'HR Round'])
-    expect(arrows).toEqual([
-      { from: 'pair:4:2', to: 'gd' }, { from: 'pair:5:2', to: 'gd' },
-      { from: 'gd', to: 'interview' }, { from: 'interview', to: 'hr' },
+    expect(arrows).toEqual([{ from: 'gd', to: 'interview' }, { from: 'interview', to: 'hr' }])
+  })
+
+  it('drops arrows from pairs and round ids', () => {
+    const template = {
+      rounds: [{ id: 9, key: '9', name: 'Coding' }, { key: '10', name: 'Technical' }],
+      edges: [{ from: 'pair:4:2', to: '9' }, { from: '9', to: '10' }],
+    }
+    const fitted = fitTemplate(template, pairs)
+    expect(fitted.rounds.every((r) => r.id === undefined)).toBe(true)
+    expect(fitted.edges).toEqual([{ from: '9', to: '10' }])
+  })
+
+  it('keeps only the pairs the event hires for in a round\'s onlyFor', () => {
+    const template = { rounds: [{ key: '1', name: 'GD2', onlyFor: ['pair:4:2', 'pair:9:9'] }, { key: '2', name: 'HR' }], edges: [] }
+    expect(fitTemplate(template, pairs).rounds.map((r) => r.onlyFor)).toEqual([['pair:4:2'], []])
+  })
+})
+
+describe('pair colours and arrows', () => {
+  const colors = pairColors(pairs)
+
+  it('gives each pair the next colour in order', () => {
+    expect(colors).toEqual({ 'pair:4:2': PAIR_COLORS[0], 'pair:5:2': PAIR_COLORS[1] })
+  })
+
+  // Dev → A, QA → B, both into GD, GD → D (only Dev) → E, and GD → F.
+  const rounds = [{ key: 'A' }, { key: 'B' }, { key: 'GD' }, { key: 'D', onlyFor: ['pair:4:2'] }, { key: 'E' }, { key: 'F' }]
+  const arrows = [
+    { from: 'pair:4:2', to: 'A' }, { from: 'pair:5:2', to: 'B' }, { from: 'A', to: 'GD' }, { from: 'B', to: 'GD' },
+    { from: 'GD', to: 'D' }, { from: 'D', to: 'E' }, { from: 'GD', to: 'F' },
+  ]
+  const at = roundPairs(rounds, arrows, ['pair:4:2', 'pair:5:2'])
+
+  it('passes each round the pairs arriving along its arrows, narrowed by its Only for', () => {
+    expect(at.A).toEqual({ inherited: ['pair:4:2'], effective: ['pair:4:2'], explicit: false })
+    expect(at.GD.effective).toEqual(['pair:4:2', 'pair:5:2'])
+    expect(at.D).toEqual({ inherited: ['pair:4:2', 'pair:5:2'], effective: ['pair:4:2'], explicit: true })
+    expect(at.E).toEqual({ inherited: ['pair:4:2'], effective: ['pair:4:2'], explicit: false })
+    expect(at.F.effective).toEqual(['pair:4:2', 'pair:5:2'])
+  })
+
+  it('colours an arrow carrying one pair, dashes several into a limited round, leaves the rest plain', () => {
+    expect(arrowStyle('pair:5:2', 'B', at, colors)).toEqual({ color: PAIR_COLORS[1], dashed: false })
+    expect(arrowStyle('A', 'GD', at, colors)).toEqual({ color: PAIR_COLORS[0], dashed: false })
+    expect(arrowStyle('GD', 'D', at, colors)).toEqual({ color: PAIR_COLORS[0], dashed: false })
+    expect(arrowStyle('D', 'E', at, colors)).toEqual({ color: PAIR_COLORS[0], dashed: false })
+    expect(arrowStyle('GD', 'F', at, colors)).toBeUndefined()
+    expect(arrowStyle('stage:Resume', 'pair:4:2', at, colors)).toBeUndefined()
+    const both = roundPairs([{ key: 'X' }, { key: 'Y', onlyFor: ['pair:4:2', 'pair:5:2'] }],
+      [{ from: 'pair:4:2', to: 'X' }, { from: 'pair:5:2', to: 'X' }, { from: 'X', to: 'Y' }])
+    expect(arrowStyle('X', 'Y', both, colors)).toMatchObject({ dashed: true })
+  })
+})
+
+describe('spreadOut', () => {
+  it('moves overlapping boxes down below the ones above, and leaves the rest', () => {
+    const ys = spreadOut([
+      { id: 'coding', x: 0, y: 0, w: 200, h: 120 },
+      { id: 'aptitude', x: 20, y: 100, w: 200, h: 120 },
+      { id: 'hr', x: 20, y: 150, w: 200, h: 50 },
+      { id: 'beside', x: 400, y: 10, w: 100, h: 100 },
     ])
+    expect(ys).toEqual({ coding: 0, aptitude: 136, hr: 272, beside: 10 })
   })
 })
 

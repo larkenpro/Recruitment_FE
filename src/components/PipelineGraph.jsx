@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Background, Controls, Handle, Position, ReactFlow, useEdgesState, useNodesState } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { Modal, Segmented, Typography } from 'antd'
 import { EditOutlined, EyeOutlined } from '@ant-design/icons'
-import RoundGraphEditor, { HANDLE_STYLE, PairNode, RoundNode, toFlowEdge, toPairNode, toRoundNode } from './RoundGraphEditor'
-import { pipelineLayout } from '../utils/roundGraph'
+import RoundGraphEditor, {
+  HANDLE_STYLE, PairInfo, PairNode, RoundNode, colorEdges, pairInfoOf, toFlowEdge, toPairNode, toRoundNode,
+} from './RoundGraphEditor'
+import { pipelineLayout, roundPairs, spreadOut } from '../utils/roundGraph'
 
 const { Text } = Typography
 
@@ -36,10 +38,29 @@ const viewNodeTypes = { stage: StageNode, round: RoundNode, pair: PairNode }
 function PipelineView({ graph, counts, selectedStage, onSelectStage }) {
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges] = useEdgesState([])
+  const info = useMemo(() => pairInfoOf(graph.pairs), [graph])
+  const pairsAt = useMemo(() => roundPairs(graph.rounds, graph.edges, (graph.pairs ?? []).map((p) => p.key)), [graph])
+  // Each node's measured { w, h }: rounds placed close together in the editor can overlap once
+  // their tags and counts show, so the view moves them apart when it knows how big they are.
+  const sizes = useRef({})
+  const flow = useRef(null)
+  const settle = (ns) => {
+    if (ns.some((n) => !sizes.current[n.id])) return ns
+    const ys = spreadOut(ns.map((n) => ({ id: n.id, x: n.position.x, y: n.position.y, ...sizes.current[n.id] })))
+    return ns.map((n) => (ys[n.id] === n.position.y ? n : { ...n, position: { ...n.position, y: ys[n.id] } }))
+  }
+
+  useEffect(() => {
+    if (!nodes.length || nodes.some((n) => !n.measured?.height)) return
+    if (nodes.every((n) => sizes.current[n.id]?.h === n.measured.height && sizes.current[n.id]?.w === n.measured.width)) return
+    nodes.forEach((n) => { sizes.current[n.id] = { w: n.measured.width, h: n.measured.height } })
+    setNodes(settle(nodes))
+    requestAnimationFrame(() => flow.current?.fitView({ maxZoom: 1 }))
+  }, [nodes]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const view = pipelineLayout(graph)
-    setNodes([
+    setNodes(settle([
       ...view.stages.map((s) => ({
         id: s.key,
         type: 'stage',
@@ -52,29 +73,32 @@ function PipelineView({ graph, counts, selectedStage, onSelectStage }) {
         const node = toRoundNode(r)
         return { ...node, data: { ...node.data, count: counts[r.key] ?? { pending: 0, passed: 0, failed: 0 } }, selected: r.key === selectedStage, style: { cursor: 'pointer' } }
       }),
-    ])
-    setEdges(view.edges.map((e) => toFlowEdge(e.from, e.to)))
-  }, [graph, counts, selectedStage, setNodes, setEdges])
+    ]))
+    setEdges(colorEdges(view.edges.map((e) => toFlowEdge(e.from, e.to)), pairsAt, info))
+  }, [graph, counts, selectedStage, setNodes, setEdges, info, pairsAt]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div style={{ height: 360, border: '1px solid #e5e7eb', borderRadius: 8 }}>
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={viewNodeTypes}
-        onNodesChange={onNodesChange}
-        onNodeClick={(_, node) => node.type !== 'pair' && onSelectStage(node.id)}
-        nodesDraggable={false}
-        nodesConnectable={false}
-        elementsSelectable={false}
-        deleteKeyCode={null}
-        fitView
-        fitViewOptions={{ maxZoom: 1 }}
-        proOptions={{ hideAttribution: true }}
-      >
-        <Background gap={16} />
-        <Controls showInteractive={false} />
-      </ReactFlow>
+      <PairInfo.Provider value={{ info, at: pairsAt }}>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={viewNodeTypes}
+          onNodesChange={onNodesChange}
+          onInit={(instance) => { flow.current = instance }}
+          onNodeClick={(_, node) => node.type !== 'pair' && onSelectStage(node.id)}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable={false}
+          deleteKeyCode={null}
+          fitView
+          fitViewOptions={{ maxZoom: 1 }}
+          proOptions={{ hideAttribution: true }}
+        >
+          <Background gap={16} />
+          <Controls showInteractive={false} />
+        </ReactFlow>
+      </PairInfo.Provider>
     </div>
   )
 }
