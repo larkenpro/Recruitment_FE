@@ -126,7 +126,7 @@ Fixed left sidebar (`Sider`, 220px) with:
 - Nav menu: Colleges, Positions, Events, Offers, Import, Analytics, User Management, Audit Log (no candidate list: `/candidates/:id` is reached from event and offer rows)
 - Logout button pinned to bottom
 
-Top `Header` shows notification bell (count=0 placeholder) + logged-in username. `Content` area renders the active page.
+Top `Header` shows notification bell (count=0 placeholder) + logged-in username. `Content` area (the scrolling part) renders the active page, then `PageFooter` (`components/PageFooter.jsx`): a small "Recruit · J&J Sourcing" line with 160px of room under it, so the last table or graph can be scrolled clear of the window's bottom edge.
 
 ---
 

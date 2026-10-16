@@ -7,6 +7,7 @@ import {
 } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import PageFooter from './PageFooter'
 import { SPACE, FONT_SIZE, FONT_WEIGHT, INK, RADIUS, TEXT, useLayoutMetrics } from '../theme'
 
 const { Header, Sider, Content } = Layout
@@ -122,6 +123,7 @@ export default function AppLayout({ children }) {
         </Header>
         <Content style={{ flex: 1, overflow: 'auto', padding: pagePadding, background: '#f5f6fa' }}>
           {children}
+          <PageFooter />
         </Content>
       </Layout>
     </Layout>
