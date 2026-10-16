@@ -4,5 +4,8 @@ export const OFFER_RESPONSES = [
   { value: 'REJECTED', label: 'Rejected', color: 'red' },
 ]
 
+export const offeredLabel = (offer) =>
+  offer?.offeredPosition ? `${offer.offeredPosition.title}${offer.offeredType ? ` — ${offer.offeredType.name}` : ''}` : null
+
 export const offerResponse = (status) =>
   OFFER_RESPONSES.find((r) => r.value === status) ?? { value: null, label: status ?? 'No Information', color: 'default' }

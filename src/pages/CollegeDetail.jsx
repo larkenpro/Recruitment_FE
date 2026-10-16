@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext'
 import { COLLEGE_STATUS_COLOR, tierColor } from '../utils/colleges'
 import { eventMode } from '../utils/eventModes'
 import { GUTTER, useLayoutMetrics } from '../theme'
+import { formatDate } from '../utils/dates'
 
 const { Title, Text } = Typography
 
@@ -49,7 +50,7 @@ export default function CollegeDetail() {
     },
     { title: 'Mode', dataIndex: 'mode', render: (m) => <Tag color={eventMode(m).color}>{eventMode(m).label}</Tag> },
     { title: 'Status', dataIndex: 'status', render: (s) => (s ? <Tag color={EVENT_STATUS_COLOR[s] ?? 'default'}>{s}</Tag> : '—') },
-    { title: 'Start Date', dataIndex: 'startDate', render: (d) => d ?? '—' },
+    { title: 'Start Date', dataIndex: 'startDate', render: formatDate },
     {
       title: 'Positions',
       dataIndex: 'positions',

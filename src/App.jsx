@@ -23,6 +23,10 @@ import AuditLog from './pages/AuditLog'
 
 const queryClient = new QueryClient()
 
+// Every dialog sits in the middle of the window; one taller than it scrolls inside, so its title and
+// buttons stay in view. (Modal.confirm calls don't read this and pass `centered` themselves.)
+const MODAL_DEFAULTS = { centered: true, styles: { body: { maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' } } }
+
 const P = ({ page, children }) => (
   <ProtectedRoute><AppLayout><PageGuard page={page}>{children}</PageGuard></AppLayout></ProtectedRoute>
 )
@@ -40,7 +44,7 @@ const Admin = ({ children }) => {
 
 export default function App() {
   return (
-    <ConfigProvider theme={antdTheme}>
+    <ConfigProvider theme={antdTheme} modal={MODAL_DEFAULTS}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <BrowserRouter>

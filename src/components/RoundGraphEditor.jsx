@@ -202,6 +202,7 @@ export default function RoundGraphEditor({ eventId, graph, onSaved, onDirtyChang
       return
     }
     Modal.confirm({
+      centered: true,
       title: `Delete ${removed.map((r) => r.name).join(', ')}?`,
       content: 'Any results already recorded for these rounds are deleted with them.',
       okText: 'Delete and save',

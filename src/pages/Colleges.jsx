@@ -97,6 +97,7 @@ export default function Colleges() {
       && isSimilar(c.name, values.name))
     if (!dupes.length) return save(values)
     Modal.confirm({
+      centered: true,
       title: 'Possible duplicate college',
       content: (
         <>

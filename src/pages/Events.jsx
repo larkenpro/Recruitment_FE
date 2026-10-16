@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Card, Table, Button, Modal, Form, Input, Select, Tag, message, Space, Popover } from 'antd'
+import { Card, Table, Button, Modal, Form, Select, Tag, message, Space, Popover, DatePicker } from 'antd'
+import dayjs from 'dayjs'
 import { PlusOutlined, LinkOutlined, ExperimentOutlined, ImportOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
@@ -13,7 +14,8 @@ import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
 import { getErrorMessage } from '../utils/errorUtils'
 import { EVENT_MODE_OPTIONS, eventMode } from '../utils/eventModes'
-import { GRADUATION_YEAR_RULE, requiredRule } from '../components/validation/rules'
+import { requiredRule } from '../components/validation/rules'
+import { DATE_FORMAT, formatDate } from '../utils/dates'
 
 const FILTER_KEYS = [
   { key: 'college',         label: 'College', getVal: r => r.college?.name },
@@ -58,8 +60,7 @@ export default function Events() {
     const month = String(Math.floor(Math.random() * 6) + 6).padStart(2, '0')
     form.setFieldsValue({
       collegeId: college?.id,
-      recruitmentYear: year,
-      startDate: `${year}-${month}-01`,
+      startDate: dayjs(`${year}-${month}-01`),
       status: 'UPCOMING',
     })
   }
@@ -99,7 +100,7 @@ export default function Events() {
       title: 'Mode', dataIndex: 'mode',
       render: m => <Tag color={eventMode(m).color}>{eventMode(m).label}</Tag>,
     },
-    { title: 'Start Date', dataIndex: 'startDate' },
+    { title: 'Start Date', dataIndex: 'startDate', render: formatDate },
     {
       title: 'Status', dataIndex: 'status', render: (s, r) => (
         <Select value={s} size="small" style={{ width: 130 }}
@@ -145,9 +146,12 @@ export default function Events() {
         onOk={() => form.validateFields().then(({ positionIds, positionTypes: picked, ...v }) => createMutation.mutate({
           ...v,
           collegeId: Number(v.collegeId),
-          recruitmentYear: Number(v.recruitmentYear),
+          // The event is named for its start date's year (e.g. "IIT Madras 2026").
+          recruitmentYear: v.startDate.year(),
+          startDate: v.startDate.format('YYYY-MM-DD'),
           positions: toEventPositions({ positionIds, positionTypes: picked }),
-        }))} okText="Save">
+        // A failed check is already shown on its field.
+        })).catch(() => {})} okText="Save">
         <DevOnly>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: SPACE.sm }}>
             <Button icon={<ExperimentOutlined />} size="small" onClick={fillEventTestData}>Fill Test Data</Button>
@@ -157,10 +161,7 @@ export default function Events() {
           <Form.Item name="collegeId" label="College" rules={[{ required: true }]}>
             <Select options={colleges?.map(c => ({ value: c.id, label: c.name })) ?? []} />
           </Form.Item>
-          <Form.Item name="recruitmentYear" label="Year" rules={[requiredRule('Year is required'), GRADUATION_YEAR_RULE]}>
-            <Input inputMode="numeric" />
-          </Form.Item>
-          <Form.Item name="startDate" label="Start Date"><Input type="date" /></Form.Item>
+          <Form.Item name="startDate" label="Start Date" initialValue={dayjs()} rules={[{ required: true, message: 'Start date is required' }]}><DatePicker format={DATE_FORMAT} style={{ width: '100%' }} /></Form.Item>
           <Form.Item name="mode" label="Mode" initialValue="ON_CAMPUS" rules={[{ required: true }]}>
             <Select options={EVENT_MODE_OPTIONS} />
           </Form.Item>

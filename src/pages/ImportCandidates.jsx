@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   Card, Steps, Upload, Button, Table, Select, InputNumber, Form, Input, Radio,
-  Progress, Alert, Space, Tag, Typography, message,
+  Progress, Alert, Space, Tag, Typography, message, DatePicker,
 } from 'antd'
 import { InboxOutlined, DownloadOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
@@ -13,6 +13,8 @@ import { getEvents } from '../api/events'
 import { getPositionTypes } from '../api/positions'
 import { getColleges } from '../api/colleges'
 import { getErrorMessage } from '../utils/errorUtils'
+import dayjs from 'dayjs'
+import { DATE_FORMAT } from '../utils/dates'
 
 const { Text } = Typography
 
@@ -94,9 +96,11 @@ export default function ImportCandidates() {
       return
     }
     try {
-      const values = await newEventForm.validateFields()
-      // An empty date input posts '' — the backend can't parse that as a LocalDate.
-      setNewEvent(Object.fromEntries(Object.entries(values).filter(([, v]) => v !== '' && v != null)))
+      const { startDate, ...values } = await newEventForm.validateFields()
+      // An empty field posts '' or nothing — the backend can't parse that as a LocalDate.
+      // The event is named for its start date's year (e.g. "IIT Madras 2026").
+      setNewEvent(Object.fromEntries(Object.entries({ ...values, recruitmentYear: startDate.year(), startDate: startDate.format('YYYY-MM-DD') })
+        .filter(([, v]) => v !== '' && v != null)))
       setStep(3)
     } catch {
       // validateFields already highlights the offending field
@@ -299,11 +303,7 @@ export default function ImportCandidates() {
                 <Form.Item name="collegeId" label="College" rules={[{ required: true }]}>
                   <Select options={(colleges ?? []).map((c) => ({ value: c.id, label: c.name }))} />
                 </Form.Item>
-                <Form.Item name="recruitmentYear" label="Year" rules={[{ required: true }]}
-                  initialValue={new Date().getFullYear()}>
-                  <InputNumber style={{ width: '100%' }} />
-                </Form.Item>
-                <Form.Item name="startDate" label="Start Date"><Input type="date" /></Form.Item>
+                <Form.Item name="startDate" label="Start Date" initialValue={dayjs()} rules={[{ required: true, message: 'Start date is required' }]}><DatePicker format={DATE_FORMAT} style={{ width: '100%' }} /></Form.Item>
                 <Form.Item name="status" label="Status" initialValue="UPCOMING">
                   <Select options={['UPCOMING', 'ACTIVE', 'COMPLETED', 'CANCELLED'].map((s) => ({ value: s }))} />
                 </Form.Item>

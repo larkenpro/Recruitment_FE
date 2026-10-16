@@ -70,6 +70,7 @@ import { getErrorMessage } from '../utils/errorUtils'
 import { GUTTER, useLayoutMetrics } from '../theme'
 import { PIPELINE_STAGES, useStageDecision } from '../hooks/useStageDecision'
 import { SCORE_RULE } from '../components/validation/rules'
+import { DATE_FORMAT, formatDate, formatDateTime } from '../utils/dates'
 
 const { Title, Text } = Typography
 const STATUS_COLOR = { SHORTLISTED: 'green', HOLD: 'orange', REJECTED: 'red' }
@@ -441,7 +442,7 @@ export default function CandidateDetail() {
                   <Text type="secondary" style={{ fontSize: 12 }}>
                     Date
                   </Text>
-                  <div>{round.evaluatedAt ? new Date(round.evaluatedAt).toLocaleDateString() : '—'}</div>
+                  <div>{formatDate(round.evaluatedAt)}</div>
                 </Col>
                 {round.comments && (
                   <Col xs={24}>
@@ -471,7 +472,7 @@ export default function CandidateDetail() {
           <Descriptions.Item label="Email">{candidate.email}</Descriptions.Item>
           <Descriptions.Item label="Recruitment data consent">
             {selectedApplication?.consentedAt
-              ? `Given ${new Date(selectedApplication.consentedAt).toLocaleString()}`
+              ? `Given ${formatDateTime(selectedApplication.consentedAt)}`
               : 'Not recorded'}
           </Descriptions.Item>
           <Descriptions.Item label="Phone">{candidate.phone}</Descriptions.Item>
@@ -650,7 +651,7 @@ export default function CandidateDetail() {
                   <FileTextOutlined style={{ color: '#4f46e5', fontSize: 16 }} />
                   <Text strong>{resumeData.fileName}</Text>
                   <Text type="secondary" style={{ fontSize: 12 }}>
-                    Uploaded: {resumeData.uploadedAt ? new Date(resumeData.uploadedAt).toLocaleDateString() : '—'}
+                    Uploaded: {formatDate(resumeData.uploadedAt)}
                   </Text>
                 </Space>
                 <Button size="small" icon={<DownloadOutlined />} href={resumeBlobUrl} download={resumeData.fileName} disabled={!resumeBlobUrl}>
@@ -732,7 +733,7 @@ export default function CandidateDetail() {
                 <Row gutter={GUTTER}>
                   <Col xs={24} sm={12}>
                     <Form.Item name="offerDate" label="Offer Date">
-                      <DatePicker style={{ width: '100%' }} />
+                      <DatePicker style={{ width: '100%' }} format={DATE_FORMAT} />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12}>
@@ -774,7 +775,7 @@ export default function CandidateDetail() {
             <div>
               <Descriptions column={{ xs: 1, sm: 2 }} bordered size="small" style={{ marginBottom: 16 }}>
                 <Descriptions.Item label="Offer Date">
-                  {offerData.offerDate ? new Date(offerData.offerDate).toLocaleDateString() : '—'}
+                  {formatDate(offerData.offerDate)}
                 </Descriptions.Item>
                 <Descriptions.Item label="Location">
                   {offerData.location ? <Tag color="blue">{offerData.location}</Tag> : '—'}
@@ -843,7 +844,7 @@ export default function CandidateDetail() {
         <Timeline
           mode="left"
           items={allHistory.map((h) => ({
-            label: h.changedAt ? new Date(h.changedAt).toLocaleString() : '—',
+            label: formatDateTime(h.changedAt),
             color: STATUS_COLOR[h.status] ?? 'blue',
             children: (
               <Space size={4} wrap>
@@ -1107,7 +1108,7 @@ export default function CandidateDetail() {
             {
               title: 'Uploaded',
               dataIndex: 'uploadedAt',
-              render: (d) => d ? new Date(d).toLocaleDateString() : '—',
+              render: formatDate,
             },
             {
               title: 'Actions',

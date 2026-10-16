@@ -11,6 +11,9 @@ import FilterBar from '../components/FilterBar'
 import { OfferResponseCell, OfferedPositionCell } from '../components/OfferPairSelect'
 import { useColumnChoice } from '../components/ColumnPicker'
 import { useCandidateColumns } from '../components/CandidateColumns'
+import DownloadExcel from '../components/DownloadExcel'
+import { labelFor } from '../utils/columns'
+import { offerResponse, offeredLabel } from '../utils/offers'
 import { getErrorMessage } from '../utils/errorUtils'
 
 const AFTER_OFFER = PIPELINE_STAGES.slice(PIPELINE_STAGES.indexOf('Offer') + 1)
@@ -77,6 +80,7 @@ export default function Offers() {
   const stageColumn = (stageName, key, title) => ({
     key,
     title,
+    exportValue: (r) => labelFor(optionsFor(stageName), r.stages[stageName]),
     render: (_, r) => {
       if (!(stageName in r.stages)) return '—'
       const key = rowKey(r)
@@ -105,6 +109,7 @@ export default function Offers() {
     {
       key: 'offered',
       title: 'Offered position',
+      exportValue: (r) => offeredLabel(r.offer),
       render: (_, r) => (
         <OfferedPositionCell
           candidateId={r.candidateId}
@@ -118,6 +123,7 @@ export default function Offers() {
     {
       key: 'response',
       title: 'Offer Response',
+      exportValue: (r) => (r.stages.Offer === 'SHORTLISTED' ? offerResponse(r.offer?.status).label : null),
       // Only an offer actually made (Shortlisted) can be accepted or rejected.
       render: (_, r) => (r.stages.Offer === 'SHORTLISTED'
         ? <OfferResponseCell candidateId={r.candidateId} eventId={r.eventId} offer={r.offer} />
@@ -136,7 +142,10 @@ export default function Offers() {
 
   return (
     <Card title="Offers" bordered={false} style={{ borderRadius: 12 }}>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>{columnPicker}</div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12 }}>
+        {columnPicker}
+        <DownloadExcel title="Offers" columns={columns} rows={filteredData} />
+      </div>
       <FilterBar
         filterKeys={FILTER_KEYS}
         optionMap={optionMap}

@@ -88,6 +88,7 @@ export default function PipelineGraph({ eventId, graph, onSaved, counts, selecte
   const switchMode = (next) => {
     if (next === 'view' && dirty) {
       Modal.confirm({
+        centered: true,
         title: 'Leave without saving?',
         content: 'Your unsaved changes to the rounds will be lost.',
         okText: 'Leave',

@@ -75,6 +75,10 @@ import { useCandidateColumns } from '../components/CandidateColumns'
 import PipelineGraph from '../components/PipelineGraph'
 import { hasReached, isStageKey, roundsBefore, stageKey, stageOf } from '../utils/roundGraph'
 import { useColumnChoice } from '../components/ColumnPicker'
+import DownloadExcel from '../components/DownloadExcel'
+import { labelFor } from '../utils/columns'
+import { offerResponse, offeredLabel } from '../utils/offers'
+import { DATE_FORMAT, defaultLinkExpiry, formatDate } from '../utils/dates'
 
 const { Title, Text } = Typography
 
@@ -133,7 +137,8 @@ export default function EventDetail() {
 
   // { url, until } once generated; `until` is the expiry it was generated with.
   const [link, setLink] = useState(null)
-  const [linkExpiry, setLinkExpiry] = useState(() => dayjs().add(30, 'day'))
+  // null until picked: the default follows the event's start date, which loads later.
+  const [pickedLinkExpiry, setLinkExpiry] = useState(null)
   const [positionForm] = Form.useForm()
   const [pendingCandidateId, setPendingCandidateId] = useState(null)
   const [groupCount, setGroupCount] = useState(null)
@@ -495,6 +500,8 @@ export default function EventDetail() {
   if (!event) return <Empty />
 
   const sortedRounds = roundGraph?.rounds ?? []
+  const linkExpiry = pickedLinkExpiry ?? defaultLinkExpiry(event.startDate)
+  const eventTitle = `${event.college?.name ?? 'Event'} ${event.recruitmentYear ?? ''}`.trim()
   const untypedPositions = (eventPositions ?? []).filter((p) => !(p.types?.length))
 
   // Candidates the round graph has brought to this round (it's open for them, or already marked).
@@ -521,6 +528,7 @@ export default function EventDetail() {
       {
         key: 'decision',
         title: 'Offer Status',
+        exportValue: (r) => labelFor(OFFER_DECISION_OPTIONS, summaryMap[r.id]?.status),
         render: (_, r) => (
           <Select
             size="small"
@@ -542,6 +550,7 @@ export default function EventDetail() {
       ...(eventOffers ? [{
         key: 'offered',
         title: 'Offered position',
+        exportValue: (r) => offeredLabel(eventOffers[r.id]),
         render: (_, r) => (
           <OfferedPositionCell
             candidateId={r.id}
@@ -554,6 +563,7 @@ export default function EventDetail() {
       }, {
         key: 'response',
         title: 'Offer Response',
+        exportValue: (r) => (summaryMap[r.id]?.status === 'SHORTLISTED' ? offerResponse(eventOffers[r.id]?.status).label : null),
         // Only an offer actually made (Shortlisted) can be accepted or rejected.
         render: (_, r) => (summaryMap[r.id]?.status === 'SHORTLISTED'
           ? <OfferResponseCell candidateId={r.id} eventId={Number(id)} offer={eventOffers[r.id]} />
@@ -563,7 +573,10 @@ export default function EventDetail() {
     ], ['decision', 'response', 'name', 'rollNo', 'branch', 'offered'])
     return (
       <>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>{offerColumnPicker}</div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12 }}>
+          {offerColumnPicker}
+          <DownloadExcel title={`${eventTitle} - ${stageName}`} columns={offerColumns} rows={filteredData} />
+        </div>
         <FilterBar
           filterKeys={LATE_STAGE_FILTER_KEYS}
           optionMap={optionMap}
@@ -902,6 +915,7 @@ export default function EventDetail() {
       {
         key: 'result',
         title: 'Round Decision',
+        exportValue: (r) => labelFor(ROUND_RESULT_OPTIONS, roundResultMap[round.id]?.[r.id]?.result) ?? 'Pending',
         render: (_, r) => {
           if (isEditing) return (
             <Select
@@ -925,6 +939,7 @@ export default function EventDetail() {
       {
         key: 'score',
         title: 'Score',
+        exportValue: (r) => roundResultMap[round.id]?.[r.id]?.score,
         render: (_, r) => {
           if (isEditing) return (
             <InputNumber
@@ -945,11 +960,13 @@ export default function EventDetail() {
       ...earlierRounds.map((prev) => ({
         key: `score:${prev.key}`,
         title: `${prev.name} score`,
+        exportValue: (r) => roundResultMap[prev.id]?.[r.id]?.score,
         render: (_, r) => roundResultMap[prev.id]?.[r.id]?.score ?? '—',
       })),
       {
         key: 'interviewer',
         title: 'Interviewer',
+        exportValue: (r) => roundResultMap[round.id]?.[r.id]?.interviewer,
         render: (_, r) => {
           if (isEditing) return (
             <Input
@@ -966,6 +983,7 @@ export default function EventDetail() {
       {
         key: 'comments',
         title: 'Comments',
+        exportValue: (r) => roundResultMap[round.id]?.[r.id]?.comments,
         render: (_, r) => {
           if (isEditing) return (
             <Input
@@ -982,6 +1000,7 @@ export default function EventDetail() {
       ...(isLastRound ? [{
         key: 'roundsDecision',
         title: 'Overall Rounds Decision',
+        exportValue: (r) => labelFor(ROUND_DECISION_OPTIONS, roundsStageSummaryMap[r.id]?.status),
         render: (_, r) => (
           <Select
             size="small"
@@ -1005,6 +1024,12 @@ export default function EventDetail() {
       ['result', 'name', 'rollNo', 'score', ...earlierRounds.map((prev) => `score:${prev.key}`), 'interviewer'],
     )
 
+    // A GD round shown as group cards downloads as one sheet, with each candidate's group first.
+    const groupOf = Object.fromEntries((groups ?? []).flatMap((g) => g.members.map((m) => [m.id, g.name])))
+    const roundExportColumns = round.roundType === 'GROUP_DISCUSSION' && (groups ?? []).length > 0
+      ? [{ title: 'Group', exportValue: (r) => groupOf[r.id] ?? 'Unassigned' }, ...roundColumns]
+      : roundColumns
+
     const editControls = (
       <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
         <Select
@@ -1019,6 +1044,7 @@ export default function EventDetail() {
         />
         <Space>
           {roundColumnPicker}
+          <DownloadExcel title={`${eventTitle} - ${round.name}`} columns={roundExportColumns} rows={displayCandidates} />
           {isEditing ? (
             <>
               <Button size="small" onClick={() => { setEditingRoundId(null); setRoundTableEdits({}) }}>Cancel</Button>
@@ -1125,6 +1151,7 @@ export default function EventDetail() {
     {
       key: 'decision',
       title: 'Decision',
+      exportValue: (r) => labelFor(RESUME_STATUS_OPTIONS, r.resumeStatus),
       render: (_, r) => (
         <Select
           size="small"
@@ -1148,6 +1175,7 @@ export default function EventDetail() {
     <>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12 }}>
         {resumeColumnPicker}
+        <DownloadExcel title={`${eventTitle} - Resume`} columns={resumeColumns} rows={filteredCandidates} />
         <Button icon={<UserAddOutlined />} onClick={() => addCandidate(id)}>
           Add Candidate
         </Button>
@@ -1264,7 +1292,7 @@ export default function EventDetail() {
               </div>
             </div>
             <Descriptions column={1} size="small">
-              <Descriptions.Item label="Start Date">{event.startDate ?? '—'}</Descriptions.Item>
+              <Descriptions.Item label="Start Date">{formatDate(event.startDate)}</Descriptions.Item>
               <Descriptions.Item label="City">{event.college?.city ?? '—'}</Descriptions.Item>
               <Descriptions.Item label="Tier">{event.college?.tier ?? '—'}</Descriptions.Item>
               <Descriptions.Item label="Mode">
@@ -1340,7 +1368,7 @@ export default function EventDetail() {
                   value={linkExpiry}
                   onChange={setLinkExpiry}
                   allowClear={false}
-                  format="D MMM YYYY"
+                  format={DATE_FORMAT}
                   disabledDate={(d) => d.isBefore(dayjs(), 'day')}
                   style={{ width: '100%', marginTop: 4 }}
                 />
@@ -1368,7 +1396,7 @@ export default function EventDetail() {
                       Copy
                     </Button>
                   </Space.Compact>
-                  <Text type="secondary" style={{ fontSize: 12 }}>Valid through {link.until.format('D MMM YYYY')}</Text>
+                  <Text type="secondary" style={{ fontSize: 12 }}>Valid through {link.until.format(DATE_FORMAT)}</Text>
                 </>
               )}
             </div>

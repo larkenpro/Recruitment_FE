@@ -58,6 +58,7 @@ export function useCandidateColumns(positionsFor) {
     preferences: {
       key: 'preferences',
       title: 'Preferences',
+      exportValue: (r) => (r.preferences ?? []).map((p, i) => `${i + 1}. ${preferenceLabel(p)}`).join('\n'),
       render: (_, r) => (r.preferences ?? []).map((p, i) => (
         <div key={i} style={{ whiteSpace: 'nowrap' }}>{i + 1}. {preferenceLabel(p)}</div>
       )),
@@ -66,11 +67,13 @@ export function useCandidateColumns(positionsFor) {
       key: 'backlogs',
       title: 'Backlogs',
       dataIndex: 'backlogs',
+      exportValue: (r) => r.backlogs ?? 0,
       render: (v) => <Tag color={(v ?? 0) === 0 ? 'green' : 'red'}>{v ?? 0}</Tag>,
     },
     resume: {
       key: 'resume',
       title: 'Resume',
+      noExport: true,
       render: (_, r) => (
         <Button size="small" icon={<FileTextOutlined />} onClick={() => viewResume(r.candidateId)}>
           View
@@ -80,6 +83,7 @@ export function useCandidateColumns(positionsFor) {
     details: {
       key: 'details',
       title: 'Details',
+      noExport: true,
       render: (_, r) => (
         <Button size="small" icon={<EditOutlined />} onClick={() => setEditing({ eventId: r.eventId, application: r })}>
           Edit

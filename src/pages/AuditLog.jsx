@@ -5,6 +5,7 @@ import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import { getAuditLog } from '../api/audit'
 import { SPACE, TEXT } from '../theme'
+import { DATE_FORMAT, DATE_TIME_FORMAT } from '../utils/dates'
 
 const { RangePicker } = DatePicker
 
@@ -57,7 +58,7 @@ export default function AuditLog() {
       title: 'When',
       dataIndex: 'occurredAt',
       width: 170,
-      render: (value) => dayjs(value).format('DD MMM YYYY, HH:mm:ss'),
+      render: (value) => dayjs(value).format(`${DATE_FORMAT}, HH:mm:ss`),
     },
     { title: 'User', dataIndex: 'username', width: 140, render: (value) => value || <Tag>anonymous</Tag> },
     {
@@ -113,7 +114,7 @@ export default function AuditLog() {
             onChange={(value) => update({ method: value })}
             options={METHODS.map((m) => ({ value: m, label: m }))}
           />
-          <RangePicker showTime value={range} onChange={(value) => { setRange(value); setPage(1) }} />
+          <RangePicker showTime format={DATE_TIME_FORMAT} value={range} onChange={(value) => { setRange(value); setPage(1) }} />
           <Space size={SPACE.xxs}>
             <Switch checked={filters.failuresOnly} onChange={(value) => update({ failuresOnly: value })} />
             <span>Failures only</span>

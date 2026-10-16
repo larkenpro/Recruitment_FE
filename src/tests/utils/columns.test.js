@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { placeKey, resolveChoice, saveChoice, toggleKey } from '../../utils/columns'
+import { placeKey, resolveChoice, saveChoice, tableToSheet, toggleKey } from '../../utils/columns'
 
 describe('placeKey', () => {
   const keys = ['a', 'b', 'c', 'd']
@@ -61,5 +61,21 @@ describe('resolveChoice / saveChoice', () => {
     const second = saveChoice(first, ['name'], ['name'])
     expect(second.seen).toEqual(['name', 'response'])
     expect(resolveChoice(second, defaults)).toEqual(['name', 'status'])
+  })
+})
+
+describe('tableToSheet', () => {
+  const columns = [
+    { title: 'Decision', exportValue: (r) => (r.status === 'HOLD' ? 'WaitList' : r.status) },
+    { title: 'Name', dataIndex: 'name' },
+    { title: 'CGPA', dataIndex: 'ugCgpa' },
+    { title: 'Resume', noExport: true },
+  ]
+
+  it('keeps the shown order, uses what each column displays, and leaves out button columns', () => {
+    expect(tableToSheet(columns, [{ status: 'HOLD', name: 'Asha', ugCgpa: 8.4 }, { name: 'Ben' }])).toEqual({
+      columns: ['Decision', 'Name', 'CGPA'],
+      rows: [['WaitList', 'Asha', 8.4], [null, 'Ben', null]],
+    })
   })
 })

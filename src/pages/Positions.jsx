@@ -91,6 +91,7 @@ export default function Positions() {
       && isSimilar(p.title, values.title))
     if (!dupes.length) return save(values)
     Modal.confirm({
+      centered: true,
       title: 'Possible duplicate position',
       content: (
         <>
