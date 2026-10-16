@@ -83,6 +83,16 @@ export const defaultTemplate = (pairs) => ({
   ],
 })
 
+// Every round with a path of arrows into this one, in graph order: where a candidate's earlier scores come from.
+export const roundsBefore = (graph, key) => {
+  const before = new Set()
+  const visit = (to) => graph.edges
+    .filter((e) => e.to === to && !isPairKey(e.from) && !before.has(e.from))
+    .forEach((e) => { before.add(e.from); visit(e.from) })
+  visit(key)
+  return graph.rounds.filter((r) => before.has(r.key))
+}
+
 // A round status (from /round-progress) that means the candidate has reached the round.
 export const hasReached = (status) => status != null && status !== 'LOCKED' && status !== 'NOT_APPLICABLE'
 

@@ -43,6 +43,24 @@ export default function FilterBar({ filterKeys, optionMap, filters, setFilter, r
             )
           }
 
+          if (type === 'multi') {
+            return (
+              <Select
+                key={key}
+                mode="multiple"
+                placeholder={`Filter by ${label}`}
+                size="small"
+                style={isMobile ? { width: '100%' } : { minWidth: 220 }}
+                allowClear
+                maxTagCount="responsive"
+                value={filters[key] ?? []}
+                options={optionMap[key] ?? []}
+                onChange={vals => setFilter(key, vals.length ? vals : null)}
+                suffixIcon={<FilterOutlined style={{ pointerEvents: 'none', color: INK.faint }} />}
+              />
+            )
+          }
+
           return (
             <Select
               key={key}
@@ -65,6 +83,9 @@ export default function FilterBar({ filterKeys, optionMap, filters, setFilter, r
             const filterDef = filterKeys.find(f => f.key === key)
             const label = filterDef?.label ?? key
             const prefix = filterDef?.type === 'min' ? '≥' : filterDef?.type === 'max' ? '≤' : null
+            // Show the options' labels (e.g. WaitList), not the stored values (HOLD).
+            const labelOf = (v) => optionMap[key]?.find(o => o.value === v)?.label ?? v
+            const shown = Array.isArray(value) ? value.map(labelOf).join(', ') : labelOf(value)
             return (
               <Tag
                 key={key}
@@ -73,7 +94,7 @@ export default function FilterBar({ filterKeys, optionMap, filters, setFilter, r
                 color="blue"
                 style={{ borderRadius: RADIUS.pill, padding: `2px ${SPACE.sm}px`, fontSize: FONT_SIZE.body }}
               >
-                {label}: {prefix ? `${prefix} ${value}` : value}
+                {label}: {prefix ? `${prefix} ${value}` : shown}
               </Tag>
             )
           })}

@@ -8,10 +8,12 @@ import { useAuth } from '../context/AuthContext'
 import { PIPELINE_STAGES, useStageDecision } from '../hooks/useStageDecision'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
-import { OfferedPositionCell } from '../components/OfferPairSelect'
+import { OfferResponseCell, OfferedPositionCell } from '../components/OfferPairSelect'
+import { useColumnChoice } from '../components/ColumnPicker'
+import { useCandidateColumns } from '../components/CandidateColumns'
 import { getErrorMessage } from '../utils/errorUtils'
 
-const FROM_OFFER = PIPELINE_STAGES.slice(PIPELINE_STAGES.indexOf('Offer'))
+const AFTER_OFFER = PIPELINE_STAGES.slice(PIPELINE_STAGES.indexOf('Offer') + 1)
 
 const DECISION_OPTIONS = [
   { value: 'SHORTLISTED', label: 'Shortlisted' },
@@ -30,7 +32,7 @@ const FILTER_KEYS = [
   { key: 'branch', label: 'Branch', getVal: (r) => r.branch },
   { key: 'graduationYear', label: 'Batch', getVal: (r) => r.graduationYear },
   { key: 'stage', label: 'Stage', getVal: currentStage },
-  { key: 'offerStatus', label: 'Offer decision', getVal: (r) => r.stages.Offer },
+  { key: 'offerStatus', label: 'Offer Status', type: 'multi', getVal: (r) => r.stages.Offer },
 ]
 
 const rowKey = (r) => `${r.eventId}:${r.candidateId}`
@@ -54,7 +56,10 @@ export default function Offers() {
     })),
   }).map((q, i) => [eventIds[i], q.data]))
 
-  const { filteredData, filters, setFilter, removeFilter, optionMap: rawOptionMap } = useColumnFilter(offers, FILTER_KEYS)
+  const columnsFor = useColumnChoice()
+  const { columns: col, modals: candidateModals } = useCandidateColumns((eventId) => positionsByEvent[eventId])
+
+  const { filteredData, filters, setFilter, removeFilter, optionMap: rawOptionMap } = useColumnFilter(offers, FILTER_KEYS, { offerStatus: ['SHORTLISTED', 'HOLD'] })
   const optionMap = { ...rawOptionMap, offerStatus: OFFER_DECISION_OPTIONS }
 
   const decision = useStageDecision({
@@ -69,22 +74,36 @@ export default function Offers() {
     },
   })
 
-  const columns = [
-    {
-      title: 'Name',
-      dataIndex: 'name',
-      fixed: 'left',
-      render: (t, r) => <a onClick={() => navigate(`/candidates/${r.candidateId}`)}><strong>{t}</strong></a>,
+  const stageColumn = (stageName, key, title) => ({
+    key,
+    title,
+    render: (_, r) => {
+      if (!(stageName in r.stages)) return '—'
+      const key = rowKey(r)
+      return (
+        <Select
+          size="small"
+          style={{ width: 130 }}
+          value={r.stages[stageName]}
+          placeholder="Set decision"
+          loading={pendingKey === key && decision.isPending}
+          disabled={decision.isPending && pendingKey !== key}
+          onChange={(status) => {
+            setPendingKey(key)
+            decision.mutate({ candidateId: r.candidateId, eventId: r.eventId, stageName, status })
+          }}
+          options={optionsFor(stageName)}
+        />
+      )
     },
-    { title: 'College', dataIndex: 'collegeName' },
+  })
+
+  // The same columns and defaults as the event page's Offer table, plus where each candidate is from.
+  const { shown: columns, picker: columnPicker } = columnsFor('offers', [
+    stageColumn('Offer', 'decision', 'Offer Status'),
+    col.name, col.rollNo, col.email, col.phone, col.branch, col.batch, col.ugCgpa, col.preferences, col.backlogs, col.resume,
     {
-      title: 'Event',
-      dataIndex: 'recruitmentYear',
-      render: (y, r) => (hasPage('EVENTS') ? <a onClick={() => navigate(`/events/${r.eventId}`)}>{y}</a> : y),
-    },
-    { title: 'Branch', dataIndex: 'branch', render: (v) => v || '—' },
-    { title: 'Batch', dataIndex: 'graduationYear', render: (v) => v ?? '—' },
-    {
+      key: 'offered',
       title: 'Offered position',
       render: (_, r) => (
         <OfferedPositionCell
@@ -96,32 +115,28 @@ export default function Offers() {
         />
       ),
     },
-    ...FROM_OFFER.map((stageName) => ({
-      title: stageName,
-      render: (_, r) => {
-        if (!(stageName in r.stages)) return '—'
-        const key = rowKey(r)
-        return (
-          <Select
-            size="small"
-            style={{ width: 130 }}
-            value={r.stages[stageName]}
-            placeholder="Set decision"
-            loading={pendingKey === key && decision.isPending}
-            disabled={decision.isPending && pendingKey !== key}
-            onChange={(status) => {
-              setPendingKey(key)
-              decision.mutate({ candidateId: r.candidateId, eventId: r.eventId, stageName, status })
-            }}
-            options={optionsFor(stageName)}
-          />
-        )
-      },
-    })),
-  ]
+    {
+      key: 'response',
+      title: 'Offer Response',
+      // Only an offer actually made (Shortlisted) can be accepted or rejected.
+      render: (_, r) => (r.stages.Offer === 'SHORTLISTED'
+        ? <OfferResponseCell candidateId={r.candidateId} eventId={r.eventId} offer={r.offer} />
+        : '—'),
+    },
+    col.details,
+    { key: 'college', title: 'College', dataIndex: 'collegeName' },
+    {
+      key: 'event',
+      title: 'Event',
+      dataIndex: 'recruitmentYear',
+      render: (y, r) => (hasPage('EVENTS') ? <a onClick={() => navigate(`/events/${r.eventId}`)}>{y}</a> : y),
+    },
+    ...AFTER_OFFER.map((stageName) => stageColumn(stageName, stageName, stageName)),
+  ], ['decision', 'response', 'name', 'rollNo', 'branch', 'offered'])
 
   return (
     <Card title="Offers" bordered={false} style={{ borderRadius: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>{columnPicker}</div>
       <FilterBar
         filterKeys={FILTER_KEYS}
         optionMap={optionMap}
@@ -136,6 +151,7 @@ export default function Offers() {
         loading={isLoading}
         scroll={{ x: 'max-content' }}
       />
+      {candidateModals}
     </Card>
   )
 }

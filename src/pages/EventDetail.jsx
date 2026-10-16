@@ -4,7 +4,6 @@ import {
   CopyOutlined,
   DeleteOutlined,
   EditOutlined,
-  FileTextOutlined,
   LinkOutlined,
   TeamOutlined,
   UnorderedListOutlined,
@@ -41,7 +40,7 @@ import {
   message,
 } from 'antd'
 import { useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import {
   addEventPositions,
   generateLink,
@@ -62,20 +61,20 @@ import {
   updateEventStatus,
 } from '../api/events'
 import { getPositions, getPositionTypes } from '../api/positions'
-import { preferenceLabel } from '../utils/preferences'
 import { EVENT_MODE_OPTIONS, eventMode } from '../utils/eventModes'
 import PositionTypeFields, { toEventPositions } from '../components/PositionTypeFields'
-import { getCandidateResume, getResumeFile, getOffers, updateRoundResult, addStageEntry, updateStageStatusByName } from '../api/candidates'
+import { getOffers, updateRoundResult, addStageEntry, updateStageStatusByName } from '../api/candidates'
 import { useAuth } from '../context/AuthContext'
-import { OfferedPositionCell } from '../components/OfferPairSelect'
+import { OfferResponseCell, OfferedPositionCell } from '../components/OfferPairSelect'
 import { getErrorMessage } from '../utils/errorUtils'
 import { GUTTER, useLayoutMetrics } from '../theme'
 import { useStageDecision } from '../hooks/useStageDecision'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
-import EventApplicationModal from '../components/EventApplicationModal'
+import { useCandidateColumns } from '../components/CandidateColumns'
 import PipelineGraph from '../components/PipelineGraph'
-import { hasReached, isStageKey, stageKey, stageOf } from '../utils/roundGraph'
+import { hasReached, isStageKey, roundsBefore, stageKey, stageOf } from '../utils/roundGraph'
+import { useColumnChoice } from '../components/ColumnPicker'
 
 const { Title, Text } = Typography
 
@@ -84,20 +83,20 @@ const CANDIDATE_FILTER_KEYS = [
   { key: 'graduationYear', label: 'Batch', getVal: (r) => r.graduationYear },
   { key: 'ugCgpa', label: 'CGPA', type: 'min', getVal: (r) => r.ugCgpa },
   { key: 'backlogs', label: 'Backlogs', type: 'max', getVal: (r) => r.backlogs ?? 0 },
-  { key: 'resumeStatus', label: 'Resume Result', getVal: (r) => r.resumeStatus },
+  { key: 'resumeStatus', label: 'Decision', getVal: (r) => r.resumeStatus },
 ]
 
 const ROUND_FILTER_KEYS = [
   { key: 'branch', label: 'Branch', getVal: (r) => r.branch },
   { key: 'graduationYear', label: 'Batch', getVal: (r) => r.graduationYear },
   { key: 'backlogs', label: 'Backlogs', type: 'max', getVal: (r) => r.backlogs ?? 0 },
-  { key: 'roundsDecision', label: 'Decision', getVal: (r) => r.roundsDecision },
+  { key: 'roundsDecision', label: 'Overall Rounds Decision', getVal: (r) => r.roundsDecision },
 ]
 
 const LATE_STAGE_FILTER_KEYS = [
   { key: 'branch', label: 'Branch', getVal: (r) => r.branch },
   { key: 'graduationYear', label: 'Batch', getVal: (r) => r.graduationYear },
-  { key: 'stageStatus', label: 'Decision', getVal: (r) => r.stageStatus },
+  { key: 'stageStatus', label: 'Offer Status', getVal: (r) => r.stageStatus },
 ]
 
 const RESUME_STATUS_OPTIONS = [
@@ -130,14 +129,12 @@ const STATUS_COLOR = { UPCOMING: 'blue', ACTIVE: 'green', COMPLETED: 'default', 
 export default function EventDetail() {
   const { id } = useParams()
   const { sectionGap } = useLayoutMetrics()
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
 
   // { url, until } once generated; `until` is the expiry it was generated with.
   const [link, setLink] = useState(null)
   const [linkExpiry, setLinkExpiry] = useState(() => dayjs().add(30, 'day'))
   const [positionForm] = Form.useForm()
-  const [resumeModal, setResumeModal] = useState({ open: false, candidateId: null, fileName: null, blobUrl: null })
   const [pendingCandidateId, setPendingCandidateId] = useState(null)
   const [groupCount, setGroupCount] = useState(null)
   const [editingGroup, setEditingGroup] = useState(null)
@@ -148,11 +145,10 @@ export default function EventDetail() {
   const [roundTableEdits, setRoundTableEdits] = useState({})
   const [pendingRoundCandidateId, setPendingRoundCandidateId] = useState(null)
   const [pendingPipelineCandidateId, setPendingPipelineCandidateId] = useState(null)
-  // { application: null } to add a candidate, { application: row } to edit theirs; null when closed.
-  const [applicationModal, setApplicationModal] = useState(null)
   // The pipeline graph node whose candidates are listed: a stage key, or a round id as text.
   const [selectedStage, setSelectedStage] = useState(stageKey('Resume'))
   const [roundStatusFilter, setRoundStatusFilter] = useState([])
+  const columnsFor = useColumnChoice()
 
   const { data: event, isLoading } = useQuery({
     queryKey: ['event', id],
@@ -175,6 +171,9 @@ export default function EventDetail() {
     queryKey: ['eventPositions', id],
     queryFn: () => getEventPositions(id).then((r) => r.data.data),
   })
+
+  // Every row here is from this event, so the editor always gets its positions.
+  const { columns: col, modals: candidateModals, addCandidate } = useCandidateColumns(() => eventPositions)
 
   const { data: allPositions } = useQuery({
     queryKey: ['positions'],
@@ -470,28 +469,6 @@ export default function EventDetail() {
     onError: (err) => message.error(getErrorMessage(err)),
   })
 
-  // /resume/view and /resume/download require a JWT, which a plain <iframe src>/<a href>
-  // can't send — fetch the bytes through the authed axios instance and hand the
-  // iframe/download button a blob: URL instead (mirrors CandidateDetail.jsx).
-  const handleViewResume = async (candidateId) => {
-    try {
-      const res = await getCandidateResume(candidateId)
-      const fileName = res.data.data?.fileName ?? null
-      const fileRes = await getResumeFile(candidateId)
-      const blobUrl = URL.createObjectURL(fileRes.data)
-      setResumeModal({ open: true, candidateId, fileName, blobUrl })
-    } catch {
-      message.error('No resume found for this candidate')
-    }
-  }
-
-  const closeResumeModal = () => {
-    setResumeModal((prev) => {
-      if (prev.blobUrl) URL.revokeObjectURL(prev.blobUrl)
-      return { open: false, candidateId: null, fileName: null, blobUrl: null }
-    })
-  }
-
   const handleGenerateLink = async () => {
     if ((eventPositions?.length ?? 0) === 0) {
       message.warning('Add at least one position before generating the application link.')
@@ -530,6 +507,7 @@ export default function EventDetail() {
     (p) => !(eventPositions ?? []).some((ep) => ep.id === p.id)
   )
 
+
   const LATE_STAGE_NAMES = ['Offer']
 
   const renderLateStageTab = (stageName) => {
@@ -539,8 +517,53 @@ export default function EventDetail() {
     if (totalCount === 0) {
       return <Empty description={`No candidates at the ${stageName} stage yet`} />
     }
+    const { shown: offerColumns, picker: offerColumnPicker } = columnsFor(`stage:${stageName}`, [
+      {
+        key: 'decision',
+        title: 'Offer Status',
+        render: (_, r) => (
+          <Select
+            size="small"
+            style={{ width: 140 }}
+            value={summaryMap[r.id]?.status ?? null}
+            placeholder="Set decision"
+            loading={pendingPipelineCandidateId === r.id && pipelineDecisionMutation.isPending}
+            disabled={pipelineDecisionMutation.isPending && pendingPipelineCandidateId !== r.id}
+            onChange={(status) => {
+              setPendingPipelineCandidateId(r.id)
+              pipelineDecisionMutation.mutate({ candidateId: r.id, eventId: Number(id), stageName, status, ensureStarted: true })
+            }}
+            options={OFFER_DECISION_OPTIONS}
+          />
+        ),
+      },
+      col.name, col.rollNo, col.email, col.phone, col.branch, col.batch, col.ugCgpa, col.preferences, col.backlogs, col.resume,
+      // Shown once the offers are in, so a pick never saves over details not yet loaded.
+      ...(eventOffers ? [{
+        key: 'offered',
+        title: 'Offered position',
+        render: (_, r) => (
+          <OfferedPositionCell
+            candidateId={r.id}
+            eventId={Number(id)}
+            offer={eventOffers[r.id]}
+            eventPositions={eventPositions}
+            preferences={r.preferences}
+          />
+        ),
+      }, {
+        key: 'response',
+        title: 'Offer Response',
+        // Only an offer actually made (Shortlisted) can be accepted or rejected.
+        render: (_, r) => (summaryMap[r.id]?.status === 'SHORTLISTED'
+          ? <OfferResponseCell candidateId={r.id} eventId={Number(id)} offer={eventOffers[r.id]} />
+          : '—'),
+      }] : []),
+      col.details,
+    ], ['decision', 'response', 'name', 'rollNo', 'branch', 'offered'])
     return (
       <>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>{offerColumnPicker}</div>
         <FilterBar
           filterKeys={LATE_STAGE_FILTER_KEYS}
           optionMap={optionMap}
@@ -554,53 +577,7 @@ export default function EventDetail() {
           size="small"
           pagination={{ pageSize: 10 }}
           scroll={{ x: 'max-content' }}
-          columns={[
-            {
-              title: 'Name',
-              dataIndex: 'name',
-              render: (t, r) => (
-                <a onClick={() => navigate(`/candidates/${r.id}`)}>
-                  <strong>{t}</strong>
-                </a>
-              ),
-            },
-            { title: 'Roll No', dataIndex: 'rollNo', render: (v) => v || '—' },
-            { title: 'Email', dataIndex: 'email' },
-            { title: 'Branch', dataIndex: 'branch', render: (v) => v || '—' },
-            { title: 'Batch', dataIndex: 'graduationYear', render: (v) => v ?? '—' },
-            { title: 'UG CGPA', dataIndex: 'ugCgpa', render: (v) => v ?? '—' },
-            // Shown once the offers are in, so a pick never saves over details not yet loaded.
-            ...(eventOffers ? [{
-              title: 'Offered position',
-              render: (_, r) => (
-                <OfferedPositionCell
-                  candidateId={r.id}
-                  eventId={Number(id)}
-                  offer={eventOffers[r.id]}
-                  eventPositions={eventPositions}
-                  preferences={r.preferences}
-                />
-              ),
-            }] : []),
-            {
-              title: 'Decision',
-              render: (_, r) => (
-                <Select
-                  size="small"
-                  style={{ width: 140 }}
-                  value={summaryMap[r.id]?.status ?? null}
-                  placeholder="Set decision"
-                  loading={pendingPipelineCandidateId === r.id && pipelineDecisionMutation.isPending}
-                  disabled={pipelineDecisionMutation.isPending && pendingPipelineCandidateId !== r.id}
-                  onChange={(status) => {
-                    setPendingPipelineCandidateId(r.id)
-                    pipelineDecisionMutation.mutate({ candidateId: r.id, eventId: Number(id), stageName, status, ensureStarted: true })
-                  }}
-                  options={OFFER_DECISION_OPTIONS}
-                />
-              ),
-            },
-          ]}
+          columns={offerColumns}
         />
       </>
     )
@@ -919,64 +896,12 @@ export default function EventDetail() {
       setRoundTableEdits({})
     }
 
-    const editControls = (
-      <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-        <Select
-          mode="multiple"
-          size="small"
-          style={{ minWidth: 260 }}
-          value={roundStatusFilter}
-          onChange={setRoundStatusFilter}
-          options={ROUND_STATUS_OPTIONS}
-          placeholder="Every status"
-          maxTagCount="responsive"
-        />
-        {isEditing ? (
-          <Space>
-            <Button size="small" onClick={() => { setEditingRoundId(null); setRoundTableEdits({}) }}>Cancel</Button>
-            <Button size="small" type="primary" onClick={handleRoundSave} loading={eventRoundScoreMutation.isPending}>Save</Button>
-          </Space>
-        ) : (
-          <Button size="small" icon={<EditOutlined />} onClick={initRoundEdit}>Edit Scores</Button>
-        )}
-      </div>
-    )
+    const earlierRounds = roundsBefore(roundGraph, String(round.id))
 
-    const roundColumns = [
+    const allRoundColumns = [
       {
-        title: 'Name',
-        dataIndex: 'name',
-        render: (t, r) => (
-          <a onClick={() => navigate(`/candidates/${r.id}`)}>
-            <strong>{t}</strong>
-          </a>
-        ),
-      },
-      { title: 'Roll No', dataIndex: 'rollNo', render: (v) => v || '—' },
-      { title: 'Branch', dataIndex: 'branch', render: (v) => v || '—' },
-      { title: 'Batch', dataIndex: 'graduationYear', render: (v) => v ?? '—' },
-      { title: 'UG CGPA', dataIndex: 'ugCgpa', render: (v) => v ?? '—' },
-      {
-        title: 'Score',
-        render: (_, r) => {
-          if (isEditing) return (
-            <InputNumber
-              size="small"
-              style={{ width: 80 }}
-              min={0}
-              max={100}
-              step={0.5}
-              precision={2}
-              value={roundTableEdits[r.id]?.score ?? null}
-              onChange={(val) => updateRoundEdit(r.id, 'score', val)}
-            />
-          )
-          const res = roundResultMap[round.id]?.[r.id]
-          return res?.score != null ? String(res.score) : '—'
-        },
-      },
-      {
-        title: 'Result',
+        key: 'result',
+        title: 'Round Decision',
         render: (_, r) => {
           if (isEditing) return (
             <Select
@@ -995,7 +920,35 @@ export default function EventDetail() {
           return <Tag color={color}>{res.result}</Tag>
         },
       },
+      col.name,
+      col.rollNo,
       {
+        key: 'score',
+        title: 'Score',
+        render: (_, r) => {
+          if (isEditing) return (
+            <InputNumber
+              size="small"
+              style={{ width: 80 }}
+              min={0}
+              max={100}
+              step={0.5}
+              precision={2}
+              value={roundTableEdits[r.id]?.score ?? null}
+              onChange={(val) => updateRoundEdit(r.id, 'score', val)}
+            />
+          )
+          const res = roundResultMap[round.id]?.[r.id]
+          return res?.score != null ? String(res.score) : '—'
+        },
+      },
+      ...earlierRounds.map((prev) => ({
+        key: `score:${prev.key}`,
+        title: `${prev.name} score`,
+        render: (_, r) => roundResultMap[prev.id]?.[r.id]?.score ?? '—',
+      })),
+      {
+        key: 'interviewer',
         title: 'Interviewer',
         render: (_, r) => {
           if (isEditing) return (
@@ -1009,7 +962,9 @@ export default function EventDetail() {
           return roundResultMap[round.id]?.[r.id]?.interviewer || '—'
         },
       },
+      col.email, col.phone, col.branch, col.batch, col.ugCgpa, col.preferences, col.backlogs, col.resume, col.details,
       {
+        key: 'comments',
         title: 'Comments',
         render: (_, r) => {
           if (isEditing) return (
@@ -1025,7 +980,8 @@ export default function EventDetail() {
         },
       },
       ...(isLastRound ? [{
-        title: 'Rounds Decision',
+        key: 'roundsDecision',
+        title: 'Overall Rounds Decision',
         render: (_, r) => (
           <Select
             size="small"
@@ -1043,6 +999,37 @@ export default function EventDetail() {
         ),
       }] : []),
     ]
+    const { shown: roundColumns, picker: roundColumnPicker } = columnsFor(
+      `round:${round.id}`,
+      allRoundColumns,
+      ['result', 'name', 'rollNo', 'score', ...earlierRounds.map((prev) => `score:${prev.key}`), 'interviewer'],
+    )
+
+    const editControls = (
+      <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+        <Select
+          mode="multiple"
+          size="small"
+          style={{ minWidth: 260 }}
+          value={roundStatusFilter}
+          onChange={setRoundStatusFilter}
+          options={ROUND_STATUS_OPTIONS}
+          placeholder="Every status"
+          maxTagCount="responsive"
+        />
+        <Space>
+          {roundColumnPicker}
+          {isEditing ? (
+            <>
+              <Button size="small" onClick={() => { setEditingRoundId(null); setRoundTableEdits({}) }}>Cancel</Button>
+              <Button size="small" type="primary" onClick={handleRoundSave} loading={eventRoundScoreMutation.isPending}>Save</Button>
+            </>
+          ) : (
+            <Button size="small" icon={<EditOutlined />} onClick={initRoundEdit}>Edit Scores</Button>
+          )}
+        </Space>
+      </div>
+    )
 
     // GD round with assigned groups — render per-group cards
     if (round.roundType === 'GROUP_DISCUSSION' && (groups ?? []).length > 0) {
@@ -1134,10 +1121,34 @@ export default function EventDetail() {
     )
   }
 
+  const { shown: resumeColumns, picker: resumeColumnPicker } = columnsFor('stage:Resume', [
+    {
+      key: 'decision',
+      title: 'Decision',
+      render: (_, r) => (
+        <Select
+          size="small"
+          style={{ width: 140 }}
+          value={r.resumeStatus ?? null}
+          placeholder="Set decision"
+          loading={pendingCandidateId === r.id && shortlistMutation.isPending}
+          disabled={shortlistMutation.isPending && pendingCandidateId !== r.id}
+          onChange={(status) => {
+            setPendingCandidateId(r.id)
+            shortlistMutation.mutate({ candidateId: r.id, eventId: Number(id), stageName: 'Resume', status, ensureStarted: true })
+          }}
+          options={RESUME_STATUS_OPTIONS}
+        />
+      ),
+    },
+    col.name, col.rollNo, col.email, col.phone, col.branch, col.batch, col.ugCgpa, col.preferences, col.backlogs, col.resume, col.details,
+  ], ['decision', 'name', 'rollNo', 'branch', 'ugCgpa', 'backlogs', 'resume'])
+
   const resumeContent = (
     <>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-        <Button icon={<UserAddOutlined />} onClick={() => setApplicationModal({ application: null })}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12 }}>
+        {resumeColumnPicker}
+        <Button icon={<UserAddOutlined />} onClick={() => addCandidate(id)}>
           Add Candidate
         </Button>
       </div>
@@ -1156,68 +1167,7 @@ export default function EventDetail() {
         pagination={{ pageSize: 10 }}
         scroll={{ x: 'max-content' }}
         locale={{ emptyText: 'No candidates have applied yet' }}
-        columns={[
-          {
-            title: 'Name',
-            dataIndex: 'name',
-            render: (t, r) => (
-              <a onClick={() => navigate(`/candidates/${r.id}`)}>
-                <strong>{t}</strong>
-              </a>
-            ),
-          },
-          { title: 'Roll No', dataIndex: 'rollNo', render: (v) => v || '—' },
-          { title: 'Email', dataIndex: 'email' },
-          { title: 'Phone', dataIndex: 'phone', render: (v) => v || '—' },
-          { title: 'Branch', dataIndex: 'branch', render: (v) => v || '—' },
-          { title: 'Batch', dataIndex: 'graduationYear', render: (v) => v ?? '—' },
-          { title: 'UG CGPA', dataIndex: 'ugCgpa', render: (v) => v ?? '—' },
-          {
-            title: 'Preferences',
-            render: (_, r) => (r.preferences ?? []).map((p, i) => (
-              <div key={i} style={{ whiteSpace: 'nowrap' }}>{i + 1}. {preferenceLabel(p)}</div>
-            )),
-          },
-          {
-            title: 'Backlogs',
-            dataIndex: 'backlogs',
-            render: (v) => <Tag color={(v ?? 0) === 0 ? 'green' : 'red'}>{v ?? 0}</Tag>,
-          },
-          {
-            title: 'Resume',
-            render: (_, r) => (
-              <Button size="small" icon={<FileTextOutlined />} onClick={() => handleViewResume(r.id)}>
-                View
-              </Button>
-            ),
-          },
-          {
-            title: 'Resume Result',
-            render: (_, r) => (
-              <Select
-                size="small"
-                style={{ width: 140 }}
-                value={r.resumeStatus ?? null}
-                placeholder="Set decision"
-                loading={pendingCandidateId === r.id && shortlistMutation.isPending}
-                disabled={shortlistMutation.isPending && pendingCandidateId !== r.id}
-                onChange={(status) => {
-                  setPendingCandidateId(r.id)
-                  shortlistMutation.mutate({ candidateId: r.id, eventId: Number(id), stageName: 'Resume', status, ensureStarted: true })
-                }}
-                options={RESUME_STATUS_OPTIONS}
-              />
-            ),
-          },
-          {
-            title: 'Details',
-            render: (_, r) => (
-              <Button size="small" icon={<EditOutlined />} onClick={() => setApplicationModal({ application: r })}>
-                Edit
-              </Button>
-            ),
-          },
-        ]}
+        columns={resumeColumns}
       />
     </>
   )
@@ -1459,61 +1409,8 @@ export default function EventDetail() {
         </div>
       </Card>
 
-      {/* Resume viewer modal */}
-      <Modal
-        open={resumeModal.open}
-        title={
-          <Space>
-            <FileTextOutlined style={{ color: '#4f46e5' }} />
-            <span>{resumeModal.fileName ?? 'Resume'}</span>
-          </Space>
-        }
-        onCancel={closeResumeModal}
-        footer={[
-          <Button
-            key="download"
-            href={resumeModal.blobUrl}
-            download={resumeModal.fileName}
-            disabled={!resumeModal.blobUrl}
-          >
-            Download
-          </Button>,
-          <Button key="close" type="primary" onClick={closeResumeModal}>
-            Close
-          </Button>,
-        ]}
-        width={900}
-        styles={{ body: { padding: 0 } }}
-      >
-        {resumeModal.blobUrl && resumeModal.fileName?.toLowerCase().endsWith('.pdf') ? (
-          <iframe
-            src={resumeModal.blobUrl}
-            style={{ width: '100%', height: 620, border: 'none' }}
-            title={resumeModal.fileName}
-          />
-        ) : (
-          <div style={{ textAlign: 'center', padding: 48 }}>
-            <FileTextOutlined style={{ fontSize: 40, color: '#9ca3af', marginBottom: 12 }} />
-            <div style={{ color: '#6b7280', marginBottom: 16 }}>
-              Preview not available for this file type.
-            </div>
-          </div>
-        )}
-      </Modal>
 
-      <EventApplicationModal
-        open={!!applicationModal}
-        eventId={id}
-        eventPositions={eventPositions}
-        application={applicationModal?.application}
-        onClose={() => setApplicationModal(null)}
-        onSaved={() => {
-          setApplicationModal(null)
-          queryClient.invalidateQueries({ queryKey: ['eventCandidates', id] })
-          queryClient.invalidateQueries({ queryKey: ['eventStageSummary', id] })
-          queryClient.invalidateQueries({ queryKey: ['roundGroups', id] })
-        }}
-      />
+      {candidateModals}
 
       {/* Edit group modal */}
       <Modal

@@ -65,6 +65,7 @@ import {
 import { preferenceKey, preferenceLabel } from '../utils/preferences'
 import { getEventPositions } from '../api/events'
 import OfferPairSelect from '../components/OfferPairSelect'
+import { OFFER_RESPONSES, offerResponse } from '../utils/offers'
 import { getErrorMessage } from '../utils/errorUtils'
 import { GUTTER, useLayoutMetrics } from '../theme'
 import { PIPELINE_STAGES, useStageDecision } from '../hooks/useStageDecision'
@@ -713,9 +714,9 @@ export default function CandidateDetail() {
                         offerDate: offerData.offerDate ? dayjs(offerData.offerDate) : undefined,
                         location: offerData.location,
                         offeredPair: offeredPairKey(offerData),
-                        status: offerData.status,
+                        status: offerData.status ?? '',
                       }
-                    : {}
+                    : { status: '' }
                 }
                 onFinish={({ offeredPair, ...values }) => {
                   const [offeredPositionId, offeredTypeId] = offeredPair ? offeredPair.split(':').map(Number) : [null, null]
@@ -724,6 +725,7 @@ export default function CandidateDetail() {
                     offeredPositionId,
                     offeredTypeId,
                     offerDate: values.offerDate?.format('YYYY-MM-DD') ?? null,
+                    status: values.status || null,
                   })
                 }}
               >
@@ -752,11 +754,10 @@ export default function CandidateDetail() {
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12}>
-                    <Form.Item name="status" label="Status">
+                    <Form.Item name="status" label="Offer Response">
                       <Select
-                        placeholder="Select status"
-                        allowClear
-                        options={['PENDING', 'ACCEPTED', 'DECLINED', 'WITHDRAWN'].map((v) => ({ value: v }))}
+                        // '' stands in for "no answer yet", which is stored as null.
+                        options={[...OFFER_RESPONSES.map(({ value, label }) => ({ value, label })), { value: '', label: 'No Information' }]}
                       />
                     </Form.Item>
                   </Col>
@@ -783,12 +784,8 @@ export default function CandidateDetail() {
                     ? `${offerData.offeredPosition.title}${offerData.offeredType ? ` — ${offerData.offeredType.name}` : ''}`
                     : '—'}
                 </Descriptions.Item>
-                <Descriptions.Item label="Status">
-                  {offerData.status ? (
-                    <Tag color={offerData.status === 'ACCEPTED' ? 'green' : offerData.status === 'DECLINED' ? 'red' : 'orange'}>
-                      {offerData.status}
-                    </Tag>
-                  ) : '—'}
+                <Descriptions.Item label="Offer Response">
+                  <Tag color={offerResponse(offerData.status).color}>{offerResponse(offerData.status).label}</Tag>
                 </Descriptions.Item>
               </Descriptions>
               <Button
@@ -798,7 +795,7 @@ export default function CandidateDetail() {
                     offerDate: offerData.offerDate ? dayjs(offerData.offerDate) : undefined,
                     location: offerData.location,
                     offeredPair: offeredPairKey(offerData),
-                    status: offerData.status,
+                    status: offerData.status ?? '',
                   })
                   setEditingOffer(true)
                 }}

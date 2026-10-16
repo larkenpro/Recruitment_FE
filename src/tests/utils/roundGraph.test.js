@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createsCycle, defaultTemplate, hasReached, isPairKey, isStageKey, layoutPairs, layoutRounds, pairLabel, pipelineLayout, stageOf, toGraphPayload } from '../../utils/roundGraph'
+import { createsCycle, defaultTemplate, hasReached, isPairKey, isStageKey, layoutPairs, layoutRounds, pairLabel, pipelineLayout, roundsBefore, stageOf, toGraphPayload } from '../../utils/roundGraph'
 
 const edges = [{ from: 'coding', to: 'tech' }, { from: 'tech', to: 'hr' }, { from: 'aptitude', to: 'hr' }]
 
@@ -118,5 +118,22 @@ describe('pipelineLayout', () => {
   it('with no rounds yet, the pairs lead straight to Offer', () => {
     const { edges } = pipelineLayout({ pairs, rounds: [], edges: [] })
     expect(edges).toContainEqual({ from: 'pair:4:2', to: 'stage:Offer' })
+  })
+})
+
+describe('roundsBefore', () => {
+  // Coding and Aptitude both lead into GD, which leads into HR; a pair starts at Coding.
+  const graph = {
+    rounds: [{ key: '9', name: 'Coding' }, { key: '6', name: 'Aptitude' }, { key: '7', name: 'GD' }, { key: '8', name: 'HR' }],
+    edges: [{ from: 'pair:1:1', to: '9' }, { from: '9', to: '7' }, { from: '6', to: '7' }, { from: '7', to: '8' }],
+  }
+
+  it('collects every round upstream, in graph order, skipping pairs', () => {
+    expect(roundsBefore(graph, '8').map((r) => r.name)).toEqual(['Coding', 'Aptitude', 'GD'])
+    expect(roundsBefore(graph, '7').map((r) => r.name)).toEqual(['Coding', 'Aptitude'])
+  })
+
+  it('a starting round has none', () => {
+    expect(roundsBefore(graph, '9')).toEqual([])
   })
 })

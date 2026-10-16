@@ -6,9 +6,21 @@ import { useState, useMemo } from 'react'
  *   { key, label, type: 'min', getVal }  — single value, row >= value
  *   { key, label, type: 'max', getVal }  — single value, row <= value
  *   { key, label, type: 'text', getVal } — free-text, case-insensitive substring match
+ *   { key, label, type: 'multi', getVal } — dropdown of several values, row matches any of them
+ * `initialFilters` is what's applied before anyone touches the bar, e.g. `{ status: ['A', 'B'] }`.
  */
-export function useColumnFilter(data, filterKeys) {
-  const [filters, setFilters] = useState({})
+export const rowMatches = (row, filterKeys, filters) =>
+  filterKeys.every(({ key, type, getVal }) => {
+    const val = getVal(row)
+    if (type === 'min') return filters[key] == null || (val != null && val >= filters[key])
+    if (type === 'max') return filters[key] == null || (val != null && val <= filters[key])
+    if (type === 'text') return !filters[key] || String(val ?? '').toLowerCase().includes(filters[key].toLowerCase())
+    if (type === 'multi') return !filters[key]?.length || filters[key].includes(String(val ?? ''))
+    return filters[key] == null || String(val ?? '') === filters[key]
+  })
+
+export function useColumnFilter(data, filterKeys, initialFilters = {}) {
+  const [filters, setFilters] = useState(initialFilters)
 
   const setFilter = (key, value) => {
     setFilters(prev => {
@@ -32,15 +44,7 @@ export function useColumnFilter(data, filterKeys) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const filteredData = useMemo(() => {
     if (!data) return []
-    return data.filter(row =>
-      filterKeys.every(({ key, type, getVal }) => {
-        const val = getVal(row)
-        if (type === 'min') return filters[key] == null || (val != null && val >= filters[key])
-        if (type === 'max') return filters[key] == null || (val != null && val <= filters[key])
-        if (type === 'text') return !filters[key] || String(val ?? '').toLowerCase().includes(filters[key].toLowerCase())
-        return filters[key] == null || String(val ?? '') === filters[key]
-      })
-    )
+    return data.filter(row => rowMatches(row, filterKeys, filters))
   }, [data, filters])
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -48,7 +52,7 @@ export function useColumnFilter(data, filterKeys) {
     if (!data) return {}
     return Object.fromEntries(
       filterKeys
-        .filter(({ type }) => !type)
+        .filter(({ type }) => !type || type === 'multi')
         .map(({ key, getVal }) => [
           key,
           [...new Set(data.map(row => getVal(row)).filter(v => v != null && v !== ''))]
