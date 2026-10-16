@@ -11,7 +11,6 @@ import {
   LinkOutlined,
   GithubOutlined,
   LinkedinOutlined,
-  LogoutOutlined,
   MailOutlined,
   PhoneOutlined,
   PlusOutlined,
@@ -49,8 +48,6 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import {
   addStageEntry,
-  createExitRecord,
-  deleteExitRecord,
   deleteCandidateDocument,
   getCandidate,
   getCandidateDocuments,
@@ -58,16 +55,16 @@ import {
   getCandidateRoundResults,
   getResumeFile,
   getCandidateStageHistory,
-  getExitRecord,
   getOffer,
   getCandidateApplications,
   updateCandidateApplication,
-  updateExitRecord,
   updateRoundResult,
   upsertOffer,
   uploadCandidateDocument,
 } from '../api/candidates'
 import { preferenceKey, preferenceLabel } from '../utils/preferences'
+import { getEventPositions } from '../api/events'
+import OfferPairSelect from '../components/OfferPairSelect'
 import { getErrorMessage } from '../utils/errorUtils'
 import { GUTTER, useLayoutMetrics } from '../theme'
 import { PIPELINE_STAGES, useStageDecision } from '../hooks/useStageDecision'
@@ -76,7 +73,7 @@ import { SCORE_RULE } from '../components/validation/rules'
 const { Title, Text } = Typography
 const STATUS_COLOR = { SHORTLISTED: 'green', HOLD: 'orange', REJECTED: 'red' }
 
-// The offer form selects a preference pair; offers saved before types existed have no type.
+// The offer form selects one of the event's pairs; offers saved before types existed have no type.
 const offeredPairKey = (offer) =>
   offer.offeredPosition && offer.offeredType ? `${offer.offeredPosition.id}:${offer.offeredType.id}` : undefined
 
@@ -90,8 +87,6 @@ export default function CandidateDetail() {
   const [editingRound, setEditingRound] = useState(null)
   const [scoreForm] = Form.useForm()
   const [selectedEventId, setSelectedEventId] = useState(null)
-  const [exitForm] = Form.useForm()
-  const [editingExit, setEditingExit] = useState(false)
   const [offerForm] = Form.useForm()
   const [editingOffer, setEditingOffer] = useState(false)
   const [docUploadOpen, setDocUploadOpen] = useState(false)
@@ -137,13 +132,6 @@ export default function CandidateDetail() {
     queryKey: ['stage-history', id],
     queryFn: () => getCandidateStageHistory(id).then((r) => r.data),
   })
-  const { data: exitRecord, isLoading: exitLoading } = useQuery({
-    queryKey: ['exit', id],
-    queryFn: () =>
-      getExitRecord(id)
-        .then((r) => r.data.data)
-        .catch((e) => (e.response?.status === 404 ? null : Promise.reject(e))),
-  })
 
   const { data: applications } = useQuery({
     queryKey: ['applications', id],
@@ -153,6 +141,12 @@ export default function CandidateDetail() {
   const activeEventId = selectedEventId ?? stageHistory?.[0]?.eventId ?? applications?.[0]?.eventId
   // What they submitted for the selected event; the profile is the fallback when there's no application.
   const selectedApplication = applications?.find((a) => a.eventId === activeEventId)
+
+  const { data: activeEventPositions } = useQuery({
+    queryKey: ['eventPositions', String(activeEventId)],
+    queryFn: () => getEventPositions(activeEventId).then((r) => r.data.data),
+    enabled: !!activeEventId,
+  })
 
   const { data: offerData } = useQuery({
     queryKey: ['offer', id, activeEventId],
@@ -200,25 +194,6 @@ export default function CandidateDetail() {
 
   const statusMutation = useStageDecision({
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['stage-history', id] }),
-    onError: (err) => message.error(getErrorMessage(err)),
-  })
-
-  const exitMutation = useMutation({
-    mutationFn: (data) => (exitRecord ? updateExitRecord(id, data) : createExitRecord(id, data)),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['exit', id] })
-      setEditingExit(false)
-      message.success(exitRecord ? 'Exit record updated!' : 'Exit record saved!')
-    },
-    onError: (err) => message.error(getErrorMessage(err)),
-  })
-
-  const deleteExitMutation = useMutation({
-    mutationFn: () => deleteExitRecord(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['exit', id] })
-      message.success('Exit record removed')
-    },
     onError: (err) => message.error(getErrorMessage(err)),
   })
 
@@ -366,7 +341,7 @@ export default function CandidateDetail() {
             }
           >
             <Radio.Button value="SHORTLISTED">Shortlisted</Radio.Button>
-            <Radio.Button value="HOLD">Hold</Radio.Button>
+            <Radio.Button value="HOLD">{stageName === 'Offer' ? 'WaitList' : 'Hold'}</Radio.Button>
             <Radio.Button value="REJECTED">Rejected</Radio.Button>
           </Radio.Group>
         </Space>
@@ -773,14 +748,7 @@ export default function CandidateDetail() {
                   </Col>
                   <Col xs={24} sm={12}>
                     <Form.Item name="offeredPair" label="Offered Position">
-                      <Select
-                        placeholder="Select position"
-                        allowClear
-                        options={(selectedApplication?.preferences ?? []).map((p) => ({
-                          value: preferenceKey(p),
-                          label: preferenceLabel(p),
-                        }))}
-                      />
+                      <OfferPairSelect eventPositions={activeEventPositions} preferences={selectedApplication?.preferences} />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12}>
@@ -845,7 +813,7 @@ export default function CandidateDetail() {
     })
   }
 
-  for (const stageName of ['Joining', '6 Month Review', '12 Month Retained']) {
+  for (const stageName of ['Joining']) {
     if (shouldShowStage(stageName)) {
       pipelineTabs.push({
         key: stageName,
@@ -858,74 +826,6 @@ export default function CandidateDetail() {
         ),
       })
     }
-  }
-
-  if (shouldShowStage('Exit')) {
-    pipelineTabs.push({
-      key: 'Exit',
-      label: tabLabel('Exit', <LogoutOutlined style={{ marginRight: 4 }} />),
-      children: exitLoading ? null : editingExit || !exitRecord ? (
-        <div style={{ maxWidth: 480 }}>
-          <Form
-            form={exitForm}
-            layout="vertical"
-            initialValues={
-              exitRecord
-                ? { exitDate: dayjs(exitRecord.exitDate), reason: exitRecord.reason }
-                : {}
-            }
-            onFinish={(values) =>
-              exitMutation.mutate({ exitDate: values.exitDate.format('YYYY-MM-DD'), reason: values.reason })
-            }
-          >
-            <Form.Item name="exitDate" label="Exit Date" rules={[{ required: true }]}>
-              <DatePicker style={{ width: '100%' }} />
-            </Form.Item>
-            <Form.Item name="reason" label="Reason for Leaving">
-              <Input.TextArea rows={4} placeholder="Resignation, contract end, termination…" />
-            </Form.Item>
-            <Space>
-              <Button type="primary" danger htmlType="submit" loading={exitMutation.isPending}>
-                {exitRecord ? 'Update' : 'Record Exit'}
-              </Button>
-              {exitRecord && <Button onClick={() => setEditingExit(false)}>Cancel</Button>}
-            </Space>
-          </Form>
-        </div>
-      ) : (
-        <div>
-          <Descriptions column={{ xs: 1, sm: 2 }} bordered size="small" style={{ marginBottom: 16 }}>
-            <Descriptions.Item label="Exit Date">
-              <Tag color="red">{new Date(exitRecord.exitDate).toLocaleDateString()}</Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="Reason" span={2}>
-              {exitRecord.reason || '—'}
-            </Descriptions.Item>
-          </Descriptions>
-          <Space>
-            <Button
-              icon={<EditOutlined />}
-              onClick={() => {
-                exitForm.setFieldsValue({ exitDate: dayjs(exitRecord.exitDate), reason: exitRecord.reason })
-                setEditingExit(true)
-              }}
-            >
-              Edit
-            </Button>
-            <Popconfirm
-              title="Remove exit record?"
-              onConfirm={() => deleteExitMutation.mutate()}
-              okText="Yes"
-              cancelText="No"
-            >
-              <Button danger loading={deleteExitMutation.isPending}>
-                Remove
-              </Button>
-            </Popconfirm>
-          </Space>
-        </div>
-      ),
-    })
   }
 
   // ── Stage history tab ──

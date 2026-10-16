@@ -37,13 +37,8 @@ export const uploadResume = (candidateId, file) => {
   })
 }
 
-export const getExitRecord = (candidateId) => api.get(C(`/${candidateId}/exit`))
-export const createExitRecord = (candidateId, data) => api.post(C(`/${candidateId}/exit`), data)
-export const updateExitRecord = (candidateId, data) => api.put(C(`/${candidateId}/exit`), data)
-export const deleteExitRecord = (candidateId) => api.delete(C(`/${candidateId}/exit`))
-
 // Offer
-// Everyone given an offer (shortlisted at Offer), across all events: application + offer + stages.
+// Everyone who reached the Offer stage, across all events: application + offer + stages.
 export const getOffers = () => api.get(V1('/offers'))
 export const getOffer = (candidateId, eventId) =>
   api.get(`/candidates/${candidateId}/events/${eventId}/offer`)

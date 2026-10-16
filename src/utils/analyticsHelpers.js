@@ -168,8 +168,7 @@ export function buildPositionPreferenceTable(applications) {
 }
 
 /**
- * The recruitment funnel proper — the tail of PIPELINE_STAGES (6 Month Review onwards)
- * is post-hire retention, not hiring, so it is left out.
+ * The recruitment funnel: Resume through Joining.
  */
 export const FUNNEL_STAGES = ['Resume', 'Rounds', 'Offer', 'Joining']
 

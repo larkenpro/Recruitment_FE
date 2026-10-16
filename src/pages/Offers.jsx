@@ -1,21 +1,26 @@
 import { useState } from 'react'
 import { Card, Table, Select, message } from 'antd'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { getOffers } from '../api/candidates'
+import { getEventPositions } from '../api/events'
 import { useAuth } from '../context/AuthContext'
 import { PIPELINE_STAGES, useStageDecision } from '../hooks/useStageDecision'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
+import { OfferedPositionCell } from '../components/OfferPairSelect'
 import { getErrorMessage } from '../utils/errorUtils'
 
-const AFTER_OFFER = PIPELINE_STAGES.slice(PIPELINE_STAGES.indexOf('Offer') + 1)
+const FROM_OFFER = PIPELINE_STAGES.slice(PIPELINE_STAGES.indexOf('Offer'))
 
 const DECISION_OPTIONS = [
   { value: 'SHORTLISTED', label: 'Shortlisted' },
   { value: 'HOLD', label: 'Hold' },
   { value: 'REJECTED', label: 'Rejected' },
 ]
+// Same stored values; at Offer, HOLD reads as a waitlist.
+const OFFER_DECISION_OPTIONS = DECISION_OPTIONS.map((o) => (o.value === 'HOLD' ? { ...o, label: 'WaitList' } : o))
+const optionsFor = (stageName) => (stageName === 'Offer' ? OFFER_DECISION_OPTIONS : DECISION_OPTIONS)
 
 const currentStage = (r) => PIPELINE_STAGES.filter((s) => s in r.stages).at(-1)
 
@@ -25,6 +30,7 @@ const FILTER_KEYS = [
   { key: 'branch', label: 'Branch', getVal: (r) => r.branch },
   { key: 'graduationYear', label: 'Batch', getVal: (r) => r.graduationYear },
   { key: 'stage', label: 'Stage', getVal: currentStage },
+  { key: 'offerStatus', label: 'Offer decision', getVal: (r) => r.stages.Offer },
 ]
 
 const rowKey = (r) => `${r.eventId}:${r.candidateId}`
@@ -40,7 +46,16 @@ export default function Offers() {
     queryFn: () => getOffers().then((r) => r.data.data),
   })
 
-  const { filteredData, filters, setFilter, removeFilter, optionMap } = useColumnFilter(offers, FILTER_KEYS)
+  const eventIds = [...new Set((offers ?? []).map((r) => r.eventId))]
+  const positionsByEvent = Object.fromEntries(useQueries({
+    queries: eventIds.map((id) => ({
+      queryKey: ['eventPositions', String(id)],
+      queryFn: () => getEventPositions(id).then((r) => r.data.data),
+    })),
+  }).map((q, i) => [eventIds[i], q.data]))
+
+  const { filteredData, filters, setFilter, removeFilter, optionMap: rawOptionMap } = useColumnFilter(offers, FILTER_KEYS)
+  const optionMap = { ...rawOptionMap, offerStatus: OFFER_DECISION_OPTIONS }
 
   const decision = useStageDecision({
     onSuccess: () => {
@@ -70,12 +85,18 @@ export default function Offers() {
     { title: 'Branch', dataIndex: 'branch', render: (v) => v || '—' },
     { title: 'Batch', dataIndex: 'graduationYear', render: (v) => v ?? '—' },
     {
-      title: 'Offered',
-      render: (_, r) => (r.offer?.offeredPosition
-        ? `${r.offer.offeredPosition.title}${r.offer.offeredType ? ` — ${r.offer.offeredType.name}` : ''}`
-        : '—'),
+      title: 'Offered position',
+      render: (_, r) => (
+        <OfferedPositionCell
+          candidateId={r.candidateId}
+          eventId={r.eventId}
+          offer={r.offer}
+          eventPositions={positionsByEvent[r.eventId]}
+          preferences={r.preferences}
+        />
+      ),
     },
-    ...AFTER_OFFER.map((stageName) => ({
+    ...FROM_OFFER.map((stageName) => ({
       title: stageName,
       render: (_, r) => {
         if (!(stageName in r.stages)) return '—'
@@ -92,7 +113,7 @@ export default function Offers() {
               setPendingKey(key)
               decision.mutate({ candidateId: r.candidateId, eventId: r.eventId, stageName, status })
             }}
-            options={DECISION_OPTIONS}
+            options={optionsFor(stageName)}
           />
         )
       },

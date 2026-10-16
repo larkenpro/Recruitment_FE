@@ -1,9 +1,8 @@
 import { useMutation } from '@tanstack/react-query'
 import { addStageEntry, updateStageStatusByName } from '../api/candidates'
 
-export const PIPELINE_STAGES = [
-  'Resume', 'Rounds', 'Offer', 'Joining', '6 Month Review', '12 Month Retained', 'Exit',
-]
+// The app tracks a candidate up to Joining; the backend still knows the later retention stages.
+export const PIPELINE_STAGES = ['Resume', 'Rounds', 'Offer', 'Joining']
 
 /**
  * Shared mutation for updating a candidate's stage status by name.

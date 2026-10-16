@@ -180,7 +180,7 @@ Renders dropdowns (or number inputs for min/max) from `optionMap`. Active filter
 
 ### EventDetail pipeline (`components/PipelineGraph.jsx`, `components/RoundGraphEditor.jsx`, `utils/roundGraph.js`)
 - The **Pipeline** card is one React Flow (`@xyflow/react`) graph with a View / Edit rounds switch; it replaced the Pipeline Stages tabs and the Event Details Rounds and Groups tabs (Event Details keeps Positions).
-- **View** (default, read-only): Resume → one node per (position, type) pair the event hires for → the rounds → Offer (`pipelineLayout`; only pair and round arrows are stored). The event page stops at Offer: Joining → Exit are handled on the Offers page. Nodes show counts (applicants at Resume, "N pending, N passed, N failed" on each round — pending is open or on hold — and everyone at Offer). Clicking Resume, a round or a later stage lists its candidates under the graph (`selectedStage`): the Resume table, the round's scoring table (status filter, default every status: everyone who reached the round), or the later stage's table. Pair nodes aren't clickable.
+- **View** (default, read-only): Resume → one node per (position, type) pair the event hires for → the rounds → Offer (`pipelineLayout`; only pair and round arrows are stored). The event page stops at Offer: Joining is handled on the Offers page. Nodes show counts (applicants at Resume, "N pending, N passed, N failed" on each round — pending is open or on hold — and everyone at Offer). Clicking Resume, a round or a later stage lists its candidates under the graph (`selectedStage`): the Resume table, the round's scoring table (status filter, default every status: everyone who reached the round), or the later stage's table. The Offer table has the same **Offered position** dropdown as the Offers page (`OfferedPositionCell`), shown only to users with the CANDIDATES page since offer records live under `/api/v1/candidates`. Pair nodes aren't clickable.
 - A **Group Discussion** round's panel has Scores and Groups tabs. Groups belong to that round (`getGroups(eventId, roundId)` etc.): generate a number of random groups from the candidates who reached it, drag members between groups, rename / set a topic. Each GD round's groups are separate.
 - **Edit rounds**: drag from a pair to the round its candidates start at, and from a round to the round passing it unlocks; candidates take every round reachable from their pairs. Add round / select + Delete / **Clear arrows** (removes every arrow, to redraw from scratch); the side panel edits the selected round's name and type. Arrows into a pair or that would close a loop are refused while dragging (`createsCycle`). Nothing is stored until **Save rounds**, which sends the whole canvas (`saveRoundGraph`; new rounds carry a temporary `key`, pair arrows start from `pair:<positionId>:<typeId>`); **Discard changes** reverts to the saved graph, and leaving Edit with unsaved changes asks first. Removing a round that has results asks first. **Default template** (no rounds yet) lays out GD → Interview → HR with every pair starting at GD.
 - Who has reached which round comes from the backend (`getRoundProgress`; statuses `NOT_APPLICABLE`/`LOCKED`/`OPEN`/`PASS`/`FAIL`/`ON_HOLD`). Recording a result moves the Rounds stage on the backend; no follow-up stage call. Rounds with no arrow out show the manual Rounds Decision column.
@@ -198,8 +198,8 @@ Renders dropdowns (or number inputs for min/max) from `optionMap`. Active filter
 - API: `src/api/positions.js` — `getPositions`, `createPosition`, `updatePosition`, `deletePosition`, `uploadPositionJd`, `getPositionJd`, `deletePositionJd`.
 
 ### Offers (`src/pages/Offers.jsx`, `/offers`, CANDIDATES page)
-- Everyone shortlisted at Offer across all colleges and events (`getOffers` → `GET /api/v1/candidates/offers`), one row per (event, candidate): college, event year (links to the event with the EVENTS page), branch, batch, offered position, and a decision select per stage after Offer (Joining, 6 Month Review, 12 Month Retained, Exit) once reached — `useStageDecision`, so Shortlisted opens the next stage.
-- Filter keys: name, college, branch, batch, current stage.
+- Everyone who reached the Offer stage, whatever its decision, across all colleges and events (`getOffers` → `GET /api/v1/candidates/offers`), one row per (event, candidate): college, event year (links to the event with the EVENTS page), branch, batch, an **Offered position** dropdown (`OfferedPositionCell` in `components/OfferPairSelect`: every pair the event hires for, the candidate's preference rank beside each — `-` if unranked — ranked first; saving resends the rest of the offer since the PUT replaces it), and a decision select per stage from Offer on (Offer — Shortlisted / WaitList / Rejected — and Joining) once reached — `useStageDecision`, so Shortlisted at Offer opens Joining.
+- Filter keys: name, college, branch, batch, current stage, Offer decision.
 
 ### CandidateDetail (`src/pages/CandidateDetail.jsx`)
 The most complex page. Displays a 3-column top row + two tabbed sections.
@@ -209,25 +209,24 @@ The most complex page. Displays a 3-column top row + two tabbed sections.
 2. Pipeline Status card — current stage + `Steps` progress through `PIPELINE_STAGES`; if candidate has multiple events, a `Select` switches between them
 3. Academic Snapshot card — CGPA, marks, backlogs **as submitted for the selected event** (falls back to the profile when there's no application)
 
-**Pipeline stages (ordered):** Resume → Rounds → Offer → Joining → 6 Month Review → 12 Month Retained → Exit
+**Pipeline stages (ordered):** Resume → Rounds → Offer → Joining (`PIPELINE_STAGES` in `hooks/useStageDecision.js`; the app stops at Joining — the backend still accepts 6 Month Review / 12 Month Retained / Exit, but nothing in the UI reads or starts them)
 
 **Candidate Information tabs:**
 - Personal Info — `Descriptions` table
 - Academic — `Descriptions` table
-- Personal Info / Academic / Preferences read the selected event's application (`getCandidateApplications`); Preferences are reordered/removed and saved via `updateCandidateApplication`. The Offer form's pair options come from the same application.
+- Personal Info / Academic / Preferences read the selected event's application (`getCandidateApplications`); Preferences are reordered/removed and saved via `updateCandidateApplication`. The Offer form's Offered Position uses the same `OfferPairSelect` as the Offers page (the event's pairs, with this application's ranks).
 
 **Recruitment Pipeline tabs** (tabs are added dynamically — only visible if that stage has been reached):
 - **Resume** — shows uploaded resume with download button; "Begin Resume Review" triggers stage start; decision radio (SHORTLISTED / HOLD / REJECTED)
 - **Rounds** — per-round cards in graph order (`order`), locked when the API says `LOCKED`, rounds on another position's track (`NOT_APPLICABLE`) hidden; each has score, result, interviewer, comments; Edit Score modal
-- **Offer / Joining / 6 Month Review / 12 Month Retained** — placeholder + decision radio
-- **Exit** — create/edit/delete exit record (exit date + reason)
+- **Offer** — offer form + decision radio; **Joining** — placeholder + decision radio
 - **Stage History** — `Timeline` of all stage transitions across all events
 
 **Stage decision logic:**
 - `stageDecision(stageName)` renders decision controls only for the current active stage; completed stages show a static tag.
 - Setting status to SHORTLISTED auto-advances to the next stage via `addStageEntry`.
 
-API calls in this page: `getCandidate`, `getCandidateApplications`, `updateCandidateApplication`, `getCandidateResume`, `getCandidateRoundResults`, `getCandidateStageHistory`, `getExitRecord`, `updateRoundResult`, `addStageEntry`, `updateStageStatus`, `createExitRecord`, `updateExitRecord`, `deleteExitRecord`.
+API calls in this page: `getCandidate`, `getCandidateApplications`, `updateCandidateApplication`, `getCandidateResume`, `getCandidateRoundResults`, `getCandidateStageHistory`, `updateRoundResult`, `addStageEntry`, `updateStageStatus`, `getOffer`, `upsertOffer`, `getEventPositions`.
 
 ### PublicApply (`src/pages/PublicApply.jsx`)
 Token-based public form — no auth required. **Only for new candidates.**

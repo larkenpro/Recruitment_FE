@@ -65,7 +65,9 @@ import { getPositions, getPositionTypes } from '../api/positions'
 import { preferenceLabel } from '../utils/preferences'
 import { EVENT_MODE_OPTIONS, eventMode } from '../utils/eventModes'
 import PositionTypeFields, { toEventPositions } from '../components/PositionTypeFields'
-import { getCandidateResume, getResumeFile, updateRoundResult, addStageEntry, updateStageStatusByName } from '../api/candidates'
+import { getCandidateResume, getResumeFile, getOffers, updateRoundResult, addStageEntry, updateStageStatusByName } from '../api/candidates'
+import { useAuth } from '../context/AuthContext'
+import { OfferedPositionCell } from '../components/OfferPairSelect'
 import { getErrorMessage } from '../utils/errorUtils'
 import { GUTTER, useLayoutMetrics } from '../theme'
 import { useStageDecision } from '../hooks/useStageDecision'
@@ -105,6 +107,9 @@ const RESUME_STATUS_OPTIONS = [
 ]
 
 const ROUND_DECISION_OPTIONS = RESUME_STATUS_OPTIONS
+
+// Same stored values; at Offer, HOLD reads as a waitlist.
+const OFFER_DECISION_OPTIONS = RESUME_STATUS_OPTIONS.map((o) => (o.value === 'HOLD' ? { ...o, label: 'WaitList' } : o))
 
 // Which candidates a round's list shows, by where they stand in it. Defaults to who is there now.
 const ROUND_STATUS_OPTIONS = [
@@ -209,6 +214,15 @@ export default function EventDetail() {
   const { data: roundsStageSummaryList } = useQuery({
     queryKey: ['eventStageSummary', id, 'Rounds'],
     queryFn: () => getEventStageSummary(id, 'Rounds').then((r) => r.data.data),
+  })
+
+  // Offer records live under /candidates (PAGE_CANDIDATES), shared with the Offers page's cache.
+  const { hasPage } = useAuth()
+  const { data: eventOffers } = useQuery({
+    queryKey: ['offers'],
+    queryFn: () => getOffers().then((r) => r.data.data),
+    enabled: hasPage('CANDIDATES'),
+    select: (rows) => Object.fromEntries(rows.filter((o) => o.eventId === Number(id)).map((o) => [o.candidateId, o.offer])),
   })
 
   const { data: offerStageSummaryList } = useQuery({
@@ -323,7 +337,7 @@ export default function EventDetail() {
   const { filteredData: filteredOfferData, filters: offerFilters, setFilter: setOfferFilter, removeFilter: removeOfferFilter, optionMap: offerOptionMap } = useColumnFilter(lateStageEnrichedData['Offer'], LATE_STAGE_FILTER_KEYS)
 
   const lateStageFilterProps = {
-    'Offer': { filteredData: filteredOfferData, filters: offerFilters, setFilter: setOfferFilter, removeFilter: removeOfferFilter, optionMap: { ...offerOptionMap, stageStatus: ROUND_DECISION_OPTIONS } },
+    'Offer': { filteredData: filteredOfferData, filters: offerFilters, setFilter: setOfferFilter, removeFilter: removeOfferFilter, optionMap: { ...offerOptionMap, stageStatus: OFFER_DECISION_OPTIONS } },
   }
 
   const modeMutation = useMutation({
@@ -555,6 +569,19 @@ export default function EventDetail() {
             { title: 'Branch', dataIndex: 'branch', render: (v) => v || '—' },
             { title: 'Batch', dataIndex: 'graduationYear', render: (v) => v ?? '—' },
             { title: 'UG CGPA', dataIndex: 'ugCgpa', render: (v) => v ?? '—' },
+            // Shown once the offers are in, so a pick never saves over details not yet loaded.
+            ...(eventOffers ? [{
+              title: 'Offered position',
+              render: (_, r) => (
+                <OfferedPositionCell
+                  candidateId={r.id}
+                  eventId={Number(id)}
+                  offer={eventOffers[r.id]}
+                  eventPositions={eventPositions}
+                  preferences={r.preferences}
+                />
+              ),
+            }] : []),
             {
               title: 'Decision',
               render: (_, r) => (
@@ -569,7 +596,7 @@ export default function EventDetail() {
                     setPendingPipelineCandidateId(r.id)
                     pipelineDecisionMutation.mutate({ candidateId: r.id, eventId: Number(id), stageName, status, ensureStarted: true })
                   }}
-                  options={ROUND_DECISION_OPTIONS}
+                  options={OFFER_DECISION_OPTIONS}
                 />
               ),
             },

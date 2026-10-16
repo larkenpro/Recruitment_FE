@@ -94,11 +94,11 @@ describe('Candidates API', () => {
   })
 
   // ── Offers ────────────────────────────────────────────────────────────────
-  it('GET /candidates/offers — everyone shortlisted at Offer, each with their stages', async () => {
+  it('GET /candidates/offers — everyone who reached Offer, each with their stages', async () => {
     const res = await getOffers()
     expect(res.data.status).toBe('success')
     expect(Array.isArray(res.data.data)).toBe(true)
-    res.data.data.forEach((row) => expect(row.stages.Offer).toBe('SHORTLISTED'))
+    res.data.data.forEach((row) => expect(row.stages).toHaveProperty('Offer'))
   })
 
   // ── 404 ───────────────────────────────────────────────────────────────────

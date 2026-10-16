@@ -33,3 +33,12 @@ export const selectedPreferences = (ranked, selected) =>
   ranked
     .filter((p) => selected.has(preferenceKey(p)))
     .map((p) => ({ positionId: p.position.id, typeId: p.type.id }))
+
+// The offer dropdown: every pair the event hires for with the candidate's rank for it (null if they
+// didn't rank it), ranked pairs first.
+export const offerPairs = (eventPositions, preferences) => {
+  const rank = Object.fromEntries((preferences ?? []).map((p, i) => [preferenceKey(p), i + 1]))
+  return eventPairs(eventPositions)
+    .map((p) => ({ key: preferenceKey(p), label: preferenceLabel(p), rank: rank[preferenceKey(p)] ?? null }))
+    .sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity))
+}
