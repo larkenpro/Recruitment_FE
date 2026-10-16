@@ -7,6 +7,7 @@ import {
   deleteCandidate,
   getCandidateResume,
   getCandidateStageHistory,
+  getOffers,
 } from '../../api/candidates'
 import { getColleges } from '../../api/colleges'
 
@@ -90,6 +91,14 @@ describe('Candidates API', () => {
     if (!createdId) return
     const res = await deleteCandidate(createdId)
     expect(res.data.status).toBe('success')
+  })
+
+  // ── Offers ────────────────────────────────────────────────────────────────
+  it('GET /candidates/offers — everyone shortlisted at Offer, each with their stages', async () => {
+    const res = await getOffers()
+    expect(res.data.status).toBe('success')
+    expect(Array.isArray(res.data.data)).toBe(true)
+    res.data.data.forEach((row) => expect(row.stages.Offer).toBe('SHORTLISTED'))
   })
 
   // ── 404 ───────────────────────────────────────────────────────────────────

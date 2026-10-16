@@ -87,15 +87,16 @@ export const defaultTemplate = (pairs) => ({
 export const hasReached = (status) => status != null && status !== 'LOCKED' && status !== 'NOT_APPLICABLE'
 
 // The fixed pipeline stages around the round graph. Only pair and round arrows are stored; Resume
-// before the pairs and Offer → … → Exit after the rounds are drawn from this order.
-export const PIPELINE_TAIL = ['Offer', 'Joining', '6 Month Review', '12 Month Retained', 'Exit']
+// before the pairs and Offer after the rounds are drawn from this order. The event page stops at
+// Offer: what happens after it is tracked across events on the Offers page.
+export const PIPELINE_TAIL = ['Offer']
 export const stageKey = (name) => `stage:${name}`
 export const isStageKey = (key) => key.startsWith('stage:')
 export const stageOf = (key) => key.slice('stage:'.length)
 
 const TAIL_SPACING = 200
 
-// The whole pipeline for the clickable view: Resume → pairs → rounds → Offer → … → Exit.
+// The whole pipeline for the clickable view: Resume → pairs → rounds → Offer.
 export const pipelineLayout = (graph) => {
   const rounds = layoutRounds(graph.rounds, graph.edges)
   const pairs = layoutPairs(graph.pairs ?? [], rounds)

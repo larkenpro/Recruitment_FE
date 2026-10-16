@@ -91,21 +91,21 @@ describe('pipelineLayout', () => {
     edges: [{ from: 'pair:4:2', to: '1' }, { from: 'pair:5:2', to: '2' }, { from: '1', to: '2' }],
   }
 
-  it('wraps the rounds in Resume before and Offer → … → Exit after', () => {
+  it('wraps the rounds in Resume before and Offer after, and stops there', () => {
     const { stages } = pipelineLayout(graph)
-    expect(stages.map((s) => s.key)).toEqual(['stage:Resume', 'stage:Offer', 'stage:Joining',
-      'stage:6 Month Review', 'stage:12 Month Retained', 'stage:Exit'])
-    expect(stageOf('stage:6 Month Review')).toBe('6 Month Review')
+    expect(stages.map((s) => s.key)).toEqual(['stage:Resume', 'stage:Offer'])
+    expect(stageOf('stage:Offer')).toBe('Offer')
     expect(isStageKey('stage:Offer')).toBe(true)
     expect(isStageKey('pair:4:2')).toBe(false)
   })
 
-  it('draws Resume into each pair, the final rounds into Offer, and the stages after it in a line', () => {
+  it('draws Resume into each pair and the final rounds into Offer, with nothing after it', () => {
     const { edges } = pipelineLayout(graph)
     expect(edges).toEqual(expect.arrayContaining([
       { from: 'stage:Resume', to: 'pair:4:2' }, { from: 'stage:Resume', to: 'pair:5:2' },
-      { from: '2', to: 'stage:Offer' }, { from: 'stage:Offer', to: 'stage:Joining' }, { from: 'stage:12 Month Retained', to: 'stage:Exit' },
+      { from: '2', to: 'stage:Offer' },
     ]))
+    expect(edges.some((e) => e.from === 'stage:Offer')).toBe(false)
     expect(edges).not.toContainEqual({ from: '1', to: 'stage:Offer' })
   })
 

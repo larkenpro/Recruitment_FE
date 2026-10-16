@@ -50,7 +50,7 @@ function PipelineView({ graph, counts, selectedStage, onSelectStage }) {
       ...view.pairs.map(toPairNode),
       ...view.rounds.map((r) => {
         const node = toRoundNode(r)
-        return { ...node, data: { ...node.data, count: counts[r.key] ?? 0 }, selected: r.key === selectedStage, style: { cursor: 'pointer' } }
+        return { ...node, data: { ...node.data, count: counts[r.key] ?? { pending: 0, passed: 0, failed: 0 } }, selected: r.key === selectedStage, style: { cursor: 'pointer' } }
       }),
     ])
     setEdges(view.edges.map((e) => toFlowEdge(e.from, e.to)))

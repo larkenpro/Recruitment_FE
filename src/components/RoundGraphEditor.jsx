@@ -19,7 +19,7 @@ const ARROW = { type: MarkerType.ArrowClosed, width: 18, height: 18 }
 export const HANDLE_STYLE = { width: 14, height: 14, background: '#4f46e5', border: '2px solid #fff' }
 export const toFlowEdge = (from, to) => ({ id: `${from}->${to}`, source: from, target: to, markerEnd: ARROW })
 
-// `count` is only set in the pipeline view: how many candidates are at the round right now.
+// `count` is only set in the pipeline view: { pending, passed, failed } at the round.
 export function RoundNode({ data, selected }) {
   return (
     <div
@@ -38,7 +38,13 @@ export function RoundNode({ data, selected }) {
       {data.roundType && (
         <Tag color={ROUND_TYPE_COLOR[data.roundType] ?? 'default'} style={{ fontSize: 10, margin: 0 }}>{data.roundType}</Tag>
       )}
-      {data.count != null && <div style={{ fontSize: 11, color: '#4f46e5', marginTop: 4 }}>{data.count} here now</div>}
+      {data.count != null && (
+        <div style={{ fontSize: 11, marginTop: 4 }}>
+          <span style={{ color: '#d48806' }}>{data.count.pending} pending</span>,{' '}
+          <span style={{ color: '#389e0d' }}>{data.count.passed} passed</span>,{' '}
+          <span style={{ color: '#cf1322' }}>{data.count.failed} failed</span>
+        </div>
+      )}
       <Handle type="source" position={Position.Right} style={HANDLE_STYLE} />
     </div>
   )

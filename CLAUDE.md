@@ -103,7 +103,7 @@ Routes:
 - `/apply/:token` — public, no layout, candidate application form
 - `/candidate` — public, no layout, the candidate's own page (sign in by emailed link)
 - `/` — redirects to `/colleges`
-- `/colleges`, `/colleges/:id`, `/events`, `/positions`, `/candidates`, `/candidates/:id`, `/analytics` — all protected; wrapped in `ProtectedRoute` + `AppLayout`
+- `/colleges`, `/colleges/:id`, `/events`, `/positions`, `/offers`, `/candidates/:id`, `/analytics` — all protected; wrapped in `ProtectedRoute` + `AppLayout`
 
 The `P` shorthand component (`<ProtectedRoute><AppLayout>{children}</AppLayout></ProtectedRoute>`) is used inline on every protected route.
 
@@ -123,7 +123,7 @@ The `P` shorthand component (`<ProtectedRoute><AppLayout>{children}</AppLayout><
 
 Fixed left sidebar (`Sider`, 220px) with:
 - "JJ Recruit" brand logo
-- Nav menu: Colleges, Events, Positions, Candidates, Analytics
+- Nav menu: Colleges, Positions, Events, Offers, Import, Analytics, User Management, Audit Log (no candidate list: `/candidates/:id` is reached from event and offer rows)
 - Logout button pinned to bottom
 
 Top `Header` shows notification bell (count=0 placeholder) + logged-in username. `Content` area renders the active page.
@@ -132,7 +132,7 @@ Top `Header` shows notification bell (count=0 placeholder) + logged-in username.
 
 ## Shared Patterns Across All List Pages
 
-Every list page (Colleges, Events, Positions, Candidates) follows the same structure:
+Every list page (Colleges, Events, Positions, Offers) follows the same structure:
 
 1. **Data fetch** via `useQuery` → TanStack React Query
 2. **Column filtering** via `useColumnFilter` hook + `FilterBar` component
@@ -180,7 +180,7 @@ Renders dropdowns (or number inputs for min/max) from `optionMap`. Active filter
 
 ### EventDetail pipeline (`components/PipelineGraph.jsx`, `components/RoundGraphEditor.jsx`, `utils/roundGraph.js`)
 - The **Pipeline** card is one React Flow (`@xyflow/react`) graph with a View / Edit rounds switch; it replaced the Pipeline Stages tabs and the Event Details Rounds and Groups tabs (Event Details keeps Positions).
-- **View** (default, read-only): Resume → one node per (position, type) pair the event hires for → the rounds → Offer → Joining → 6 Month Review → 12 Month Retained → Exit (`pipelineLayout`; only pair and round arrows are stored, the rest follows the fixed stage order). Nodes show counts (applicants at Resume, candidates at a round right now, everyone at each later stage). Clicking Resume, a round or a later stage lists its candidates under the graph (`selectedStage`): the Resume table, the round's scoring table (status filter, default Open + On hold), or the later stage's table. Pair nodes aren't clickable.
+- **View** (default, read-only): Resume → one node per (position, type) pair the event hires for → the rounds → Offer (`pipelineLayout`; only pair and round arrows are stored). The event page stops at Offer: Joining → Exit are handled on the Offers page. Nodes show counts (applicants at Resume, "N pending, N passed, N failed" on each round — pending is open or on hold — and everyone at Offer). Clicking Resume, a round or a later stage lists its candidates under the graph (`selectedStage`): the Resume table, the round's scoring table (status filter, default every status: everyone who reached the round), or the later stage's table. Pair nodes aren't clickable.
 - A **Group Discussion** round's panel has Scores and Groups tabs. Groups belong to that round (`getGroups(eventId, roundId)` etc.): generate a number of random groups from the candidates who reached it, drag members between groups, rename / set a topic. Each GD round's groups are separate.
 - **Edit rounds**: drag from a pair to the round its candidates start at, and from a round to the round passing it unlocks; candidates take every round reachable from their pairs. Add round / select + Delete / **Clear arrows** (removes every arrow, to redraw from scratch); the side panel edits the selected round's name and type. Arrows into a pair or that would close a loop are refused while dragging (`createsCycle`). Nothing is stored until **Save rounds**, which sends the whole canvas (`saveRoundGraph`; new rounds carry a temporary `key`, pair arrows start from `pair:<positionId>:<typeId>`); **Discard changes** reverts to the saved graph, and leaving Edit with unsaved changes asks first. Removing a round that has results asks first. **Default template** (no rounds yet) lays out GD → Interview → HR with every pair starting at GD.
 - Who has reached which round comes from the backend (`getRoundProgress`; statuses `NOT_APPLICABLE`/`LOCKED`/`OPEN`/`PASS`/`FAIL`/`ON_HOLD`). Recording a result moves the Rounds stage on the backend; no follow-up stage call. Rounds with no arrow out show the manual Rounds Decision column.
@@ -197,11 +197,9 @@ Renders dropdowns (or number inputs for min/max) from `optionMap`. Active filter
 - Filter keys: department.
 - API: `src/api/positions.js` — `getPositions`, `createPosition`, `updatePosition`, `deletePosition`, `uploadPositionJd`, `getPositionJd`, `deletePositionJd`.
 
-### Candidates (`src/pages/Candidates.jsx`)
-- Lists all candidates with their **current profile** (latest application's details). Name cell is a link to `CandidateDetail`.
-- Edit modal: the profile only (personal + academic). Per-event marks and preferences are edited on `CandidateDetail`.
-- Filter keys: college, branch, batch (graduationYear), ugCgpa (min), backlogs (max).
-- API: `getCandidates`, `getCandidate`, `updateCandidate`, `deleteCandidate`.
+### Offers (`src/pages/Offers.jsx`, `/offers`, CANDIDATES page)
+- Everyone shortlisted at Offer across all colleges and events (`getOffers` → `GET /api/v1/candidates/offers`), one row per (event, candidate): college, event year (links to the event with the EVENTS page), branch, batch, offered position, and a decision select per stage after Offer (Joining, 6 Month Review, 12 Month Retained, Exit) once reached — `useStageDecision`, so Shortlisted opens the next stage.
+- Filter keys: name, college, branch, batch, current stage.
 
 ### CandidateDetail (`src/pages/CandidateDetail.jsx`)
 The most complex page. Displays a 3-column top row + two tabbed sections.

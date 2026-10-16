@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Layout, Menu, Avatar, Badge, Drawer, Button } from 'antd'
 import {
   DashboardOutlined, BankOutlined, CalendarOutlined,
-  UserOutlined, BarChartOutlined, GiftOutlined, LogoutOutlined, BellOutlined, AuditOutlined, CheckCircleOutlined, TeamOutlined, SettingOutlined,
+  UserOutlined, BarChartOutlined, GiftOutlined, LogoutOutlined, BellOutlined, AuditOutlined, CheckCircleOutlined, SettingOutlined,
   ImportOutlined, MenuOutlined, FileSearchOutlined
 } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
@@ -15,7 +15,7 @@ const allMenuItems = [
   { key: '/colleges', page: 'COLLEGES', icon: <BankOutlined />, label: 'Colleges' },
   { key: '/positions', page: 'POSITIONS', icon: <AuditOutlined />, label: 'Positions' },
   { key: '/events', page: 'EVENTS', icon: <CalendarOutlined />, label: 'Events' },
-  { key: '/candidates', page: 'CANDIDATES', icon: <TeamOutlined />, label: 'Candidates' },
+  { key: '/offers', page: 'CANDIDATES', icon: <GiftOutlined />, label: 'Offers' },
   { key: '/import', page: 'CANDIDATES', icon: <ImportOutlined />, label: 'Import' },
   { key: '/analytics', page: 'ANALYTICS', icon: <BarChartOutlined />, label: 'Analytics' },
   { key: '/users', page: 'USER_MANAGEMENT', icon: <SettingOutlined />, label: 'User Management' },

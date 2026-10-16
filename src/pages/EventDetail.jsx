@@ -147,7 +147,7 @@ export default function EventDetail() {
   const [applicationModal, setApplicationModal] = useState(null)
   // The pipeline graph node whose candidates are listed: a stage key, or a round id as text.
   const [selectedStage, setSelectedStage] = useState(stageKey('Resume'))
-  const [roundStatusFilter, setRoundStatusFilter] = useState(['OPEN', 'ON_HOLD'])
+  const [roundStatusFilter, setRoundStatusFilter] = useState([])
 
   const { data: event, isLoading } = useQuery({
     queryKey: ['event', id],
@@ -215,22 +215,6 @@ export default function EventDetail() {
     queryKey: ['eventStageSummary', id, 'Offer'],
     queryFn: () => getEventStageSummary(id, 'Offer').then((r) => r.data.data),
   })
-  const { data: joiningStageSummaryList } = useQuery({
-    queryKey: ['eventStageSummary', id, 'Joining'],
-    queryFn: () => getEventStageSummary(id, 'Joining').then((r) => r.data.data),
-  })
-  const { data: sixMonthStageSummaryList } = useQuery({
-    queryKey: ['eventStageSummary', id, '6 Month Review'],
-    queryFn: () => getEventStageSummary(id, '6 Month Review').then((r) => r.data.data),
-  })
-  const { data: twelveMonthStageSummaryList } = useQuery({
-    queryKey: ['eventStageSummary', id, '12 Month Retained'],
-    queryFn: () => getEventStageSummary(id, '12 Month Retained').then((r) => r.data.data),
-  })
-  const { data: exitStageSummaryList } = useQuery({
-    queryKey: ['eventStageSummary', id, 'Exit'],
-    queryFn: () => getEventStageSummary(id, 'Exit').then((r) => r.data.data),
-  })
 
   const stageSummaryMap = useMemo(
     () => Object.fromEntries((stageSummaryList ?? []).map((s) => [s.candidateId, s])),
@@ -286,13 +270,10 @@ export default function EventDetail() {
     [candidates]
   )
 
+  // The event page stops at Offer; later stages live on the Offers page.
   const lateStageLists = useMemo(() => ({
     'Offer': offerStageSummaryList ?? [],
-    'Joining': joiningStageSummaryList ?? [],
-    '6 Month Review': sixMonthStageSummaryList ?? [],
-    '12 Month Retained': twelveMonthStageSummaryList ?? [],
-    'Exit': exitStageSummaryList ?? [],
-  }), [offerStageSummaryList, joiningStageSummaryList, sixMonthStageSummaryList, twelveMonthStageSummaryList, exitStageSummaryList])
+  }), [offerStageSummaryList])
 
   const lateStageSummaryMaps = useMemo(() => Object.fromEntries(
     Object.entries(lateStageLists).map(([stage, list]) => [
@@ -301,13 +282,17 @@ export default function EventDetail() {
     ])
   ), [lateStageLists])
 
-  // What each pipeline graph node shows as its count: applicants at Resume, the candidates at a
-  // round right now (open or on hold), and everyone at each later stage.
+  // What each pipeline graph node shows as its count: applicants at Resume, each round's pending
+  // (open or on hold) / passed / failed, and everyone at each later stage.
   const stageCounts = useMemo(() => {
     const counts = { [stageKey('Resume')]: candidates?.length ?? 0 }
     ;(roundGraph?.rounds ?? []).forEach((r) => {
-      counts[String(r.id)] = shortlistedCandidates
-        .filter((c) => ['OPEN', 'ON_HOLD'].includes(roundStatusByCandidate[c.id]?.[r.id])).length
+      const statuses = shortlistedCandidates.map((c) => roundStatusByCandidate[c.id]?.[r.id])
+      counts[String(r.id)] = {
+        pending: statuses.filter((s) => s === 'OPEN' || s === 'ON_HOLD').length,
+        passed: statuses.filter((s) => s === 'PASS').length,
+        failed: statuses.filter((s) => s === 'FAIL').length,
+      }
     })
     Object.entries(lateStageLists).forEach(([stage, list]) => { counts[stageKey(stage)] = list.length })
     return counts
@@ -336,17 +321,9 @@ export default function EventDetail() {
   ), [lateStageLists, candidateMap])
 
   const { filteredData: filteredOfferData, filters: offerFilters, setFilter: setOfferFilter, removeFilter: removeOfferFilter, optionMap: offerOptionMap } = useColumnFilter(lateStageEnrichedData['Offer'], LATE_STAGE_FILTER_KEYS)
-  const { filteredData: filteredJoiningData, filters: joiningFilters, setFilter: setJoiningFilter, removeFilter: removeJoiningFilter, optionMap: joiningOptionMap } = useColumnFilter(lateStageEnrichedData['Joining'], LATE_STAGE_FILTER_KEYS)
-  const { filteredData: filteredSixMonthData, filters: sixMonthFilters, setFilter: setSixMonthFilter, removeFilter: removeSixMonthFilter, optionMap: sixMonthOptionMap } = useColumnFilter(lateStageEnrichedData['6 Month Review'], LATE_STAGE_FILTER_KEYS)
-  const { filteredData: filteredTwelveMonthData, filters: twelveMonthFilters, setFilter: setTwelveMonthFilter, removeFilter: removeTwelveMonthFilter, optionMap: twelveMonthOptionMap } = useColumnFilter(lateStageEnrichedData['12 Month Retained'], LATE_STAGE_FILTER_KEYS)
-  const { filteredData: filteredExitData, filters: exitFilters, setFilter: setExitFilter, removeFilter: removeExitFilter, optionMap: exitOptionMap } = useColumnFilter(lateStageEnrichedData['Exit'], LATE_STAGE_FILTER_KEYS)
 
   const lateStageFilterProps = {
     'Offer': { filteredData: filteredOfferData, filters: offerFilters, setFilter: setOfferFilter, removeFilter: removeOfferFilter, optionMap: { ...offerOptionMap, stageStatus: ROUND_DECISION_OPTIONS } },
-    'Joining': { filteredData: filteredJoiningData, filters: joiningFilters, setFilter: setJoiningFilter, removeFilter: removeJoiningFilter, optionMap: { ...joiningOptionMap, stageStatus: ROUND_DECISION_OPTIONS } },
-    '6 Month Review': { filteredData: filteredSixMonthData, filters: sixMonthFilters, setFilter: setSixMonthFilter, removeFilter: removeSixMonthFilter, optionMap: { ...sixMonthOptionMap, stageStatus: ROUND_DECISION_OPTIONS } },
-    '12 Month Retained': { filteredData: filteredTwelveMonthData, filters: twelveMonthFilters, setFilter: setTwelveMonthFilter, removeFilter: removeTwelveMonthFilter, optionMap: { ...twelveMonthOptionMap, stageStatus: ROUND_DECISION_OPTIONS } },
-    'Exit': { filteredData: filteredExitData, filters: exitFilters, setFilter: setExitFilter, removeFilter: removeExitFilter, optionMap: { ...exitOptionMap, stageStatus: ROUND_DECISION_OPTIONS } },
   }
 
   const modeMutation = useMutation({
@@ -539,7 +516,7 @@ export default function EventDetail() {
     (p) => !(eventPositions ?? []).some((ep) => ep.id === p.id)
   )
 
-  const LATE_STAGE_NAMES = ['Offer', 'Joining', '6 Month Review', '12 Month Retained', 'Exit']
+  const LATE_STAGE_NAMES = ['Offer']
 
   const renderLateStageTab = (stageName) => {
     const { filteredData, filters, setFilter, removeFilter, optionMap } = lateStageFilterProps[stageName]

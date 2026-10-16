@@ -16,7 +16,7 @@ import EventDetail from './pages/EventDetail'
 import PublicApply from './pages/PublicApply'
 import CandidatePortal from './pages/CandidatePortal'
 import Analytics from './pages/Analytics'
-import Candidates from './pages/Candidates'
+import Offers from './pages/Offers'
 import ImportCandidates from './pages/ImportCandidates'
 import UserManagement from './pages/UserManagement'
 import AuditLog from './pages/AuditLog'
@@ -55,7 +55,7 @@ export default function App() {
               <Route path="/events" element={<P page="EVENTS"><Events/></P>} />
               <Route path="/events/:id" element={<P page="EVENTS"><EventDetail /></P>} />
               <Route path="/positions" element={<P page="POSITIONS"><Positions /></P>} />
-              <Route path="/candidates" element={<P page="CANDIDATES"><Candidates /></P>} />
+              <Route path="/offers" element={<P page="CANDIDATES"><Offers /></P>} />
               <Route path="/import" element={<P page="CANDIDATES"><ImportCandidates /></P>} />
               <Route path="/candidates/:id" element={<P page="CANDIDATES"><CandidateDetail /></P>} />
               <Route path="/analytics" element={<P page="ANALYTICS"><Analytics /></P>} />

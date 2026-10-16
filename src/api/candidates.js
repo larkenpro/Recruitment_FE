@@ -43,6 +43,8 @@ export const updateExitRecord = (candidateId, data) => api.put(C(`/${candidateId
 export const deleteExitRecord = (candidateId) => api.delete(C(`/${candidateId}/exit`))
 
 // Offer
+// Everyone given an offer (shortlisted at Offer), across all events: application + offer + stages.
+export const getOffers = () => api.get(V1('/offers'))
 export const getOffer = (candidateId, eventId) =>
   api.get(`/candidates/${candidateId}/events/${eventId}/offer`)
 export const upsertOffer = (candidateId, eventId, data) =>
