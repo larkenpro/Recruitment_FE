@@ -48,6 +48,14 @@ export const colorEdges = (edges, at, info) => {
 function OnlyForTags({ roundKey }) {
   const { info, at } = useContext(PairInfo)
   const here = at[roundKey]
+  // Only for set, but to positions that no longer arrive (or the event dropped): nobody takes it.
+  if (here?.explicit && here.effective.length === 0) {
+    return (
+      <div style={{ marginTop: 4 }}>
+        <Tag color="error" style={{ fontSize: 10, margin: 0 }}>No position takes this round</Tag>
+      </div>
+    )
+  }
   if (!here || here.effective.length === 0 || here.effective.length === Object.keys(info).length) return null
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
@@ -411,10 +419,16 @@ export default function RoundGraphEditor({ eventId, graph, onSaved, onDirtyChang
                 value={selected.data.onlyFor ?? []}
                 placeholder="Everyone who reaches it"
                 style={{ width: '100%' }}
-                options={onlyForChoices.map((p) => ({
-                  value: p.key,
-                  label: <span style={{ color: pairInfo[p.key]?.color }}>{pairLabel(p)}</span>,
-                }))}
+                options={[
+                  ...onlyForChoices.map((p) => ({
+                    value: p.key,
+                    label: <span style={{ color: pairInfo[p.key]?.color }}>{pairLabel(p)}</span>,
+                  })),
+                  // A position the event no longer hires for: shown so it can be removed (saving refuses it).
+                  ...(selected.data.onlyFor ?? []).filter((k) => !pairInfo[k]).map((k) => ({
+                    value: k, label: <span style={{ color: '#cf1322' }}>Removed position</span>,
+                  })),
+                ]}
                 onChange={(keys) => updateSelected({ onlyFor: keys })}
               />
               <Text type="secondary" style={{ fontSize: 12 }}>
