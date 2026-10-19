@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
-import { Form, Input, Select, Button, Card, Row, Col, Typography, Divider, Upload, Alert, Steps, Result, DatePicker, Modal } from 'antd'
+import { Form, Input, Select, Button, Card, Row, Col, Typography, Divider, Upload, Alert, Steps, Result, DatePicker, Modal, message } from 'antd'
 import { UploadOutlined, UserOutlined, BookOutlined, AimOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { getApplyForm, submitApplication, checkApplication, getPublicEventPositions } from '../api/candidates'
 import { requestSignInLink } from '../api/portal'
@@ -12,6 +12,7 @@ import PreferenceRanker from '../components/PreferenceRanker'
 import ConsentField from '../components/ConsentField'
 import { eventMode } from '../utils/eventModes'
 import DevOnly from '../components/DevOnly'
+import { RESUME_TOO_LARGE, resumeTooLarge } from '../utils/resume'
 import { SPACE, GUTTER } from '../theme'
 
 const { Title, Text } = Typography
@@ -356,11 +357,14 @@ export default function PublicApply() {
                 )}
                 <Col xs={24} sm={12}>
                   <Form.Item
-                    label={<span>Resume (PDF/DOC) <span style={{ color: '#ff4d4f' }}>*</span></span>}
+                    label={<span>Resume (PDF/DOC, up to 5 MB) <span style={{ color: '#ff4d4f' }}>*</span></span>}
                     validateStatus={resumeFile ? '' : 'warning'}
                   >
                     <Upload
-                      beforeUpload={file => { setResumeFile(file); return false }}
+                      beforeUpload={file => {
+                        if (resumeTooLarge(file)) { message.error(RESUME_TOO_LARGE); return Upload.LIST_IGNORE }
+                        setResumeFile(file); return false
+                      }}
                       onRemove={() => setResumeFile(null)}
                       maxCount={1}
                       accept=".pdf,.doc,.docx"

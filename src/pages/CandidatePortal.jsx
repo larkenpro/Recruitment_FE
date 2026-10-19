@@ -15,6 +15,7 @@ import AcademicFields, { BRANCH_OPTIONS, JOB_LOCATION_OPTIONS } from '../compone
 import PreferenceRanker from '../components/PreferenceRanker'
 import ConsentField from '../components/ConsentField'
 import { GUTTER } from '../theme'
+import { RESUME_TOO_LARGE, resumeTooLarge } from '../utils/resume'
 
 const { Title, Text } = Typography
 
@@ -364,13 +365,17 @@ function ResumeCard({ resume, onSaved }) {
         <Upload
           accept=".pdf,.doc,.docx"
           showUploadList={false}
-          beforeUpload={(file) => { mutation.mutate(file); return false }}
+          beforeUpload={(file) => {
+            if (resumeTooLarge(file)) message.error(RESUME_TOO_LARGE)
+            else mutation.mutate(file)
+            return false
+          }}
         >
           <Button icon={<UploadOutlined />} loading={mutation.isPending}>
             {resume ? 'Replace resume' : 'Upload resume'}
           </Button>
         </Upload>
-        <Text type="secondary" style={{ fontSize: 12 }}>One resume is kept for all your applications; uploading replaces it.</Text>
+        <Text type="secondary" style={{ fontSize: 12 }}>PDF or Word, up to 5 MB. One resume is kept for all your applications; uploading replaces it.</Text>
       </Space>
     </Card>
   )
