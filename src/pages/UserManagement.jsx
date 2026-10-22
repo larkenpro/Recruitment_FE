@@ -189,7 +189,7 @@ function RolesTab() {
   const openAdd = () => { setEditingRole(null); roleForm.resetFields(); setRoleModalOpen(true) }
   const openEdit = (record) => {
     setEditingRole(record)
-    roleForm.setFieldsValue({ name: record.name, pages: record.pages, canClearData: record.canClearData })
+    roleForm.setFieldsValue({ name: record.name, pages: record.pages, canClearData: record.canClearData, canUseTestTools: record.canUseTestTools })
     setRoleModalOpen(true)
   }
   const closeRoleModal = () => { setRoleModalOpen(false); setEditingRole(null); roleForm.resetFields() }
@@ -206,6 +206,7 @@ function RolesTab() {
       render: (pages) => pages.map(p => <Tag key={p}>{p}</Tag>),
     },
     { title: 'Clear Data', dataIndex: 'canClearData', render: (v) => <Tag color={v ? 'red' : undefined}>{v ? 'Allowed' : 'No'}</Tag> },
+    { title: 'Testing Tools', dataIndex: 'canUseTestTools', render: (v) => <Tag color={v ? 'purple' : undefined}>{v ? 'Allowed' : 'No'}</Tag> },
     {
       title: 'Actions', width: 100,
       render: (_, record) => (
@@ -251,6 +252,9 @@ function RolesTab() {
           </Form.Item>
           <Form.Item name="canClearData" label="Can clear all data" valuePropName="checked" initialValue={false}>
             <Switch disabled={editingRole?.protectedRole} />
+          </Form.Item>
+          <Form.Item name="canUseTestTools" label="Can use testing tools" extra="e.g. Add 100 Dummy Candidates on an event's Resume table" valuePropName="checked" initialValue={false}>
+            <Switch />
           </Form.Item>
         </Form>
       </Modal>

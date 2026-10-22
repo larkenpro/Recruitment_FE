@@ -83,7 +83,6 @@ import PipelineGraph from '../components/PipelineGraph'
 import { DEFAULT_MAX_SCORE, hasReached, isStageKey, pairColors, pairLabel, roundsBefore, stageKey, stageOf } from '../utils/roundGraph'
 import { useColumnChoice } from '../components/ColumnPicker'
 import DownloadExcel from '../components/DownloadExcel'
-import DevOnly from '../components/DevOnly'
 import { saveFile } from '../utils/download'
 import ScreeningSettings from '../components/ScreeningSettings'
 import { fitScore, screen } from '../utils/screening'
@@ -260,7 +259,7 @@ export default function EventDetail() {
   })
 
   // Offer records live under /candidates (PAGE_CANDIDATES), shared with the Offers page's cache.
-  const { hasPage } = useAuth()
+  const { hasPage, user } = useAuth()
   const { data: eventOffers } = useQuery({
     queryKey: ['offers'],
     queryFn: () => getOffers().then((r) => r.data.data),
@@ -1454,11 +1453,12 @@ export default function EventDetail() {
         </Space>
         {resumeColumnPicker}
         <DownloadExcel title={`${eventTitle} - Resume`} columns={resumeColumns} rows={resumeRows} />
-        <DevOnly>
+        {/* Testing tool: only for users whose role can use testing tools (the "Testing" role). */}
+        {user?.canUseTestTools && (
           <Button icon={<UsergroupAddOutlined />} loading={dummyCandidatesMutation.isPending} onClick={() => dummyCandidatesMutation.mutate()}>
             Add 100 Dummy Candidates
           </Button>
-        </DevOnly>
+        )}
         <Button icon={<UserAddOutlined />} onClick={() => addCandidate(id)}>
           Add Candidate
         </Button>

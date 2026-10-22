@@ -22,7 +22,7 @@ export const deleteRoundGraphTemplate = (id) => api.delete(`/round-graph-templat
 export const getRoundProgress = (eventId) => api.get(`/events/${eventId}/round-progress`)
 export const getCandidatesByEvent = (eventId) => api.get(`/events/${eventId}/candidates`)
 export const addEventApplication = (eventId, data) => api.post(`/events/${eventId}/applications`, data)
-// Development only: the backend has this endpoint only with DEV_TOOLS_ENABLED=true.
+// Testing tool: needs a role that can use testing tools (the "Testing" role); 403 otherwise.
 export const addDummyCandidates = (eventId) => api.post(`/events/${eventId}/dummy-candidates`)
 export const updateEventApplication =(eventId, candidateId, data) => api.put(`/events/${eventId}/applications/${candidateId}`, data)
 export const getEventPositions = (eventId) => api.get(`/events/${eventId}/positions`)

@@ -57,11 +57,11 @@ describe('Events API', () => {
     expect(res.data.data.status).toBe('ACTIVE')
   })
 
-  // ── Dummy candidates (dev backend only) ───────────────────────────────────
-  // A 400, not a 404, shows the endpoint is there — and it adds nobody to the dev database.
-  it('POST /events/:id/dummy-candidates — an event with no positions returns 400', async () => {
+  // ── Dummy candidates (Testing role only) ──────────────────────────────────
+  // The tests sign in as admin, whose ADMIN role doesn't carry testing tools — and nobody gets added.
+  it('POST /events/:id/dummy-candidates — 403 without the Testing permission, even for admin', async () => {
     if (!createdId) return
-    await expect(addDummyCandidates(createdId)).rejects.toMatchObject({ response: { status: 400 } })
+    await expect(addDummyCandidates(createdId)).rejects.toMatchObject({ response: { status: 403 } })
   })
 
   // ── Screening ─────────────────────────────────────────────────────────────
