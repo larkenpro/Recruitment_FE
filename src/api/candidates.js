@@ -24,7 +24,8 @@ export const updateCandidateApplication = (candidateId, eventId, data) => api.pu
 export const getCandidateRoundResults = (id) => api.get(V1(`/${id}/round-results`))
 export const updateRoundResult = (candidateId, eventId, roundId, data) => api.put(V1(`/${candidateId}/events/${eventId}/rounds/${roundId}`), data)
 // At a split round, the pair key whose track the candidate goes on; null = their top preference. Returns their round progress.
-export const pickRoundTrack = (candidateId, eventId, roundId, track) => api.put(V1(`/${candidateId}/events/${eventId}/rounds/${roundId}/track`), { track })
+// tracks: the pair keys to go on after a split round (one or several); [] = back to their top preference.
+export const pickRoundTracks = (candidateId, eventId, roundId, tracks) => api.put(V1(`/${candidateId}/events/${eventId}/rounds/${roundId}/track`), { tracks })
 export const getCandidateStageHistory = (id) => api.get(V1(`/${id}/stage-history`))
 export const addStageEntry = (candidateId, eventId, data) => api.post(V1(`/${candidateId}/events/${eventId}/stages`), data)
 export const updateStageStatus = (candidateId, eventId, data) => api.patch(V1(`/${candidateId}/events/${eventId}/stages/current`), data)

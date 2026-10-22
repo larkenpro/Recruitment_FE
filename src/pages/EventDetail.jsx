@@ -3,6 +3,7 @@ import {
   CalendarOutlined,
   CopyOutlined,
   DeleteOutlined,
+  DownloadOutlined,
   EditOutlined,
   FilterOutlined,
   LinkOutlined,
@@ -46,6 +47,8 @@ import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import {
   addDummyCandidates,
+  setRoundInterviewer,
+  exportOfferStatus,
   addEventPositions,
   generateLink,
   getCandidatesByEvent,
@@ -67,7 +70,7 @@ import {
 import { getPositions, getPositionTypes } from '../api/positions'
 import { EVENT_MODE_OPTIONS, eventMode } from '../utils/eventModes'
 import PositionTypeFields, { toEventPositions } from '../components/PositionTypeFields'
-import { getOffers, updateRoundResult, pickRoundTrack, addStageEntry, updateStageStatusByName } from '../api/candidates'
+import { getOffers, updateRoundResult, pickRoundTracks, addStageEntry, updateStageStatusByName } from '../api/candidates'
 import { useAuth } from '../context/AuthContext'
 import { OfferResponseCell, OfferedPositionCell } from '../components/OfferPairSelect'
 import { getErrorMessage } from '../utils/errorUtils'
@@ -81,6 +84,7 @@ import { DEFAULT_MAX_SCORE, hasReached, isStageKey, pairColors, pairLabel, round
 import { useColumnChoice } from '../components/ColumnPicker'
 import DownloadExcel from '../components/DownloadExcel'
 import DevOnly from '../components/DevOnly'
+import { saveFile } from '../utils/download'
 import ScreeningSettings from '../components/ScreeningSettings'
 import { screen } from '../utils/screening'
 import { labelFor } from '../utils/columns'
@@ -107,6 +111,9 @@ const GROUP_STRATEGIES = [
   { value: 'BALANCED_SCORE', label: 'Balanced by fit score', hint: 'Every group gets a similar mix of strong and weaker candidates (by the event\'s fit score).' },
   { value: 'SIMILAR_SCORE', label: 'Similar fit score', hint: 'Candidates with close fit scores together, best group first.' },
 ]
+
+// Rounds whose interviewer can be set for everyone, or per discussion group, at once.
+const BULK_INTERVIEWER_TYPES = ['GROUP_DISCUSSION', 'INTERVIEW']
 
 const ROUND_FILTER_KEYS = [
   { key: 'branch', label: 'Branch', getVal: (r) => r.branch },
@@ -163,6 +170,7 @@ export default function EventDetail() {
   const [groupStrategy, setGroupStrategy] = useState('RANDOM')
   const [groupMaxSize, setGroupMaxSize] = useState(null)
   const [editingGroup, setEditingGroup] = useState(null)
+  const [bulkInterviewer, setBulkInterviewer] = useState('')
   const [draggingMember, setDraggingMember] = useState(null)
   const [dragOverGroupId, setDragOverGroupId] = useState(null)
   const [groupForm] = Form.useForm()
@@ -318,6 +326,14 @@ export default function EventDetail() {
     [shortlistedCandidates]
   )
 
+  // A discussion group's interviewer in its round: the one name all its members share, null if none, or MIXED.
+  const MIXED = 'mixed'
+  const groupInterviewer = (g) => {
+    const names = new Set(g.members.filter((m) => shortlistedIds.has(m.id))
+      .map((m) => roundResultMap[selectedGdRoundId]?.[m.id]?.interviewer || null))
+    return names.size === 1 ? [...names][0] : names.size === 0 ? null : MIXED
+  }
+
   const candidateMap = useMemo(
     () => Object.fromEntries((candidates ?? []).map((c) => [c.id, c])),
     [candidates]
@@ -444,6 +460,12 @@ export default function EventDetail() {
     },
   })
 
+  const offerStatusMutation = useMutation({
+    mutationFn: ({ candidateIds }) => exportOfferStatus(id, candidateIds),
+    onSuccess: (res, { fileName }) => saveFile(res.data, fileName),
+    onError: (err) => message.error(getErrorMessage(err)),
+  })
+
   const shortlistEligibleMutation = useMutation({
     mutationFn: async (rows) => {
       for (const r of rows) {
@@ -481,6 +503,15 @@ export default function EventDetail() {
     mutationFn: ({ groupId, candidateId }) => moveGroupMember(id, selectedGdRoundId, groupId, candidateId),
     // The endpoint returns every group of the round, so drop it straight into the cache — no refetch.
     onSuccess: (res) => queryClient.setQueryData(['roundGroups', id, selectedGdRoundId], res.data.data),
+    onError: (err) => message.error(getErrorMessage(err)),
+  })
+
+  const interviewerMutation = useMutation({
+    mutationFn: ({ roundId, interviewer, groupId }) => setRoundInterviewer(id, roundId, { interviewer, groupId }),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['eventRoundResults', id] })
+      message.success(res.data.message)
+    },
     onError: (err) => message.error(getErrorMessage(err)),
   })
 
@@ -534,7 +565,7 @@ export default function EventDetail() {
   })
 
   const trackMutation = useMutation({
-    mutationFn: ({ candidateId, roundId, track }) => pickRoundTrack(candidateId, Number(id), roundId, track),
+    mutationFn: ({ candidateId, roundId, tracks }) => pickRoundTracks(candidateId, Number(id), roundId, tracks),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['roundProgress', id] })
       queryClient.invalidateQueries({ queryKey: ['eventStageSummary', id] })
@@ -645,6 +676,18 @@ export default function EventDetail() {
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12 }}>
           {offerColumnPicker}
           <DownloadExcel title={`${eventTitle} - ${stageName}`} columns={offerColumns} rows={filteredData} />
+          <Button
+            size="small"
+            icon={<DownloadOutlined />}
+            disabled={filteredData.length === 0}
+            loading={offerStatusMutation.isPending}
+            onClick={() => offerStatusMutation.mutate({
+              candidateIds: filteredData.map((r) => r.id),
+              fileName: `${eventTitle} - Offer Status.xlsx`,
+            })}
+          >
+            Download Offer Status
+          </Button>
         </div>
         <FilterBar
           filterKeys={LATE_STAGE_FILTER_KEYS}
@@ -862,8 +905,11 @@ export default function EventDetail() {
                     size="small"
                     icon={<EditOutlined />}
                     onClick={() => {
-                      setEditingGroup(g)
-                      groupForm.setFieldsValue({ name: g.name, topic: g.topic ?? '' })
+                      // A group whose members have different interviewers starts blank and is left alone unless one is typed.
+                      const interviewer = groupInterviewer(g)
+                      const shown = interviewer === MIXED ? '' : (interviewer ?? '')
+                      setEditingGroup({ ...g, shownInterviewer: shown })
+                      groupForm.setFieldsValue({ name: g.name, topic: g.topic ?? '', interviewer: shown })
                     }}
                   >
                     Edit
@@ -885,6 +931,19 @@ export default function EventDetail() {
                       No topic set
                     </Text>
                   )}
+                </div>
+                <div style={{ marginBottom: 10 }}>
+                  <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 2 }}>
+                    INTERVIEWER
+                  </Text>
+                  {(() => {
+                    const interviewer = groupInterviewer(g)
+                    return interviewer === MIXED
+                      ? <Text type="secondary" italic style={{ fontSize: 13 }}>Different interviewers</Text>
+                      : interviewer
+                        ? <Text>{interviewer}</Text>
+                        : <Text type="secondary" italic style={{ fontSize: 13 }}>Not set</Text>
+                  })()}
                 </div>
                 <Divider style={{ margin: '10px 0' }} />
                 {(() => {
@@ -1038,24 +1097,26 @@ export default function EventDetail() {
       },
       ...(splitsHere ? [{
         key: 'track',
-        title: 'Next track',
+        title: 'Next tracks',
         exportValue: (r) => {
           const t = tracksByCandidate[r.id]?.[round.id]
-          return t ? trackLabel(t.track) + (t.picked ? '' : ' (top preference)') : null
+          return t ? t.tracks.map(trackLabel).join(' + ') + (t.picked ? '' : ' (top preference)') : null
         },
         render: (_, r) => {
           const t = tracksByCandidate[r.id]?.[round.id]
           if (!t) return '—'
           return (
             <Space size={4}>
+              {/* One or several tracks; clearing them all goes back to the top preference. */}
               <Select
+                mode="multiple"
                 size="small"
-                style={{ width: 210 }}
-                value={t.track}
+                style={{ minWidth: 210 }}
+                value={t.tracks}
                 allowClear={t.picked}
                 loading={trackMutation.isPending && trackMutation.variables?.candidateId === r.id}
                 options={t.options.map((k) => ({ value: k, label: <span style={{ color: colorOf[k] }}>{trackLabel(k)}</span> }))}
-                onChange={(track) => trackMutation.mutate({ candidateId: r.id, roundId: round.id, track: track ?? null })}
+                onChange={(tracks) => trackMutation.mutate({ candidateId: r.id, roundId: round.id, tracks })}
               />
               {!t.picked && <Text type="secondary" style={{ fontSize: 11 }}>top preference</Text>}
             </Space>
@@ -1170,7 +1231,35 @@ export default function EventDetail() {
           placeholder="Every status"
           maxTagCount="responsive"
         />
-        <Space>
+        <Space wrap>
+          {BULK_INTERVIEWER_TYPES.includes(round.roundType) && !isEditing && (() => {
+            const reached = candidatesReachingRound(shortlistedCandidates, round).length
+            return (
+              <Space.Compact size="small">
+                <Input
+                  size="small"
+                  placeholder="Interviewer"
+                  value={bulkInterviewer}
+                  onChange={(e) => setBulkInterviewer(e.target.value)}
+                  style={{ width: 150 }}
+                  aria-label={`Interviewer for everyone in ${round.name}`}
+                />
+                <Popconfirm
+                  title={`Set the interviewer for all ${reached} candidate${reached === 1 ? '' : 's'} in ${round.name}?`}
+                  description="Replaces any interviewer already set. Scores and results stay."
+                  onConfirm={() => interviewerMutation.mutate(
+                    { roundId: round.id, interviewer: bulkInterviewer },
+                    { onSuccess: () => setBulkInterviewer('') },
+                  )}
+                  disabled={!bulkInterviewer.trim() || reached === 0}
+                >
+                  <Button size="small" disabled={!bulkInterviewer.trim() || reached === 0} loading={interviewerMutation.isPending}>
+                    Set for all ({reached})
+                  </Button>
+                </Popconfirm>
+              </Space.Compact>
+            )
+          })()}
           {roundColumnPicker}
           <DownloadExcel title={`${eventTitle} - ${round.name}`} columns={roundExportColumns} rows={displayCandidates} />
           {isEditing ? (
@@ -1617,13 +1706,21 @@ export default function EventDetail() {
           form={groupForm}
           layout="vertical"
           style={{ marginTop: 16 }}
-          onFinish={(v) => updateGroupMutation.mutate({ groupId: editingGroup.id, data: v })}
+          onFinish={({ interviewer, ...data }) => {
+            if ((interviewer ?? '') !== editingGroup.shownInterviewer) {
+              interviewerMutation.mutate({ roundId: selectedGdRoundId, interviewer, groupId: editingGroup.id })
+            }
+            updateGroupMutation.mutate({ groupId: editingGroup.id, data })
+          }}
         >
           <Form.Item name="name" label="Group Name" rules={[{ required: true, message: 'Name is required' }]}>
             <Input />
           </Form.Item>
           <Form.Item name="topic" label="Topic">
             <Input placeholder="e.g. The future of renewable energy" />
+          </Form.Item>
+          <Form.Item name="interviewer" label="Interviewer" extra="Set for every member of this group in this round.">
+            <Input placeholder="e.g. Priya Nair" />
           </Form.Item>
         </Form>
       </Modal>

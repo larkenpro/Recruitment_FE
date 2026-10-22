@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { addDummyCandidates, updateEventScreening, getEvents, getEvent, createEvent, updateEventStatus, updateEventMode, addEventApplication, updateEventApplication, getRoundGraph, saveRoundGraph, getRoundProgress, getEventPositions, setEventPositionTypes, getCandidatesByEvent, getGroups, generateGroups, updateGroup, deleteAllGroups } from '../../api/events'
+import { addDummyCandidates, exportOfferStatus, setRoundInterviewer, updateEventScreening, getEvents, getEvent, createEvent, updateEventStatus, updateEventMode, addEventApplication, updateEventApplication, getRoundGraph, saveRoundGraph, getRoundProgress, getEventPositions, setEventPositionTypes, getCandidatesByEvent, getGroups, generateGroups, updateGroup, deleteAllGroups } from '../../api/events'
 import { getColleges } from '../../api/colleges'
 import { createPosition, deletePosition, getPositionTypes } from '../../api/positions'
 
@@ -89,6 +89,19 @@ describe('Events API', () => {
     if (!createdId) return
     await expect(updateEventScreening(createdId, { weightTenth: 0, weightTwelfth: 0, weightCgpa: 0 }))
       .rejects.toMatchObject({ response: { status: 400 } })
+  })
+
+  // ── Bulk interviewer ──────────────────────────────────────────────────────
+  it('PUT /events/:id/rounds/:roundId/interviewer — 404 for a round not in the event', async () => {
+    if (!createdId) return
+    await expect(setRoundInterviewer(createdId, 999999, { interviewer: 'Priya' }))
+      .rejects.toMatchObject({ response: { status: 404 } })
+  })
+
+  // ── Offer status export ───────────────────────────────────────────────────
+  it('POST /events/:id/offer-status/xlsx — 400 when none of the candidates has reached Offer', async () => {
+    if (!createdId) return
+    await expect(exportOfferStatus(createdId, [999999])).rejects.toMatchObject({ response: { status: 400 } })
   })
 
   // ── Round graph ───────────────────────────────────────────────────────────

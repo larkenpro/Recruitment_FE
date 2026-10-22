@@ -4,6 +4,7 @@ import { DownloadOutlined } from '@ant-design/icons'
 import { exportXlsx } from '../api/exports'
 import { tableToSheet } from '../utils/columns'
 import { getErrorMessage } from '../utils/errorUtils'
+import { saveFile } from '../utils/download'
 
 // Downloads the table as an .xlsx in the layout it has on screen: shown columns in order, every filtered row.
 export default function DownloadExcel({ title, columns, rows }) {
@@ -13,12 +14,7 @@ export default function DownloadExcel({ title, columns, rows }) {
     setBusy(true)
     try {
       const res = await exportXlsx({ title, ...tableToSheet(columns, rows ?? []) })
-      const url = URL.createObjectURL(res.data)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `${title}.xlsx`
-      link.click()
-      URL.revokeObjectURL(url)
+      saveFile(res.data, `${title}.xlsx`)
     } catch (err) {
       message.error(getErrorMessage(err))
     } finally {

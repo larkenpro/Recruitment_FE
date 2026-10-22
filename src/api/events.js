@@ -33,6 +33,9 @@ export const setEventPositionTypes = (eventId, positionId, typeIds) => api.put(`
 export const getEventStageSummary = (eventId, stageName = 'Resume') =>
   api.get(`/events/${eventId}/candidates/stage-summary?stageName=${encodeURIComponent(stageName)}`)
 export const getEventRoundResults = (eventId) => api.get(`/events/${eventId}/round-results`)
+// The Offer table's rows (candidate ids, in table order) as the team's offer-status .xlsx.
+export const exportOfferStatus = (eventId, candidateIds) =>
+  api.post(`/events/${eventId}/offer-status/xlsx`, { candidateIds }, { responseType: 'blob' })
 // Groups belong to one Group Discussion round of the event.
 const G = (eventId, roundId, path = '') => `/events/${eventId}/rounds/${roundId}/groups${path}`
 export const getGroups = (eventId, roundId) => api.get(G(eventId, roundId))
@@ -41,3 +44,5 @@ export const generateGroups = (eventId, roundId, request) => api.post(G(eventId,
 export const updateGroup = (eventId, roundId, groupId, data) => api.put(G(eventId, roundId, `/${groupId}`), data)
 export const moveGroupMember = (eventId, roundId, groupId, candidateId) => api.put(G(eventId, roundId, `/${groupId}/members/${candidateId}`))
 export const deleteAllGroups = (eventId, roundId) => api.delete(G(eventId, roundId))
+// { interviewer, groupId? } — everyone who reached a Group Discussion / Interview round, or one of its groups.
+export const setRoundInterviewer = (eventId, roundId, body) => api.put(`/events/${eventId}/rounds/${roundId}/interviewer`, body)

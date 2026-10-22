@@ -13,6 +13,7 @@ import { getEvents } from '../api/events'
 import { getPositionTypes } from '../api/positions'
 import { getColleges } from '../api/colleges'
 import { getErrorMessage } from '../utils/errorUtils'
+import { saveFile } from '../utils/download'
 import dayjs from 'dayjs'
 import { DATE_FORMAT } from '../utils/dates'
 
@@ -168,12 +169,7 @@ export default function ImportCandidates() {
   const handleDownloadFailures = async () => {
     try {
       const res = await downloadFailures({ headers, failures })
-      const url = URL.createObjectURL(new Blob([res.data]))
-      const link = document.createElement('a')
-      link.href = url
-      link.download = 'import-failures.xlsx'
-      link.click()
-      URL.revokeObjectURL(url)
+      saveFile(new Blob([res.data]), 'import-failures.xlsx')
     } catch (err) {
       message.error(getErrorMessage(err))
     }
