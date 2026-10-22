@@ -144,6 +144,12 @@ export default function PublicApply() {
     </div>
   )
 
+  if (eventInfo.data?.event?.status !== 'ACTIVE') return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f6fa' }}>
+      <Result status="warning" title="Applications Closed" subTitle="This event isn't taking applications right now. Please check back later or contact the recruiter." />
+    </div>
+  )
+
   if (positionsLoaded && rankedPairs.length === 0) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f6fa' }}>
       <Result status="warning" title="No Open Positions" subTitle="This event doesn't have any positions open for applications yet. Please check back later or contact the recruiter." />

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { hasInternship, hasItPosition, offerPairs, tickedPairs } from '../../utils/preferences'
+import { hasInternship, hasItPosition, offerPairs, rankedWithChosenFirst, tickedPairs } from '../../utils/preferences'
 
 const pair = (department) => ({ position: { id: 1, title: 'X', department }, type: { id: 1, name: 'FTE' } })
 const typed = (id, name) => ({ position: { id: 1, title: 'X' }, type: { id, name } })
@@ -52,5 +52,16 @@ describe('offerPairs', () => {
 
   it('with no preferences, nothing is ranked', () => {
     expect(offerPairs([da], undefined)).toEqual([{ key: '3:2', label: 'DA — FTE', rank: null }])
+  })
+})
+
+describe('rankedWithChosenFirst', () => {
+  const pair = (positionId, typeId) => ({ position: { id: positionId, title: `P${positionId}` }, type: { id: typeId, name: `T${typeId}` } })
+
+  it('keeps chosen pairs first in their order, then the other open pairs unticked, dropping pairs no longer offered', () => {
+    const { ranked, selected } = rankedWithChosenFirst([pair(2, 1), pair(9, 9), pair(1, 1)], [pair(1, 1), pair(2, 1), pair(3, 1)])
+
+    expect(ranked.map((p) => `${p.position.id}:${p.type.id}`)).toEqual(['2:1', '1:1', '3:1'])
+    expect([...selected]).toEqual(['2:1', '1:1'])
   })
 })

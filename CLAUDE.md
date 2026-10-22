@@ -221,7 +221,7 @@ The most complex page. Displays a 3-column top row + two tabbed sections.
 **Candidate Information tabs:**
 - Personal Info — `Descriptions` table
 - Academic — `Descriptions` table
-- Personal Info / Academic / Preferences read the selected event's application (`getCandidateApplications`); Preferences are reordered/removed and saved via `updateCandidateApplication`. The Offer form's Offered Position uses the same `OfferPairSelect` as the Offers page (the event's pairs, with this application's ranks), and its Offer Response the same Accepted / Rejected / No Information choices.
+- Personal Info / Academic / Preferences read the selected event's application (`getCandidateApplications`); Preferences use the same `PreferenceRanker` as the admin modal (`rankedWithChosenFirst`: the application's pairs first, then the event's other open pairs unticked, pairs the event dropped left out), so they can be added, removed and reordered; saved via `updateCandidateApplication`. The Offer form's Offered Position uses the same `OfferPairSelect` as the Offers page (the event's pairs, with this application's ranks), and its Offer Response the same Accepted / Rejected / No Information choices.
 
 **Recruitment Pipeline tabs** (tabs are added dynamically — only visible if that stage has been reached):
 - **Resume** — shows uploaded resume with download button; "Begin Resume Review" triggers stage start; decision radio (SHORTLISTED / HOLD / REJECTED)
@@ -238,7 +238,7 @@ API calls in this page: `getCandidate`, `getCandidateApplications`, `updateCandi
 ### PublicApply (`src/pages/PublicApply.jsx`)
 Token-based public form — no auth required. **Only for new candidates.**
 
-- On load, validates the token via `getApplyForm(token)` and fetches the event's (position, type) pairs with `getPublicEventPositions` (plain axios).
+- On load, validates the token via `getApplyForm(token)` and fetches the event's (position, type) pairs with `getPublicEventPositions` (plain axios). An event that isn't ACTIVE shows "Applications Closed" instead of the form.
 - 3-step wizard: Personal Info → Academic Details (`components/AcademicFields`, including the required Year of Graduation / batch) → Preferences (`components/PreferenceRanker`: tick pairs and rank them; sent as `preferences[]` = `"positionId:typeId"`).
 - Leaving step 0 calls `checkApplication(token, { email, rollNo })`. If they're already a candidate, a modal says "A candidate with this email/roll number already exists" with **[Cancel]** / **[Send me a link]** — the link goes to the masked email on file (`requestSignInLink`) and leads to the candidate page. A 409 from submit shows the same modal.
 - At least one pair must be ticked: a submit without one (even if other fields also fail) shows "Tick at least one position you want to apply for." under the ranker and scrolls to it; it clears once one is ticked.

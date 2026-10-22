@@ -1,8 +1,5 @@
 import {
-  ArrowDownOutlined,
-  ArrowUpOutlined,
   BookOutlined,
-  CloseOutlined,
   DeleteOutlined,
   DownloadOutlined,
   EditOutlined,
@@ -62,7 +59,8 @@ import {
   upsertOffer,
   uploadCandidateDocument,
 } from '../api/candidates'
-import { preferenceKey, preferenceLabel } from '../utils/preferences'
+import { eventPairs, preferenceKey, preferenceLabel, rankedWithChosenFirst, selectedPreferences } from '../utils/preferences'
+import PreferenceRanker from '../components/PreferenceRanker'
 import { getEventPositions } from '../api/events'
 import OfferPairSelect from '../components/OfferPairSelect'
 import { OFFER_RESPONSES, offerResponse } from '../utils/offers'
@@ -85,7 +83,7 @@ export default function CandidateDetail() {
   const queryClient = useQueryClient()
 
   const [editingPrefs, setEditingPrefs] = useState(false)
-  const [rankedPositions, setRankedPositions] = useState([])
+  const [ranker, setRanker] = useState({ ranked: [], selected: new Set() })
   const [editingRound, setEditingRound] = useState(null)
   const [scoreForm] = Form.useForm()
   const [selectedEventId, setSelectedEventId] = useState(null)
@@ -95,14 +93,6 @@ export default function CandidateDetail() {
   const [docFile, setDocFile] = useState(null)
   const [docForm] = Form.useForm()
   const [viewingDoc, setViewingDoc] = useState(null)
-
-  const movePosition = (index, dir) => {
-    const next = index + dir
-    if (next < 0 || next >= rankedPositions.length) return
-    const updated = [...rankedPositions]
-    ;[updated[index], updated[next]] = [updated[next], updated[index]]
-    setRankedPositions(updated)
-  }
 
   const { data: candidate, isLoading } = useQuery({
     queryKey: ['candidate', id],
@@ -232,12 +222,17 @@ export default function CandidateDetail() {
   })
 
   const openEditPrefs = () => {
-    setRankedPositions(selectedApplication?.preferences ?? [])
+    setRanker(rankedWithChosenFirst(selectedApplication?.preferences ?? [], eventPairs(activeEventPositions)))
     setEditingPrefs(true)
   }
 
   const savePrefs = () => {
-    prefMutation.mutate(rankedPositions.map((p) => ({ positionId: p.position.id, typeId: p.type.id })))
+    const preferences = selectedPreferences(ranker.ranked, ranker.selected)
+    if (preferences.length === 0) {
+      message.error('Tick at least one position the candidate is applying for.')
+      return
+    }
+    prefMutation.mutate(preferences)
   }
 
   const openEditRound = (eventId, round) => {
@@ -518,46 +513,14 @@ export default function CandidateDetail() {
       children: editingPrefs ? (
         <div style={{ maxWidth: 480 }}>
           <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 10 }}>
-            Use arrows to reorder — top position is most preferred. Remove any the candidate no longer wants.
+            Tick the positions the candidate wants and order them with the arrows — top is most preferred.
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
-            {rankedPositions.map((pref, index) => (
-              <div
-                key={preferenceKey(pref)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  padding: '8px 12px',
-                  border: '1.5px solid #e5e7eb',
-                  borderRadius: 8,
-                  background: '#fff',
-                }}
-              >
-                <Tag style={{ fontWeight: 600, minWidth: 28, textAlign: 'center', flexShrink: 0 }}>{index + 1}</Tag>
-                <span style={{ fontSize: 13, fontWeight: 500, color: '#1e1b4b', flex: 1 }}>{preferenceLabel(pref)}</span>
-                <Space size={4}>
-                  <Button
-                    size="small"
-                    icon={<ArrowUpOutlined />}
-                    disabled={index === 0}
-                    onClick={() => movePosition(index, -1)}
-                  />
-                  <Button
-                    size="small"
-                    icon={<ArrowDownOutlined />}
-                    disabled={index === rankedPositions.length - 1}
-                    onClick={() => movePosition(index, 1)}
-                  />
-                  <Button
-                    size="small"
-                    icon={<CloseOutlined />}
-                    aria-label="Remove preference"
-                    onClick={() => setRankedPositions(rankedPositions.filter((_, i) => i !== index))}
-                  />
-                </Space>
-              </div>
-            ))}
+          <div style={{ marginBottom: 16 }}>
+            <PreferenceRanker
+              ranked={ranker.ranked}
+              selected={ranker.selected}
+              onChange={(ranked, selected) => setRanker({ ranked, selected })}
+            />
           </div>
           <Space>
             <Button type="primary" onClick={savePrefs} loading={prefMutation.isPending}>
