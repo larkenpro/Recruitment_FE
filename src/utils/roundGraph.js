@@ -118,7 +118,8 @@ export const layoutRounds = (rounds, edges) => {
   })
 }
 
-// What PUT /events/{id}/round-graph takes, from the editor's React Flow nodes and edges.
+// What PUT /events/{id}/round-graph (or a template) takes, from the editor's React Flow nodes and edges.
+// A round with no maximum marks set gets the stored default on the backend.
 export const toGraphPayload = (nodes, edges) => ({
   rounds: nodes.filter((n) => !isPairKey(n.id)).map((n) => ({
     id: n.data.id ?? null,
@@ -128,7 +129,7 @@ export const toGraphPayload = (nodes, edges) => ({
     x: Math.round(n.position.x),
     y: Math.round(n.position.y),
     onlyFor: n.data.onlyFor ?? [],
-    maxScore: n.data.maxScore ?? DEFAULT_MAX_SCORE,
+    maxScore: n.data.maxScore ?? null,
   })),
   edges: edges.map((e) => ({ from: e.source, to: e.target })),
 })

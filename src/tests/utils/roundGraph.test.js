@@ -52,14 +52,15 @@ describe('toGraphPayload', () => {
   it('sends the rounds, not the pair nodes, and every arrow including the ones from pairs', () => {
     const nodes = [
       { id: 'pair:4:2', type: 'pair', position: { x: -260, y: 0 }, data: { label: 'Developer · FTE' } },
-      { id: '7', position: { x: 10.4, y: 0 }, data: { id: 7, name: 'Coding', roundType: 'ASSESSMENT' } },
+      { id: '7', position: { x: 10.4, y: 0 }, data: { id: 7, name: 'Coding', roundType: 'ASSESSMENT', maxScore: 25 } },
       { id: 'new-1', position: { x: 300, y: 0 }, data: { name: 'HR' } },
     ]
 
     expect(toGraphPayload(nodes, [{ source: 'pair:4:2', target: '7' }, { source: '7', target: 'new-1' }])).toEqual({
       rounds: [
-        { id: 7, key: '7', name: 'Coding', roundType: 'ASSESSMENT', x: 10, y: 0, onlyFor: [], maxScore: 10 },
-        { id: null, key: 'new-1', name: 'HR', roundType: null, x: 300, y: 0, onlyFor: [], maxScore: 10 },
+        { id: 7, key: '7', name: 'Coding', roundType: 'ASSESSMENT', x: 10, y: 0, onlyFor: [], maxScore: 25 },
+        // No maximum set: the backend gives it the stored default.
+        { id: null, key: 'new-1', name: 'HR', roundType: null, x: 300, y: 0, onlyFor: [], maxScore: null },
       ],
       edges: [{ from: 'pair:4:2', to: '7' }, { from: '7', to: 'new-1' }],
     })

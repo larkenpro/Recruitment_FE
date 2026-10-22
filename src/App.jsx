@@ -19,6 +19,7 @@ import Analytics from './pages/Analytics'
 import Offers from './pages/Offers'
 import ImportCandidates from './pages/ImportCandidates'
 import UserManagement from './pages/UserManagement'
+import TemplatesDefaults from './pages/TemplatesDefaults'
 import AuditLog from './pages/AuditLog'
 
 const queryClient = new QueryClient()
@@ -30,6 +31,9 @@ const MODAL_DEFAULTS = { centered: true, styles: { body: { maxHeight: 'calc(100v
 const P = ({ page, children }) => (
   <ProtectedRoute><AppLayout><PageGuard page={page}>{children}</PageGuard></AppLayout></ProtectedRoute>
 )
+
+// Anyone signed in, whatever pages their roles give.
+const SignedIn = ({ children }) => <ProtectedRoute><AppLayout>{children}</AppLayout></ProtectedRoute>
 
 // The audit log hangs off the CLEAR_DATA authority rather than a Page, matching the
 // backend's /api/v1/admin/** rule — so it can't go through PageGuard.
@@ -65,6 +69,7 @@ export default function App() {
               <Route path="/analytics" element={<P page="ANALYTICS"><Analytics /></P>} />
               <Route path="/users" element={<P page="USER_MANAGEMENT"><UserManagement /></P>} />
               <Route path="/audit" element={<Admin><AuditLog /></Admin>} />
+              <Route path="/templates" element={<SignedIn><TemplatesDefaults /></SignedIn>} />
             </Routes>
           </BrowserRouter>
         </AuthProvider>

@@ -10,6 +10,7 @@ import {
   createRoundGraphTemplate, deleteRoundGraphTemplate, getRoundGraphTemplates, saveRoundGraph,
 } from '../api/events'
 import { getErrorMessage } from '../utils/errorUtils'
+import { useDefaults } from '../hooks/useDefaults'
 import {
   DEFAULT_MAX_SCORE, DEFAULT_TEMPLATE, ROUND_TYPES, ROUND_TYPE_COLOR, arrowStyle, createsCycle, fitTemplate, isPairKey, layoutPairs,
   layoutRounds, pairColors, pairLabel, roundPairs, toGraphPayload,
@@ -77,6 +78,7 @@ function OnlyForTags({ roundKey }) {
 
 // `count` is only set in the pipeline view: { pending, passed, failed } at the round.
 export function RoundNode({ id, data, selected }) {
+  const { data: defaults } = useDefaults()
   return (
     <div
       style={{
@@ -95,7 +97,7 @@ export function RoundNode({ id, data, selected }) {
         {data.roundType && (
           <Tag color={ROUND_TYPE_COLOR[data.roundType] ?? 'default'} style={{ fontSize: 10, margin: 0 }}>{data.roundType}</Tag>
         )}
-        <span style={{ fontSize: 11, color: '#64748b' }}>Out of {data.maxScore ?? DEFAULT_MAX_SCORE}</span>
+        <span style={{ fontSize: 11, color: '#64748b' }}>Out of {data.maxScore ?? defaults?.roundMaxScore ?? DEFAULT_MAX_SCORE}</span>
       </div>
       <OnlyForTags roundKey={id} />
       {data.count != null && (
@@ -140,7 +142,8 @@ export const toRoundNode = (round) => ({
   position: { x: round.x, y: round.y },
   data: {
     id: round.id ?? null, name: round.name, roundType: round.roundType ?? null, onlyFor: round.onlyFor ?? [],
-    maxScore: round.maxScore ?? DEFAULT_MAX_SCORE,
+    // Unset (e.g. the built-in template): the stored default applies when saved.
+    maxScore: round.maxScore ?? null,
   },
 })
 
@@ -158,7 +161,9 @@ export const toPairNode = (pair) => ({
 // The event's round graph as a node canvas. On the left, one node per (position, type) pair the
 // event hires for; drag from a pair to the round its candidates start at, and from a round to the
 // round passing it unlocks. Nothing is stored until Save, which sends the whole canvas.
-export default function RoundGraphEditor({ eventId, graph, onSaved, onDirtyChange }) {
+// `template`: editing a round-graph template (the Templates & Defaults page) instead of an event —
+// no positions, nothing to warn about deleting, and `saveGraph(payload)` returns the saved graph.
+export default function RoundGraphEditor({ eventId, graph, onSaved, onDirtyChange, template = false, saveGraph }) {
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
   const [selectedKey, setSelectedKey] = useState(null)
@@ -167,6 +172,8 @@ export default function RoundGraphEditor({ eventId, graph, onSaved, onDirtyChang
   const newRounds = useRef(0)
   const [templateName, setTemplateName] = useState(null)
   const queryClient = useQueryClient()
+  const { data: defaults } = useDefaults()
+  const defaultMaxScore = defaults?.roundMaxScore ?? DEFAULT_MAX_SCORE
   const { data: templates = [] } = useQuery({
     queryKey: ['roundGraphTemplates'],
     queryFn: () => getRoundGraphTemplates().then((r) => r.data.data),
@@ -231,7 +238,7 @@ export default function RoundGraphEditor({ eventId, graph, onSaved, onDirtyChang
     const right = rounds.reduce((x, n) => Math.max(x, n.position.x), -260) + 260
     setNodes((ns) => [
       ...ns.map((n) => ({ ...n, selected: false })),
-      { ...toRoundNode({ key, name: 'New round', x: right, y: 0 }), selected: true },
+      { ...toRoundNode({ key, name: 'New round', x: right, y: 0, maxScore: defaultMaxScore }), selected: true },
     ])
     setSelectedKey(key)
     setDirty(true)
@@ -299,9 +306,10 @@ export default function RoundGraphEditor({ eventId, graph, onSaved, onDirtyChang
     const send = async () => {
       setSaving(true)
       try {
-        const res = await saveRoundGraph(eventId, toGraphPayload(nodes, edges))
-        message.success('Rounds saved')
-        onSaved(res.data.data)
+        const payload = toGraphPayload(nodes, edges)
+        const saved = saveGraph ? await saveGraph(payload) : (await saveRoundGraph(eventId, payload)).data.data
+        message.success(template ? 'Template saved' : 'Rounds saved')
+        onSaved(saved)
       } catch (err) {
         message.error(getErrorMessage(err))
       } finally {
@@ -310,7 +318,8 @@ export default function RoundGraphEditor({ eventId, graph, onSaved, onDirtyChang
     }
     const kept = new Set(rounds.map((n) => n.data.id).filter(Boolean))
     const removed = (graph?.rounds ?? []).filter((r) => !kept.has(r.id))
-    if (removed.length === 0) {
+    // A template has no results to lose.
+    if (template || removed.length === 0) {
       send()
       return
     }
@@ -356,12 +365,14 @@ export default function RoundGraphEditor({ eventId, graph, onSaved, onDirtyChang
           )}
         />
         <Button icon={<SnippetsOutlined />} disabled={rounds.length === 0} onClick={() => setTemplateName('')}>
-          Save as template
+          {template ? 'Save as new template' : 'Save as template'}
         </Button>
         <div style={{ flex: 1 }} />
         {dirty && <Text type="warning" style={{ fontSize: 12 }}>Unsaved changes</Text>}
         <Button icon={<UndoOutlined />} disabled={!dirty || saving} onClick={() => graph && load(graph)}>Discard changes</Button>
-        <Button type="primary" icon={<SaveOutlined />} disabled={!dirty} loading={saving} onClick={save}>Save rounds</Button>
+        <Button type="primary" icon={<SaveOutlined />} disabled={!dirty} loading={saving} onClick={save}>
+          {template ? 'Save template' : 'Save rounds'}
+        </Button>
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
@@ -406,12 +417,12 @@ export default function RoundGraphEditor({ eventId, graph, onSaved, onDirtyChang
               />
               <Text strong style={{ marginTop: 8 }}>Maximum marks</Text>
               <InputNumber
-                value={selected.data.maxScore ?? DEFAULT_MAX_SCORE}
+                value={selected.data.maxScore ?? defaultMaxScore}
                 min={1}
                 max={999}
                 precision={0}
                 style={{ width: '100%' }}
-                onChange={(v) => updateSelected({ maxScore: v ?? DEFAULT_MAX_SCORE })}
+                onChange={(v) => updateSelected({ maxScore: v ?? defaultMaxScore })}
               />
               <Text strong style={{ marginTop: 8 }}>Only for</Text>
               <Select
@@ -425,8 +436,12 @@ export default function RoundGraphEditor({ eventId, graph, onSaved, onDirtyChang
                     label: <span style={{ color: pairInfo[p.key]?.color }}>{pairLabel(p)}</span>,
                   })),
                   // A position the event no longer hires for: shown so it can be removed (saving refuses it).
+                  // In a template every one is from the event it was saved from; applying it keeps the ones that event hires for.
                   ...(selected.data.onlyFor ?? []).filter((k) => !pairInfo[k]).map((k) => ({
-                    value: k, label: <span style={{ color: '#cf1322' }}>Removed position</span>,
+                    value: k,
+                    label: template
+                      ? <span style={{ color: '#64748b' }}>A position from the original event</span>
+                      : <span style={{ color: '#cf1322' }}>Removed position</span>,
                   })),
                 ]}
                 onChange={(keys) => updateSelected({ onlyFor: keys })}
@@ -438,6 +453,12 @@ export default function RoundGraphEditor({ eventId, graph, onSaved, onDirtyChang
               </Text>
               <Button danger icon={<DeleteOutlined />} onClick={removeSelected}>Remove round</Button>
             </Space>
+          ) : template ? (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              A template holds rounds and the arrows between them. Drag from a round to the round passing it
+              unlocks; select a round to edit it, or an arrow or round and press Delete to remove it. Where each
+              position starts is drawn on the event after the template is applied.
+            </Text>
           ) : (graph?.pairs ?? []).length === 0 ? (
             <Empty description="Add positions with their types to this event first — each becomes a starting point here" />
           ) : (

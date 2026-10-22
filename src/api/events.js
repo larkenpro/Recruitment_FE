@@ -17,6 +17,8 @@ export const saveRoundGraph = (eventId, graph) => api.put(`/events/${eventId}/ro
 export const getRoundGraphTemplates = () => api.get('/round-graph-templates')
 export const createRoundGraphTemplate = (name, graph) => api.post('/round-graph-templates', { name, graph })
 export const deleteRoundGraphTemplate = (id) => api.delete(`/round-graph-templates/${id}`)
+// Renames the template and replaces its rounds and arrows.
+export const updateRoundGraphTemplate = (id, name, graph) => api.put(`/round-graph-templates/${id}`, { name, graph })
 // Per candidate: { candidateId, outcome, rounds: { [roundId]: 'NOT_APPLICABLE' | 'LOCKED' | 'OPEN' | 'PASS' | 'FAIL' | 'ON_HOLD' },
 // tracks: { [splitRoundId]: { track, options, picked } } } — pair keys; options best preference first.
 export const getRoundProgress = (eventId) => api.get(`/events/${eventId}/round-progress`)

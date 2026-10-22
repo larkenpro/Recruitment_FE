@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Layout, Menu, Avatar, Badge, Drawer, Button } from 'antd'
 import {
   DashboardOutlined, BankOutlined, CalendarOutlined,
-  UserOutlined, BarChartOutlined, GiftOutlined, LogoutOutlined, BellOutlined, AuditOutlined, CheckCircleOutlined, SettingOutlined,
+  UserOutlined, BarChartOutlined, GiftOutlined, LogoutOutlined, BellOutlined, AuditOutlined, CheckCircleOutlined, SettingOutlined, SnippetsOutlined,
   ImportOutlined, MenuOutlined, FileSearchOutlined
 } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
@@ -20,6 +20,8 @@ const allMenuItems = [
   { key: '/import', page: 'CANDIDATES', icon: <ImportOutlined />, label: 'Import' },
   { key: '/analytics', page: 'ANALYTICS', icon: <BarChartOutlined />, label: 'Analytics' },
   { key: '/users', page: 'USER_MANAGEMENT', icon: <SettingOutlined />, label: 'User Management' },
+  // For anyone signed in.
+  { key: '/templates', everyone: true, icon: <SnippetsOutlined />, label: 'Templates & Defaults' },
   // Gated on the CLEAR_DATA authority instead of a Page, like the backend's /admin/** rule.
   { key: '/audit', admin: true, icon: <FileSearchOutlined />, label: 'Audit Log' },
 ]
@@ -55,8 +57,8 @@ export default function AppLayout({ children }) {
   const handleLogout = () => { logout(); navigate('/login') }
 
   const menuItems = allMenuItems
-    .filter((item) => (item.admin ? user?.canClearData : user?.pages?.includes(item.page)))
-    .map(({ page, admin, ...rest }) => rest)
+    .filter((item) => item.everyone || (item.admin ? user?.canClearData : user?.pages?.includes(item.page)))
+    .map(({ page, admin, everyone, ...rest }) => rest)
 
   const activeMenuKey = menuItems.find((item) => location.pathname.startsWith(item.key))?.key ?? location.pathname
 
