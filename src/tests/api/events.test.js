@@ -380,7 +380,7 @@ describe('Events API', () => {
 
     it('POST /events/:id/rounds/:roundId/groups — returns 400 when nobody has reached the round', async () => {
       if (!gdRoundId) return
-      await expect(generateGroups(createdId, gdRoundId, 2)).rejects.toMatchObject({
+      await expect(generateGroups(createdId, gdRoundId, { strategy: 'RANDOM', count: 2 })).rejects.toMatchObject({
         response: { status: 400 },
       })
     })

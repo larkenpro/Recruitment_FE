@@ -36,7 +36,8 @@ export const getEventRoundResults = (eventId) => api.get(`/events/${eventId}/rou
 // Groups belong to one Group Discussion round of the event.
 const G = (eventId, roundId, path = '') => `/events/${eventId}/rounds/${roundId}/groups${path}`
 export const getGroups = (eventId, roundId) => api.get(G(eventId, roundId))
-export const generateGroups = (eventId, roundId, count) => api.post(G(eventId, roundId), { count })
+// { strategy, count } — or { strategy, maxSize } for SAME_PREFERENCES / SAME_BRANCH; see GROUP_STRATEGIES
+export const generateGroups = (eventId, roundId, request) => api.post(G(eventId, roundId), request)
 export const updateGroup = (eventId, roundId, groupId, data) => api.put(G(eventId, roundId, `/${groupId}`), data)
 export const moveGroupMember = (eventId, roundId, groupId, candidateId) => api.put(G(eventId, roundId, `/${groupId}/members/${candidateId}`))
 export const deleteAllGroups = (eventId, roundId) => api.delete(G(eventId, roundId))

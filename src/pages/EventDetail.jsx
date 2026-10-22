@@ -97,6 +97,17 @@ const CANDIDATE_FILTER_KEYS = [
   { key: 'resumeStatus', label: 'Decision', getVal: (r) => r.resumeStatus },
 ]
 
+// How a Group Discussion round's groups are made (CandidateGroupService.generate). bySize ones ask
+// for the most per group and make as many groups as that needs; the rest ask for a number of groups.
+const GROUP_STRATEGIES = [
+  { value: 'RANDOM', label: 'Random', hint: 'Shuffled evenly across the groups.' },
+  { value: 'SAME_PREFERENCES', label: 'Same preferences', bySize: true, hint: 'Everyone who applied for the same set of positions, in any order, together. A set bigger than the maximum is split evenly.' },
+  { value: 'SAME_BRANCH', label: 'Same branch', bySize: true, hint: 'Everyone from one branch together. A branch bigger than the maximum is split evenly.' },
+  { value: 'MIXED_BRANCHES', label: 'Mixed branches', hint: 'Each group gets a spread of branches.' },
+  { value: 'BALANCED_SCORE', label: 'Balanced by fit score', hint: 'Every group gets a similar mix of strong and weaker candidates (by the event\'s fit score).' },
+  { value: 'SIMILAR_SCORE', label: 'Similar fit score', hint: 'Candidates with close fit scores together, best group first.' },
+]
+
 const ROUND_FILTER_KEYS = [
   { key: 'branch', label: 'Branch', getVal: (r) => r.branch },
   { key: 'graduationYear', label: 'Batch', getVal: (r) => r.graduationYear },
@@ -149,6 +160,8 @@ export default function EventDetail() {
   const [positionForm] = Form.useForm()
   const [pendingCandidateId, setPendingCandidateId] = useState(null)
   const [groupCount, setGroupCount] = useState(null)
+  const [groupStrategy, setGroupStrategy] = useState('RANDOM')
+  const [groupMaxSize, setGroupMaxSize] = useState(null)
   const [editingGroup, setEditingGroup] = useState(null)
   const [draggingMember, setDraggingMember] = useState(null)
   const [dragOverGroupId, setDragOverGroupId] = useState(null)
@@ -456,7 +469,7 @@ export default function EventDetail() {
   })
 
   const generateGroupsMutation = useMutation({
-    mutationFn: (count) => generateGroups(id, selectedGdRoundId, count),
+    mutationFn: () => generateGroups(id, selectedGdRoundId, { strategy: groupStrategy, count: groupCount, maxSize: groupMaxSize }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['roundGroups', id, selectedGdRoundId] })
       message.success('Groups generated!')
@@ -750,53 +763,68 @@ export default function EventDetail() {
     },
   ]
 
-  // The selected Group Discussion round's groups: generate them at random, rename, move people.
+  // The selected Group Discussion round's groups: generate them by a strategy, rename, move people.
+  const strategy = GROUP_STRATEGIES.find((st) => st.value === groupStrategy)
+  const groupSizing = strategy.bySize ? groupMaxSize : groupCount
+  const canGenerate = !!groupSizing && gdEligible.length > 0
   const groupsContent = (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-        <InputNumber
-          min={1}
-          precision={0}
-          max={gdEligible.length || undefined}
-          placeholder="Number of groups"
-          value={groupCount}
-          onChange={setGroupCount}
-          style={{ width: 160 }}
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 6 }}>
+        <Select
+          value={groupStrategy}
+          onChange={setGroupStrategy}
+          options={GROUP_STRATEGIES.map(({ value, label }) => ({ value, label }))}
+          style={{ width: 210 }}
         />
-        {gdEligible.length > 0 && (
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            Max {gdEligible.length} group{gdEligible.length === 1 ? '' : 's'} ({gdEligible.length} candidate{gdEligible.length === 1 ? '' : 's'} in {gdRound?.name})
-          </Text>
+        {strategy.bySize ? (
+          <InputNumber
+            min={1}
+            precision={0}
+            placeholder="Max per group"
+            value={groupMaxSize}
+            onChange={setGroupMaxSize}
+            style={{ width: 160 }}
+          />
+        ) : (
+          <InputNumber
+            min={1}
+            precision={0}
+            max={gdEligible.length || undefined}
+            placeholder="Number of groups"
+            value={groupCount}
+            onChange={setGroupCount}
+            style={{ width: 160 }}
+          />
         )}
         {(groups?.length ?? 0) > 0 ? (
           <Popconfirm
             title="Regenerate groups?"
-            description="This will delete all existing groups and randomly assign new ones."
-            onConfirm={() => generateGroupsMutation.mutate(groupCount)}
+            description="This deletes the current groups and makes new ones."
+            onConfirm={() => generateGroupsMutation.mutate()}
             okText="Regenerate"
             cancelText="Cancel"
             okButtonProps={{ danger: true }}
-            disabled={!groupCount || !gdEligible.length}
+            disabled={!canGenerate}
           >
-            <Button
-              type="primary"
-              loading={generateGroupsMutation.isPending}
-              disabled={!groupCount || !gdEligible.length}
-            >
+            <Button type="primary" loading={generateGroupsMutation.isPending} disabled={!canGenerate}>
               Regenerate Groups
             </Button>
           </Popconfirm>
         ) : (
           <Button
             type="primary"
-            onClick={() => generateGroupsMutation.mutate(groupCount)}
+            onClick={() => generateGroupsMutation.mutate()}
             loading={generateGroupsMutation.isPending}
-            disabled={!groupCount || !gdEligible.length}
+            disabled={!canGenerate}
           >
             Generate Groups
           </Button>
         )}
       </div>
+      <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 20 }}>
+        {strategy.hint}
+        {gdEligible.length > 0 && ` ${gdEligible.length} candidate${gdEligible.length === 1 ? '' : 's'} in ${gdRound?.name}.`}
+      </Text>
       {!gdEligible.length ? (
         <Empty description={`No candidates have reached ${gdRound?.name ?? 'this round'} yet`} />
       ) : (groups?.length ?? 0) === 0 ? (
@@ -828,7 +856,7 @@ export default function EventDetail() {
               >
               <Card
                 size="small"
-                title={<Text strong>Group {g.name}</Text>}
+                title={<Text strong style={{ whiteSpace: 'normal' }}>Group {g.name}</Text>}
                 extra={
                   <Button
                     size="small"
@@ -910,6 +938,9 @@ export default function EventDetail() {
                               variant="borderless"
                               value={g.id}
                               options={groups.map((x) => ({ value: x.id, label: x.name }))}
+                              // Just the letter in the row; the list shows full names like "B · Developer (FTE)".
+                              labelRender={({ label }) => String(label).split(' · ')[0]}
+                              popupMatchSelectWidth={false}
                               onChange={(toGroupId) =>
                                 moveMemberMutation.mutate({ groupId: toGroupId, candidateId: m.id })
                               }
