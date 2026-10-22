@@ -43,6 +43,8 @@ export const uploadResume = (candidateId, file) => {
 // Offer
 // Everyone who reached the Offer stage, across all events: application + offer + stages.
 export const getOffers = () => api.get(V1('/offers'))
+// The Offers page's rows ([{ eventId, candidateId }], in table order) as the team's offer-status .xlsx.
+export const exportOffersStatus = (rows, title) => api.post(V1('/offers/status/xlsx'), { rows, title }, { responseType: 'blob' })
 export const getOffer = (candidateId, eventId) =>
   api.get(`/candidates/${candidateId}/events/${eventId}/offer`)
 export const upsertOffer = (candidateId, eventId, data) =>

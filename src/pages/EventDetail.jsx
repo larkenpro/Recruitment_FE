@@ -3,7 +3,6 @@ import {
   CalendarOutlined,
   CopyOutlined,
   DeleteOutlined,
-  DownloadOutlined,
   EditOutlined,
   FilterOutlined,
   LinkOutlined,
@@ -83,7 +82,7 @@ import PipelineGraph from '../components/PipelineGraph'
 import { DEFAULT_MAX_SCORE, hasReached, isStageKey, pairColors, pairLabel, roundsBefore, stageKey, stageOf } from '../utils/roundGraph'
 import { useColumnChoice } from '../components/ColumnPicker'
 import DownloadExcel from '../components/DownloadExcel'
-import { saveFile } from '../utils/download'
+import DownloadOfferStatus from '../components/DownloadOfferStatus'
 import ScreeningSettings from '../components/ScreeningSettings'
 import { fitScore, screen } from '../utils/screening'
 import { labelFor } from '../utils/columns'
@@ -489,12 +488,6 @@ export default function EventDetail() {
     },
   })
 
-  const offerStatusMutation = useMutation({
-    mutationFn: ({ candidateIds }) => exportOfferStatus(id, candidateIds),
-    onSuccess: (res, { fileName }) => saveFile(res.data, fileName),
-    onError: (err) => message.error(getErrorMessage(err)),
-  })
-
   const shortlistEligibleMutation = useMutation({
     mutationFn: async (rows) => {
       for (const r of rows) {
@@ -705,18 +698,11 @@ export default function EventDetail() {
       <>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12 }}>
           {offerColumnPicker}
-          <Button
-            size="small"
-            icon={<DownloadOutlined />}
+          <DownloadOfferStatus
             disabled={filteredData.length === 0}
-            loading={offerStatusMutation.isPending}
-            onClick={() => offerStatusMutation.mutate({
-              candidateIds: filteredData.map((r) => r.id),
-              fileName: `${eventTitle} - Offer Status.xlsx`,
-            })}
-          >
-            Download Offer Status
-          </Button>
+            fileName={`${eventTitle} - Offer Status.xlsx`}
+            request={() => exportOfferStatus(id, filteredData.map((r) => r.id))}
+          />
         </div>
         <FilterBar
           filterKeys={LATE_STAGE_FILTER_KEYS}

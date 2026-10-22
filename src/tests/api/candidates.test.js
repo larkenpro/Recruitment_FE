@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import {
+  exportOffersStatus,
   getCandidates,
   getCandidate,
   createCandidate,
@@ -94,6 +95,11 @@ describe('Candidates API', () => {
   })
 
   // ── Offers ────────────────────────────────────────────────────────────────
+  it('POST /candidates/offers/status/xlsx — 400 when none of the rows is at Offer', async () => {
+    await expect(exportOffersStatus([{ eventId: 999999, candidateId: 999999 }], 'Offers'))
+      .rejects.toMatchObject({ response: { status: 400 } })
+  })
+
   it('GET /candidates/offers — everyone who reached Offer, each with their stages', async () => {
     const res = await getOffers()
     expect(res.data.status).toBe('success')

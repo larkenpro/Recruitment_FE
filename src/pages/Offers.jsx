@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { Card, Table, Select, message } from 'antd'
+import { Card, Empty, Table, Select, Typography, message } from 'antd'
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { getOffers } from '../api/candidates'
+import { exportOffersStatus, getOffers } from '../api/candidates'
 import { getEventPositions } from '../api/events'
 import { useAuth } from '../context/AuthContext'
 import { PIPELINE_STAGES, useStageDecision } from '../hooks/useStageDecision'
@@ -11,10 +11,12 @@ import FilterBar from '../components/FilterBar'
 import { OfferResponseCell, OfferedPositionCell } from '../components/OfferPairSelect'
 import { useColumnChoice } from '../components/ColumnPicker'
 import { useCandidateColumns } from '../components/CandidateColumns'
-import DownloadExcel from '../components/DownloadExcel'
+import DownloadOfferStatus from '../components/DownloadOfferStatus'
 import { labelFor } from '../utils/columns'
 import { offerResponse, offeredLabel } from '../utils/offers'
 import { getErrorMessage } from '../utils/errorUtils'
+
+const { Title, Text } = Typography
 
 const AFTER_OFFER = PIPELINE_STAGES.slice(PIPELINE_STAGES.indexOf('Offer') + 1)
 
@@ -140,11 +142,13 @@ export default function Offers() {
     ...AFTER_OFFER.map((stageName) => stageColumn(stageName, stageName, stageName)),
   ], ['decision', 'response', 'name', 'rollNo', 'branch', 'offered'])
 
+  // One table per recruitment year, newest first; filters and columns apply to all of them.
+  const years = [...new Set(filteredData.map((r) => r.recruitmentYear))].sort((a, b) => b - a)
+
   return (
     <Card title="Offers" bordered={false} style={{ borderRadius: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12 }}>
         {columnPicker}
-        <DownloadExcel title="Offers" columns={columns} rows={filteredData} />
       </div>
       <FilterBar
         filterKeys={FILTER_KEYS}
@@ -153,13 +157,30 @@ export default function Offers() {
         setFilter={setFilter}
         removeFilter={removeFilter}
       />
-      <Table
-        dataSource={filteredData}
-        columns={columns}
-        rowKey={rowKey}
-        loading={isLoading}
-        scroll={{ x: 'max-content' }}
-      />
+      {isLoading ? (
+        <Table dataSource={[]} columns={columns} rowKey={rowKey} loading scroll={{ x: 'max-content' }} />
+      ) : years.length === 0 ? (
+        <Empty description="Nobody at the Offer stage matches these filters" />
+      ) : years.map((year) => {
+        const rows = filteredData.filter((r) => r.recruitmentYear === year)
+        return (
+          <section key={year} style={{ marginBottom: 32 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+              <Title level={5} style={{ margin: 0 }}>
+                {year} <Text type="secondary" style={{ fontWeight: 400 }}>· {rows.length} candidate{rows.length === 1 ? '' : 's'}</Text>
+              </Title>
+              <DownloadOfferStatus
+                fileName={`Offers ${year} - Offer Status.xlsx`}
+                request={() => exportOffersStatus(
+                  rows.map((r) => ({ eventId: r.eventId, candidateId: r.candidateId })),
+                  `Offers ${year} - Offer Status`,
+                )}
+              />
+            </div>
+            <Table dataSource={rows} columns={columns} rowKey={rowKey} scroll={{ x: 'max-content' }} />
+          </section>
+        )
+      })}
       {candidateModals}
     </Card>
   )
