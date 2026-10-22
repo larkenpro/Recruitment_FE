@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  Alert, Button, Card, Col, Divider, Empty, Form, Input, InputNumber, List, Modal, Row, Space, Tabs, Tag, Typography, message,
+  Button, Card, Col, Divider, Empty, Form, Input, InputNumber, List, Modal, Row, Space, Tabs, Typography, message,
 } from 'antd'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -10,20 +10,17 @@ import {
 } from '../api/events'
 import { updateDefaults } from '../api/defaults'
 import { useDefaults } from '../hooks/useDefaults'
-import { DEFAULT_TEMPLATE } from '../utils/roundGraph'
 import { getErrorMessage } from '../utils/errorUtils'
 import { GUTTER } from '../theme'
 
 const { Text, Title } = Typography
 
-const BUILT_IN = 'built-in'
 const NEW = 'new'
 const EMPTY_GRAPH = { rounds: [], edges: [] }
 // The editor draws position nodes from `pairs`; a template has none.
 const asCanvas = (graph) => ({ ...(graph ?? EMPTY_GRAPH), pairs: [] })
 
-// Round-graph templates: the built-in one (copy only) and the saved ones, each edited on the same
-// canvas as an event's rounds.
+// Round-graph templates, each edited on the same canvas as an event's rounds.
 function Templates() {
   const queryClient = useQueryClient()
   const { data: templates = [], isLoading } = useQuery({
@@ -45,9 +42,6 @@ function Templates() {
       if (key === NEW) {
         setGraph(asCanvas(EMPTY_GRAPH))
         setName('')
-      } else if (key === BUILT_IN) {
-        setGraph(asCanvas(DEFAULT_TEMPLATE))
-        setName('Default (copy)')
       } else {
         const t = templates.find((x) => x.id === key)
         setGraph(asCanvas(t.graph))
@@ -65,7 +59,7 @@ function Templates() {
     })
   }
 
-  // Called by the editor's Save. The built-in template and a new one save as a new template.
+  // Called by the editor's Save. A new one saves as a new template.
   const saveGraph = async ({ rounds, edges }) => {
     if (!name.trim()) {
       // Shaped like an API error so the editor shows this message.
@@ -117,7 +111,8 @@ function Templates() {
           size="small"
           bordered
           loading={isLoading}
-          dataSource={[{ id: BUILT_IN, name: 'Default (GD → Interview → HR)', builtIn: true, graph: DEFAULT_TEMPLATE }, ...templates]}
+          dataSource={templates}
+          locale={{ emptyText: 'No templates yet' }}
           renderItem={(t) => (
             <List.Item
               onClick={() => open(t.id)}
@@ -129,7 +124,6 @@ function Templates() {
                   {t.graph.rounds.length} round{t.graph.rounds.length === 1 ? '' : 's'}
                 </Text>
               </Space>
-              {t.builtIn && <Tag>Built-in</Tag>}
             </List.Item>
           )}
         />
@@ -139,14 +133,6 @@ function Templates() {
           <Empty description="Pick a template to edit, or start a new one" style={{ marginTop: 48 }} />
         ) : (
           <>
-            {selected === BUILT_IN && (
-              <Alert
-                type="info"
-                showIcon
-                style={{ marginBottom: 12 }}
-                message="The built-in template can't be changed. Edit it here and save to keep your own copy."
-              />
-            )}
             <Space wrap style={{ marginBottom: 12 }}>
               <Input
                 value={name}

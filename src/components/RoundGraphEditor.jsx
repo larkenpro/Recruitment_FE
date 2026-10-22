@@ -12,7 +12,7 @@ import {
 import { getErrorMessage } from '../utils/errorUtils'
 import { useDefaults } from '../hooks/useDefaults'
 import {
-  DEFAULT_MAX_SCORE, DEFAULT_TEMPLATE, ROUND_TYPES, ROUND_TYPE_COLOR, arrowStyle, createsCycle, fitTemplate, isPairKey, layoutPairs,
+  DEFAULT_MAX_SCORE, ROUND_TYPES, ROUND_TYPE_COLOR, arrowStyle, createsCycle, fitTemplate, isPairKey, layoutPairs,
   layoutRounds, pairColors, pairLabel, roundPairs, toGraphPayload,
 } from '../utils/roundGraph'
 
@@ -266,7 +266,7 @@ export default function RoundGraphEditor({ eventId, graph, onSaved, onDirtyChang
 
   // Replaces the canvas; nothing is stored until Save, so Discard brings the old rounds back.
   const applyTemplate = (id) => {
-    const template = id === 'default' ? DEFAULT_TEMPLATE : templates.find((t) => t.id === id)?.graph
+    const template = templates.find((t) => t.id === id)?.graph
     if (!template) return
     load(fitTemplate(template, graph?.pairs ?? []))
     setDirty(true)
@@ -344,10 +344,8 @@ export default function RoundGraphEditor({ eventId, graph, onSaved, onDirtyChang
           style={{ width: 220 }}
           popupMatchSelectWidth={false}
           onChange={applyTemplate}
-          options={[
-            { value: 'default', label: 'Default (GD → Interview → HR)' },
-            ...templates.map((t) => ({ value: t.id, label: t.name, template: t })),
-          ]}
+          options={templates.map((t) => ({ value: t.id, label: t.name, template: t }))}
+          notFoundContent="No templates yet — save one, or make one on the Templates & Defaults page"
           optionRender={(o) => (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ flex: 1 }}>{o.label}</span>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { DEFAULT_TEMPLATE, PAIR_COLORS, arrowStyle, roundPairs, spreadOut, createsCycle, fitTemplate, pairColors, hasReached, isPairKey, isStageKey, layoutPairs, layoutRounds, pairLabel, pipelineLayout, roundsBefore, stageOf, toGraphPayload } from '../../utils/roundGraph'
+import { PAIR_COLORS, arrowStyle, roundPairs, spreadOut, createsCycle, fitTemplate, pairColors, hasReached, isPairKey, isStageKey, layoutPairs, layoutRounds, pairLabel, pipelineLayout, roundsBefore, stageOf, toGraphPayload } from '../../utils/roundGraph'
 
 const edges = [{ from: 'coding', to: 'tech' }, { from: 'tech', to: 'hr' }, { from: 'aptitude', to: 'hr' }]
 
@@ -68,8 +68,16 @@ describe('toGraphPayload', () => {
 })
 
 describe('fitTemplate', () => {
-  it('lays out the default template\'s chain with no arrows from pairs', () => {
-    const { pairs: kept, rounds, edges: arrows } = fitTemplate(DEFAULT_TEMPLATE, pairs)
+  it('lays out a chain of rounds with no arrows from pairs', () => {
+    const chain = {
+      rounds: [
+        { key: 'gd', name: 'Group Discussion', roundType: 'GROUP_DISCUSSION', x: 0, y: 0 },
+        { key: 'interview', name: 'Interview', roundType: 'INTERVIEW', x: 260, y: 0 },
+        { key: 'hr', name: 'HR Round', roundType: 'HR', x: 520, y: 0 },
+      ],
+      edges: [{ from: 'gd', to: 'interview' }, { from: 'interview', to: 'hr' }],
+    }
+    const { pairs: kept, rounds, edges: arrows } = fitTemplate(chain, pairs)
     expect(kept).toBe(pairs)
     expect(rounds.map((r) => r.name)).toEqual(['Group Discussion', 'Interview', 'HR Round'])
     expect(arrows).toEqual([{ from: 'gd', to: 'interview' }, { from: 'interview', to: 'hr' }])

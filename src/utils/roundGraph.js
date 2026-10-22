@@ -134,19 +134,6 @@ export const toGraphPayload = (nodes, edges) => ({
   edges: edges.map((e) => ({ from: e.source, to: e.target })),
 })
 
-// Group Discussion -> Interview -> HR.
-export const DEFAULT_TEMPLATE = {
-  rounds: [
-    { key: 'gd', name: 'Group Discussion', roundType: 'GROUP_DISCUSSION', x: 0, y: 0 },
-    { key: 'interview', name: 'Interview', roundType: 'INTERVIEW', x: COLUMN_WIDTH, y: 0 },
-    { key: 'hr', name: 'HR Round', roundType: 'HR', x: 2 * COLUMN_WIDTH, y: 0 },
-  ],
-  edges: [
-    { from: 'gd', to: 'interview' },
-    { from: 'interview', to: 'hr' },
-  ],
-}
-
 // A template's rounds and the arrows between them as a new graph for an event with these pairs.
 // Arrows from pairs never come along: where each position starts is drawn per event. A round's
 // onlyFor keeps the pairs this event hires for. Rounds carry no id, so saving creates them.
