@@ -70,7 +70,7 @@ describe('Events API', () => {
     const { screening } = (await getEvent(createdId)).data.data
     expect(screening).toMatchObject({
       minTenth: 60, minTwelfth: 60, minCgpa: 6, maxActiveBacklogs: 0, maxTotalBacklogs: null,
-      batch: YEAR, allowedBranches: [], weightTenth: 0.5, weightTwelfth: 0.5, weightCgpa: 2,
+      batch: YEAR, allowedBranches: [], weightTenth: 0.1, weightTwelfth: 0.1, weightCgpa: 2,
     })
   })
 

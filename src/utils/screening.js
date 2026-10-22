@@ -12,12 +12,22 @@ function minimum(reasons, label, value, min, unit = '') {
   else if (value < min) reasons.push(`${label} ${value}${unit} < ${min}${unit}`)
 }
 
-/** Weighted average of 10th/100, 12th/100 and CGPA/10, out of 100 (1 dp). A missing mark scores 0. */
-export function fitScore(a, s) {
+export const DEFAULT_ROUND_WEIGHT = 1
+
+/**
+ * Weighted average, out of 100 (1 dp), of 10th/100, 12th/100 and CGPA/10 — a missing mark scores 0 —
+ * plus each round's score / its maximum marks, weighted by s.roundWeights[roundId] (default 1).
+ * `rounds` are [{ roundId, score, maxScore }]; one without a score is left out, so the score builds
+ * up round by round. Same as Screening.fitScore in the backend — change both.
+ */
+export function fitScore(a, s, rounds = []) {
   const parts = [
     [num(s.weightTenth) ?? 0, (num(a.tenthMark) ?? 0) / 100],
     [num(s.weightTwelfth) ?? 0, (twelfthOrDiploma(a) ?? 0) / 100],
     [num(s.weightCgpa) ?? 0, (num(a.ugCgpa) ?? 0) / 10],
+    ...rounds
+      .filter((r) => num(r.score) !== null && r.maxScore > 0)
+      .map((r) => [num(s.roundWeights?.[r.roundId]) ?? DEFAULT_ROUND_WEIGHT, num(r.score) / r.maxScore]),
   ]
   const total = parts.reduce((sum, [w]) => sum + w, 0)
   if (total <= 0) return null

@@ -1,7 +1,7 @@
 import { Alert, Button, Col, Divider, Form, InputNumber, Row, Select, Typography, message } from 'antd'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { updateEventScreening } from '../api/events'
-import { screen } from '../utils/screening'
+import { DEFAULT_ROUND_WEIGHT, screen } from '../utils/screening'
 import { getErrorMessage } from '../utils/errorUtils'
 import { BRANCH_OPTIONS } from './AcademicFields'
 import { GUTTER } from '../theme'
@@ -11,10 +11,11 @@ const { Text } = Typography
 const OFF = 'Off'
 
 /**
- * The event's eligibility criteria and fit-score weights. An empty criterion is off. The preview
- * counts how many of the event's applications the unsaved values would pass.
+ * The event's eligibility criteria and fit-score weights — the academic ones, and one per round
+ * (`rounds`, in pipeline order; empty = 1). An empty criterion is off. The preview counts how many
+ * of the event's applications the unsaved values would pass.
  */
-export default function ScreeningSettings({ eventId, screening, applications }) {
+export default function ScreeningSettings({ eventId, screening, applications, rounds = [] }) {
   const queryClient = useQueryClient()
   const [form] = Form.useForm()
   const values = Form.useWatch([], form)
@@ -37,7 +38,7 @@ export default function ScreeningSettings({ eventId, screening, applications }) 
   ])].map((b) => ({ value: b, label: b }))
 
   const number = (name, label, props) => (
-    <Col xs={24} sm={12} md={8}>
+    <Col key={String(name)} xs={24} sm={12} md={8}>
       <Form.Item name={name} label={label}>
         <InputNumber style={{ width: '100%' }} placeholder={OFF} {...props} />
       </Form.Item>
@@ -50,7 +51,12 @@ export default function ScreeningSettings({ eventId, screening, applications }) 
       form={form}
       layout="vertical"
       initialValues={screening}
-      onFinish={(v) => save.mutate({ ...v, allowedBranches: v.allowedBranches ?? [] })}
+      onFinish={(v) => save.mutate({
+        ...v,
+        allowedBranches: v.allowedBranches ?? [],
+        // An empty box is the default weight, so it isn't stored.
+        roundWeights: Object.fromEntries(Object.entries(v.roundWeights ?? {}).filter(([, w]) => w != null)),
+      })}
     >
       <Divider orientation="left" style={{ marginTop: 0 }}>Eligibility</Divider>
       <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
@@ -72,13 +78,23 @@ export default function ScreeningSettings({ eventId, screening, applications }) 
 
       <Divider orientation="left">Fit score weights</Divider>
       <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-        Fit score = (w₁·10th% + w₂·12th% + w₃·CGPA×10) ÷ (w₁ + w₂ + w₃), out of 100. A missing mark counts as 0.
+        Fit score = the weighted average, out of 100, of 10th%, 12th%, CGPA×10 and — from each round on — every
+        round score so far as a percentage of its maximum marks. A missing mark counts as 0; a round not scored yet
+        is left out. The Resume table uses the marks only, a round&apos;s table adds that round and the rounds
+        before it, and the Offer table adds every round.
       </Text>
       <Row gutter={GUTTER}>
-        {number('weightTenth', '10th weight (w₁)', { min: 0, step: 0.1, placeholder: '0' })}
-        {number('weightTwelfth', '12th / Diploma weight (w₂)', { min: 0, step: 0.1, placeholder: '0' })}
-        {number('weightCgpa', 'CGPA weight (w₃)', { min: 0, step: 0.1, placeholder: '0' })}
+        {number('weightTenth', '10th weight', { min: 0, step: 0.1, placeholder: '0' })}
+        {number('weightTwelfth', '12th / Diploma weight', { min: 0, step: 0.1, placeholder: '0' })}
+        {number('weightCgpa', 'CGPA weight', { min: 0, step: 0.1, placeholder: '0' })}
       </Row>
+      {rounds.length > 0 && (
+        <Row gutter={GUTTER}>
+          {rounds.map((r) => number(['roundWeights', String(r.id)], `${r.name} weight`, {
+            min: 0, step: 0.1, placeholder: String(DEFAULT_ROUND_WEIGHT),
+          }))}
+        </Row>
+      )}
 
       <Alert
         type="info"

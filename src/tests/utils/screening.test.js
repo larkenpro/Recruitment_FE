@@ -33,6 +33,23 @@ describe('fitScore', () => {
   })
 })
 
+describe('fitScore with rounds', () => {
+  it('adds each scored round over its maximum, weighted 1 by default', () => {
+    // (0.5·0.85 + 0.5·0.80 + 2·0.80 + 1·9/10) / 4 — same case as the backend's ScreeningTest
+    expect(fitScore(good, DEFAULTS, [{ roundId: 1, score: 9, maxScore: 10 }])).toBe(83.1)
+    expect(fitScore(good, DEFAULTS, [{ roundId: 1, score: 45, maxScore: 50 }])).toBe(83.1)
+  })
+
+  it("uses each round's weight and leaves out rounds not scored yet", () => {
+    const s = { ...DEFAULTS, roundWeights: { 1: 2 } }
+    expect(fitScore(good, s, [{ roundId: 1, score: 9, maxScore: 10 }, { roundId: 2, score: null, maxScore: 10 }])).toBe(84.5)
+  })
+
+  it('with no rounds is the academic score', () => {
+    expect(fitScore(good, DEFAULTS, [])).toBe(80.8)
+  })
+})
+
 describe('screen', () => {
   it('passes a candidate meeting every criterion, exactly at the cut-offs included', () => {
     expect(screen(good, DEFAULTS)).toEqual({ eligible: true, reasons: [], score: 80.8 })

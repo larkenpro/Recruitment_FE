@@ -86,14 +86,23 @@ import DownloadExcel from '../components/DownloadExcel'
 import DevOnly from '../components/DevOnly'
 import { saveFile } from '../utils/download'
 import ScreeningSettings from '../components/ScreeningSettings'
-import { screen } from '../utils/screening'
+import { fitScore, screen } from '../utils/screening'
 import { labelFor } from '../utils/columns'
 import { offerResponse, offeredLabel } from '../utils/offers'
 import { DATE_FORMAT, defaultLinkExpiry, formatDate } from '../utils/dates'
 
 const { Title, Text } = Typography
 
+// A search box on every table here: matches a candidate's name, roll number, email or phone.
+const CANDIDATE_SEARCH = {
+  key: 'candidate',
+  label: 'Candidate',
+  type: 'text',
+  getVal: (r) => [r.name, r.rollNo, r.email, r.phone].filter(Boolean).join(' '),
+}
+
 const CANDIDATE_FILTER_KEYS = [
+  CANDIDATE_SEARCH,
   { key: 'branch', label: 'Branch', getVal: (r) => r.branch },
   { key: 'graduationYear', label: 'Batch', getVal: (r) => r.graduationYear },
   { key: 'ugCgpa', label: 'CGPA', type: 'min', getVal: (r) => r.ugCgpa },
@@ -116,6 +125,7 @@ const GROUP_STRATEGIES = [
 const BULK_INTERVIEWER_TYPES = ['GROUP_DISCUSSION', 'INTERVIEW']
 
 const ROUND_FILTER_KEYS = [
+  CANDIDATE_SEARCH,
   { key: 'branch', label: 'Branch', getVal: (r) => r.branch },
   { key: 'graduationYear', label: 'Batch', getVal: (r) => r.graduationYear },
   { key: 'backlogs', label: 'Backlogs', type: 'max', getVal: (r) => r.backlogs ?? 0 },
@@ -123,6 +133,7 @@ const ROUND_FILTER_KEYS = [
 ]
 
 const LATE_STAGE_FILTER_KEYS = [
+  CANDIDATE_SEARCH,
   { key: 'branch', label: 'Branch', getVal: (r) => r.branch },
   { key: 'graduationYear', label: 'Batch', getVal: (r) => r.graduationYear },
   { key: 'stageStatus', label: 'Offer Status', getVal: (r) => r.stageStatus },
@@ -311,6 +322,20 @@ export default function EventDetail() {
     return map
   }, [eventRoundResults])
 
+  // Fit score at a point in the pipeline: academics plus the candidate's scores in these rounds so far.
+  const roundMaxScore = Object.fromEntries((roundGraph?.rounds ?? []).map((r) => [r.id, r.maxScore ?? DEFAULT_MAX_SCORE]))
+  const fitScoreUpTo = (c, roundIds) => (event?.screening ? fitScore(c, event.screening, roundIds.map((roundId) => ({
+    roundId, score: roundResultMap[roundId]?.[c.id]?.score, maxScore: roundMaxScore[roundId],
+  }))) : null)
+  const byFitScore = (a, b) => (b.fitScore ?? -1) - (a.fitScore ?? -1)
+  const fitScoreColumn = {
+    key: 'fitScore',
+    title: 'Fit Score',
+    dataIndex: 'fitScore',
+    sorter: (a, b) => (a.fitScore ?? -1) - (b.fitScore ?? -1),
+    render: (v) => v ?? '—',
+  }
+
   const roundsStageSummaryMap = useMemo(
     () => Object.fromEntries((roundsStageSummaryList ?? []).map((s) => [s.candidateId, s])),
     [roundsStageSummaryList]
@@ -385,9 +410,14 @@ export default function EventDetail() {
   const lateStageEnrichedData = useMemo(() => Object.fromEntries(
     Object.entries(lateStageLists).map(([stage, list]) => [
       stage,
-      list.map((s) => ({ ...candidateMap[s.candidateId], key: s.candidateId, stageStatus: s.status })).filter((r) => r.id),
+      // At Offer the fit score counts every round.
+      list.map((s) => ({ ...candidateMap[s.candidateId], key: s.candidateId, stageStatus: s.status }))
+        .filter((r) => r.id)
+        .map((r) => ({ ...r, fitScore: fitScoreUpTo(r, (roundGraph?.rounds ?? []).map((x) => x.id)) }))
+        .sort(byFitScore),
     ])
-  ), [lateStageLists, candidateMap])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [lateStageLists, candidateMap, roundResultMap, roundGraph, event?.screening])
 
   const { filteredData: filteredOfferData, filters: offerFilters, setFilter: setOfferFilter, removeFilter: removeOfferFilter, optionMap: offerOptionMap } = useColumnFilter(lateStageEnrichedData['Offer'], LATE_STAGE_FILTER_KEYS)
 
@@ -645,6 +675,7 @@ export default function EventDetail() {
           />
         ),
       },
+      fitScoreColumn,
       col.name, col.rollNo, col.email, col.phone, col.branch, col.batch, col.tenthMark, col.twelfthMark, col.diplomaMark, col.ugCgpa, col.pgCgpa, col.keamRank, col.preferences, col.activeBacklogs, col.backlogs, col.resume,
       // Shown once the offers are in, so a pick never saves over details not yet loaded.
       ...(eventOffers ? [{
@@ -670,12 +701,11 @@ export default function EventDetail() {
           : '—'),
       }] : []),
       col.details,
-    ], ['decision', 'response', 'name', 'rollNo', 'branch', 'offered'])
+    ], ['decision', 'response', 'fitScore', 'name', 'rollNo', 'branch', 'offered'])
     return (
       <>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12 }}>
           {offerColumnPicker}
-          <DownloadExcel title={`${eventTitle} - ${stageName}`} columns={offerColumns} rows={filteredData} />
           <Button
             size="small"
             icon={<DownloadOutlined />}
@@ -802,7 +832,7 @@ export default function EventDetail() {
           Screening
         </span>
       ),
-      children: <ScreeningSettings eventId={id} screening={event?.screening} applications={candidates} />,
+      children: <ScreeningSettings eventId={id} screening={event?.screening} applications={candidates} rounds={roundGraph?.rounds ?? []} />,
     },
   ]
 
@@ -1032,8 +1062,13 @@ export default function EventDetail() {
       ? ROUND_FILTER_KEYS
       : ROUND_FILTER_KEYS.filter((k) => k.key !== 'roundsDecision')
 
+    const earlierRounds = roundsBefore(roundGraph, String(round.id))
+    // Fit score here counts this round and every round leading into it; best fit first.
+    const scoredRounds = [...earlierRounds.map((r) => r.id), round.id]
     const displayCandidates = candidatesReachingRound(filteredShortlisted, round)
       .filter((c) => roundStatusFilter.length === 0 || roundStatusFilter.includes(roundStatusByCandidate[c.id]?.[round.id]))
+      .map((c) => ({ ...c, fitScore: fitScoreUpTo(c, scoredRounds) }))
+      .sort(byFitScore)
 
     const isEditing = editingRoundId === round.id
 
@@ -1065,7 +1100,6 @@ export default function EventDetail() {
       setRoundTableEdits({})
     }
 
-    const earlierRounds = roundsBefore(roundGraph, String(round.id))
     // A split for someone here: they applied for more than one of the tracks it leads into.
     const splitsHere = displayCandidates.some((c) => tracksByCandidate[c.id]?.[round.id])
     const pairByKey = Object.fromEntries((roundGraph?.pairs ?? []).map((p) => [p.key, p]))
@@ -1123,6 +1157,7 @@ export default function EventDetail() {
           )
         },
       }] : []),
+      fitScoreColumn,
       col.name,
       col.rollNo,
       {
@@ -1210,7 +1245,7 @@ export default function EventDetail() {
     const { shown: roundColumns, picker: roundColumnPicker } = columnsFor(
       `round:${round.id}`,
       allRoundColumns,
-      ['result', 'track', 'name', 'rollNo', 'score', ...earlierRounds.map((prev) => `score:${prev.key}`), 'interviewer'],
+      ['result', 'track', 'fitScore', 'name', 'rollNo', 'score', ...earlierRounds.map((prev) => `score:${prev.key}`), 'interviewer'],
     )
 
     // A GD round shown as group cards downloads as one sheet, with each candidate's group first.
@@ -1277,6 +1312,7 @@ export default function EventDetail() {
     // GD round with assigned groups — render per-group cards
     if (round.roundType === 'GROUP_DISCUSSION' && (groups ?? []).length > 0) {
       const displayCandidateIds = new Set(displayCandidates.map((c) => c.id))
+      const displayById = Object.fromEntries(displayCandidates.map((c) => [c.id, c]))
       const assignedIds = new Set((groups ?? []).flatMap((g) => g.members.map((m) => m.id)))
       const unassigned = displayCandidates.filter((c) => !assignedIds.has(c.id))
 
@@ -1289,7 +1325,7 @@ export default function EventDetail() {
             const groupData = group.members
               .filter((m) => displayCandidateIds.has(m.id))
               .map((m) => ({
-                ...(candidateMap[m.id] ?? {}),
+                ...(displayById[m.id] ?? candidateMap[m.id] ?? {}),
                 id: m.id,
                 name: m.name,
                 rollNo: m.rollNo,
@@ -1385,13 +1421,7 @@ export default function EventDetail() {
         />
       ),
     },
-    {
-      key: 'fitScore',
-      title: 'Fit Score',
-      dataIndex: 'fitScore',
-      sorter: (a, b) => (a.fitScore ?? -1) - (b.fitScore ?? -1),
-      render: (v) => v ?? '—',
-    },
+    fitScoreColumn,
     {
       key: 'eligibility',
       title: 'Eligibility',
