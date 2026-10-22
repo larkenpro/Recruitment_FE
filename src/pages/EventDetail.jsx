@@ -1249,9 +1249,16 @@ export default function EventDetail() {
 
     // A GD round shown as group cards downloads as one sheet, with each candidate's group first.
     const groupOf = Object.fromEntries((groups ?? []).flatMap((g) => g.members.map((m) => [m.id, g.name])))
-    const roundExportColumns = round.roundType === 'GROUP_DISCUSSION' && (groups ?? []).length > 0
+    const byGroup = round.roundType === 'GROUP_DISCUSSION' && (groups ?? []).length > 0
+    const roundExportColumns = byGroup
       ? [{ title: 'Group', exportValue: (r) => groupOf[r.id] ?? 'Unassigned' }, ...roundColumns]
       : roundColumns
+    // A GD round's download keeps each group's candidates together (in group order, best fit first
+    // within it; unassigned last) and merges the Group cell down them.
+    const groupIndex = Object.fromEntries((groups ?? []).flatMap((g, i) => g.members.map((m) => [m.id, i])))
+    const roundExportRows = byGroup
+      ? [...displayCandidates].sort((a, b) => (groupIndex[a.id] ?? Infinity) - (groupIndex[b.id] ?? Infinity))
+      : displayCandidates
 
     const editControls = (
       <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
@@ -1295,7 +1302,7 @@ export default function EventDetail() {
             )
           })()}
           {roundColumnPicker}
-          <DownloadExcel title={`${eventTitle} - ${round.name}`} columns={roundExportColumns} rows={displayCandidates} />
+          <DownloadExcel title={`${eventTitle} - ${round.name}`} columns={roundExportColumns} rows={roundExportRows} mergeColumns={byGroup ? [0] : undefined} />
           {isEditing ? (
             <>
               <Button size="small" onClick={() => { setEditingRoundId(null); setRoundTableEdits({}) }}>Cancel</Button>
@@ -1424,7 +1431,7 @@ export default function EventDetail() {
     {
       key: 'eligibility',
       title: 'Eligibility',
-      exportValue: (r) => (r.eligible ? 'Eligible' : r.ineligibleReasons.join('; ')),
+      exportValue: (r) => (r.eligible ? 'Eligible' : `Ineligible: ${r.ineligibleReasons.join('; ')}`),
       render: (_, r) => (r.eligible
         ? <Tag color="green">Eligible</Tag>
         : <Tooltip title={r.ineligibleReasons.join(', ')}><Tag color="red">Ineligible</Tag></Tooltip>),

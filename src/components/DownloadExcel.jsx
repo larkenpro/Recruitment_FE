@@ -7,13 +7,14 @@ import { getErrorMessage } from '../utils/errorUtils'
 import { saveFile } from '../utils/download'
 
 // Downloads the table as an .xlsx in the layout it has on screen: shown columns in order, every filtered row.
-export default function DownloadExcel({ title, columns, rows }) {
+// `mergeColumns` (indexes) merge runs of the same value down those columns, e.g. a Group column.
+export default function DownloadExcel({ title, columns, rows, mergeColumns }) {
   const [busy, setBusy] = useState(false)
 
   const download = async () => {
     setBusy(true)
     try {
-      const res = await exportXlsx({ title, ...tableToSheet(columns, rows ?? []) })
+      const res = await exportXlsx({ title, ...tableToSheet(columns, rows ?? []), mergeColumns })
       saveFile(res.data, `${title}.xlsx`)
     } catch (err) {
       message.error(getErrorMessage(err))
