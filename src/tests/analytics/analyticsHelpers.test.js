@@ -409,11 +409,11 @@ describe('buildPositionPreferenceTable', () => {
 describe('computeScoreByRoundType', () => {
   it('averages the percentage of each round\'s maximum marks, not raw scores', () => {
     const rows = computeScoreByRoundType([
-      { roundType: 'WRITTEN', score: 40, percent: 80 },
-      { roundType: 'WRITTEN', score: 90, percent: 90 },
+      { roundType: 'ASSESSMENT', score: 40, percent: 80 },
+      { roundType: 'ASSESSMENT', score: 90, percent: 90 },
       { roundType: 'HR', score: 7, percent: 70 },
       { roundType: 'HR', score: null, percent: null },
     ])
-    expect(rows).toEqual([{ name: 'HR', value: 70 }, { name: 'WRITTEN', value: 85 }])
+    expect(rows).toEqual([{ name: 'ASSESSMENT', value: 85 }, { name: 'HR', value: 70 }])
   })
 })

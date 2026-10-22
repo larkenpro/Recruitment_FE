@@ -7,6 +7,10 @@ import { getCandidateResume, getResumeFile } from '../api/candidates'
 import { preferenceLabel } from '../utils/preferences'
 import EventApplicationModal from './EventApplicationModal'
 
+// Sorts on a numeric field, blanks first in ascending order.
+const byNumber = (field) => (a, b) => (a[field] ?? -1) - (b[field] ?? -1)
+const mark = (field, title) => ({ key: field, title, dataIndex: field, sorter: byNumber(field), render: (v) => v ?? '—' })
+
 /**
  * The candidate fields every stage table can show as columns (rows are event applications), plus the
  * resume viewer and application editor their Resume and Details buttons open. Render `modals` once.
@@ -54,7 +58,20 @@ export function useCandidateColumns(positionsFor) {
     phone: { key: 'phone', title: 'Phone', dataIndex: 'phone', render: (v) => v || '—' },
     branch: { key: 'branch', title: 'Branch', dataIndex: 'branch', render: (v) => v || '—' },
     batch: { key: 'batch', title: 'Batch', dataIndex: 'graduationYear', render: (v) => v ?? '—' },
-    ugCgpa: { key: 'ugCgpa', title: 'UG CGPA', dataIndex: 'ugCgpa', render: (v) => v ?? '—' },
+    tenthMark: mark('tenthMark', '10th %'),
+    twelfthMark: mark('twelfthMark', '12th %'),
+    diplomaMark: mark('diplomaMark', 'Diploma %'),
+    ugCgpa: mark('ugCgpa', 'UG CGPA'),
+    pgCgpa: mark('pgCgpa', 'PG CGPA'),
+    keamRank: mark('keamRank', 'KEAM Rank'),
+    activeBacklogs: {
+      key: 'activeBacklogs',
+      title: 'Active Backlogs',
+      dataIndex: 'arrears',
+      sorter: byNumber('arrears'),
+      exportValue: (r) => r.arrears ?? 0,
+      render: (v) => <Tag color={(v ?? 0) === 0 ? 'green' : 'red'}>{v ?? 0}</Tag>,
+    },
     preferences: {
       key: 'preferences',
       title: 'Preferences',
@@ -65,8 +82,9 @@ export function useCandidateColumns(positionsFor) {
     },
     backlogs: {
       key: 'backlogs',
-      title: 'Backlogs',
+      title: 'Total Backlogs',
       dataIndex: 'backlogs',
+      sorter: byNumber('backlogs'),
       exportValue: (r) => r.backlogs ?? 0,
       render: (v) => <Tag color={(v ?? 0) === 0 ? 'green' : 'red'}>{v ?? 0}</Tag>,
     },

@@ -77,11 +77,11 @@ export function buildRoundComparisonRows(candidateRounds = []) {
 }
 
 /**
- * Average round-result score, as a percentage of each round's maximum marks, grouped by interview round type (e.g. GD, Technical, HR).
+ * Average round-result score, as a percentage of each round's maximum marks, grouped by interview round type (e.g. Assessment, GD, Interview, HR).
  */
 // Fixed display order for the "Average Score % by Round Type" chart — round types
-// not listed here (e.g. WRITTEN, CODING) sort alphabetically after these.
-const ROUND_TYPE_ORDER = ['GROUP_DISCUSSION', 'TECHNICAL', 'HR']
+// not listed here sort alphabetically after these.
+const ROUND_TYPE_ORDER = ['ASSESSMENT', 'GROUP_DISCUSSION', 'INTERVIEW', 'HR']
 
 export function computeScoreByRoundType(roundResults) {
   const byType = groupAndAggregate(roundResults, r => r.roundType, items => Number(avg(items, r => r.percent)))

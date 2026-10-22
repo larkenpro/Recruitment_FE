@@ -105,7 +105,7 @@ export default function Offers() {
   // The same columns and defaults as the event page's Offer table, plus where each candidate is from.
   const { shown: columns, picker: columnPicker } = columnsFor('offers', [
     stageColumn('Offer', 'decision', 'Offer Status'),
-    col.name, col.rollNo, col.email, col.phone, col.branch, col.batch, col.ugCgpa, col.preferences, col.backlogs, col.resume,
+    col.name, col.rollNo, col.email, col.phone, col.branch, col.batch, col.tenthMark, col.twelfthMark, col.diplomaMark, col.ugCgpa, col.pgCgpa, col.keamRank, col.preferences, col.activeBacklogs, col.backlogs, col.resume,
     {
       key: 'offered',
       title: 'Offered position',

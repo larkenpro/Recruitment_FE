@@ -5,6 +5,8 @@ export const getEvent = (id) => api.get(`/events/${id}`)
 export const createEvent = (data) => api.post('/events', data)
 export const updateEventStatus = (id, status) => api.put(`/events/${id}/status?status=${status}`)
 export const updateEventMode = (id, mode) => api.put(`/events/${id}/mode`, null, { params: { mode } })
+// { minTenth, minTwelfth, minCgpa, maxActiveBacklogs, maxTotalBacklogs, batch, allowedBranches, weightTenth, weightTwelfth, weightCgpa }; null = off
+export const updateEventScreening = (id, screening) => api.put(`/events/${id}/screening`, screening)
 // expiresOn: 'YYYY-MM-DD', the last day the link accepts applications; omit for 30 days.
 export const generateLink = (eventId, expiresOn) => api.post(`/links/generate`, { eventId, expiresOn })
 // The event's round graph: { pairs: [{ key, positionId, typeId, positionTitle, typeName }], rounds: [{ id, key, name, roundType, x, y, order }], edges: [{ from, to }] }, where `from` may be a pair key.
@@ -20,7 +22,9 @@ export const deleteRoundGraphTemplate = (id) => api.delete(`/round-graph-templat
 export const getRoundProgress = (eventId) => api.get(`/events/${eventId}/round-progress`)
 export const getCandidatesByEvent = (eventId) => api.get(`/events/${eventId}/candidates`)
 export const addEventApplication = (eventId, data) => api.post(`/events/${eventId}/applications`, data)
-export const updateEventApplication = (eventId, candidateId, data) => api.put(`/events/${eventId}/applications/${candidateId}`, data)
+// Development only: the backend has this endpoint only with DEV_TOOLS_ENABLED=true.
+export const addDummyCandidates = (eventId) => api.post(`/events/${eventId}/dummy-candidates`)
+export const updateEventApplication =(eventId, candidateId, data) => api.put(`/events/${eventId}/applications/${candidateId}`, data)
 export const getEventPositions = (eventId) => api.get(`/events/${eventId}/positions`)
 // positions: [{ positionId, typeIds }] — every position needs at least one type
 export const addEventPositions = (eventId, positions) => api.post(`/events/${eventId}/positions`, positions)

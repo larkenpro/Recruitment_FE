@@ -11,6 +11,7 @@ import { getAllRoundResults } from '../api/roundResults'
 import { getAllApplications, getStageSummaries } from '../api/analytics'
 import { computeAnalytics, computeScoreByRoundType, groupAndAggregate, avg, buildRoundComparisonRows, buildFunnel, buildCampusRows, buildPositionPreferenceTable } from '../utils/analyticsHelpers'
 import { SPACE, GUTTER, RADIUS, FONT_SIZE, FONT_WEIGHT, INK, TEXT, useLayoutMetrics } from '../theme'
+import { DEFAULT_MAX_SCORE } from '../utils/roundGraph'
 
 const COLORS = ['#4f46e5', '#7c3aed', '#2563eb', '#0891b2', '#059669', '#d97706', '#dc2626', '#db2777']
 
@@ -278,7 +279,7 @@ function RoundCell({ round }) {
   if (!round) return <span style={{ color: INK.faint }}>—</span>
   return (
     <Space size={SPACE.xs} wrap>
-      <span>{round.score != null ? `${round.score} / ${round.maxScore ?? 100}` : '—'}</span>
+      <span>{round.score != null ? `${round.score} / ${round.maxScore ?? DEFAULT_MAX_SCORE}` : '—'}</span>
       {round.result && <Tag color={RESULT_COLOR[round.result]}>{round.result}</Tag>}
     </Space>
   )

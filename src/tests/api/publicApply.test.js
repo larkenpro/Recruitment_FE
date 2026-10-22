@@ -30,7 +30,8 @@ describe('Apply Flow', () => {
   beforeAll(async () => {
     try {
       const eventsRes = await getEvents()
-      const event = eventsRes.data.data.find(e => e.positions?.length > 0) ?? eventsRes.data.data[0] ?? null
+      // Only an ACTIVE event takes applications; with none, the submit tests skip.
+      const event = eventsRes.data.data.find(e => e.status === 'ACTIVE' && e.positions?.length > 0) ?? null
       if (event) {
         const linkRes = await generateLink(event.id)
         // generate returns the full apply URL (…/apply/<token>), not an object

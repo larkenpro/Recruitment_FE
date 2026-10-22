@@ -4,6 +4,7 @@ import {
   CopyOutlined,
   DeleteOutlined,
   EditOutlined,
+  FilterOutlined,
   LinkOutlined,
   TeamOutlined,
   UnorderedListOutlined,
@@ -33,15 +34,18 @@ import {
   Select,
   Space,
   Statistic,
+  Switch,
   Table,
   Tabs,
   Tag,
+  Tooltip,
   Typography,
   message,
 } from 'antd'
 import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import {
+  addDummyCandidates,
   addEventPositions,
   generateLink,
   getCandidatesByEvent,
@@ -68,7 +72,7 @@ import { useAuth } from '../context/AuthContext'
 import { OfferResponseCell, OfferedPositionCell } from '../components/OfferPairSelect'
 import { getErrorMessage } from '../utils/errorUtils'
 import { GUTTER, useLayoutMetrics } from '../theme'
-import { useStageDecision } from '../hooks/useStageDecision'
+import { decideStage, useStageDecision } from '../hooks/useStageDecision'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
 import { useCandidateColumns } from '../components/CandidateColumns'
@@ -76,6 +80,9 @@ import PipelineGraph from '../components/PipelineGraph'
 import { DEFAULT_MAX_SCORE, hasReached, isStageKey, pairColors, pairLabel, roundsBefore, stageKey, stageOf } from '../utils/roundGraph'
 import { useColumnChoice } from '../components/ColumnPicker'
 import DownloadExcel from '../components/DownloadExcel'
+import DevOnly from '../components/DevOnly'
+import ScreeningSettings from '../components/ScreeningSettings'
+import { screen } from '../utils/screening'
 import { labelFor } from '../utils/columns'
 import { offerResponse, offeredLabel } from '../utils/offers'
 import { DATE_FORMAT, defaultLinkExpiry, formatDate } from '../utils/dates'
@@ -239,10 +246,20 @@ export default function EventDetail() {
     [stageSummaryList]
   )
 
+  // Screened against the event's criteria and sorted best fit first.
   const candidatesWithStatus = useMemo(
-    () => (candidates ?? []).map((c) => ({ ...c, resumeStatus: stageSummaryMap[c.id]?.status ?? null })),
-    [candidates, stageSummaryMap]
+    () => (candidates ?? [])
+      .map((c) => {
+        const { eligible, reasons, score } = screen(c, event?.screening)
+        return { ...c, resumeStatus: stageSummaryMap[c.id]?.status ?? null, eligible, ineligibleReasons: reasons, fitScore: score }
+      })
+      .sort((a, b) => (b.fitScore ?? -1) - (a.fitScore ?? -1)),
+    [candidates, stageSummaryMap, event?.screening]
   )
+  const [showIneligible, setShowIneligible] = useState(false)
+  const ineligibleCount = candidatesWithStatus.filter((c) => !c.eligible).length
+  // Undecided only: a Hold or Reject set by hand stays.
+  const toShortlist = candidatesWithStatus.filter((c) => c.eligible && !c.resumeStatus)
 
   const {
     filteredData: filteredCandidates,
@@ -414,6 +431,30 @@ export default function EventDetail() {
     },
   })
 
+  const shortlistEligibleMutation = useMutation({
+    mutationFn: async (rows) => {
+      for (const r of rows) {
+        await decideStage({ candidateId: r.id, eventId: Number(id), stageName: 'Resume', status: 'SHORTLISTED', ensureStarted: true })
+      }
+      return rows.length
+    },
+    onSuccess: (n) => message.success(`Shortlisted ${n} eligible candidate${n === 1 ? '' : 's'} at Resume`),
+    onError: (err) => message.error(getErrorMessage(err)),
+    // Some may have gone through before one failed.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['eventStageSummary', id] }),
+  })
+
+  const dummyCandidatesMutation = useMutation({
+    mutationFn: () => addDummyCandidates(id),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['eventCandidates', id] })
+      queryClient.invalidateQueries({ queryKey: ['eventStageSummary', id] })
+      queryClient.invalidateQueries({ queryKey: ['roundProgress', id] })
+      message.success(res.data.message)
+    },
+    onError: (err) => message.error(getErrorMessage(err)),
+  })
+
   const generateGroupsMutation = useMutation({
     mutationFn: (count) => generateGroups(id, selectedGdRoundId, count),
     onSuccess: () => {
@@ -560,7 +601,7 @@ export default function EventDetail() {
           />
         ),
       },
-      col.name, col.rollNo, col.email, col.phone, col.branch, col.batch, col.ugCgpa, col.preferences, col.backlogs, col.resume,
+      col.name, col.rollNo, col.email, col.phone, col.branch, col.batch, col.tenthMark, col.twelfthMark, col.diplomaMark, col.ugCgpa, col.pgCgpa, col.keamRank, col.preferences, col.activeBacklogs, col.backlogs, col.resume,
       // Shown once the offers are in, so a pick never saves over details not yet loaded.
       ...(eventOffers ? [{
         key: 'offered',
@@ -696,6 +737,16 @@ export default function EventDetail() {
           </Form>
         </div>
       ),
+    },
+    {
+      key: 'screening',
+      label: (
+        <span>
+          <FilterOutlined style={{ marginRight: 4 }} />
+          Screening
+        </span>
+      ),
+      children: <ScreeningSettings eventId={id} screening={event?.screening} applications={candidates} />,
     },
   ]
 
@@ -1025,7 +1076,7 @@ export default function EventDetail() {
           return roundResultMap[round.id]?.[r.id]?.interviewer || '—'
         },
       },
-      col.email, col.phone, col.branch, col.batch, col.ugCgpa, col.preferences, col.backlogs, col.resume, col.details,
+      col.email, col.phone, col.branch, col.batch, col.tenthMark, col.twelfthMark, col.diplomaMark, col.ugCgpa, col.pgCgpa, col.keamRank, col.preferences, col.activeBacklogs, col.backlogs, col.resume, col.details,
       {
         key: 'comments',
         title: 'Comments',
@@ -1214,14 +1265,50 @@ export default function EventDetail() {
         />
       ),
     },
-    col.name, col.rollNo, col.email, col.phone, col.branch, col.batch, col.ugCgpa, col.preferences, col.backlogs, col.resume, col.details,
-  ], ['decision', 'name', 'rollNo', 'branch', 'ugCgpa', 'backlogs', 'resume'])
+    {
+      key: 'fitScore',
+      title: 'Fit Score',
+      dataIndex: 'fitScore',
+      sorter: (a, b) => (a.fitScore ?? -1) - (b.fitScore ?? -1),
+      render: (v) => v ?? '—',
+    },
+    {
+      key: 'eligibility',
+      title: 'Eligibility',
+      exportValue: (r) => (r.eligible ? 'Eligible' : r.ineligibleReasons.join('; ')),
+      render: (_, r) => (r.eligible
+        ? <Tag color="green">Eligible</Tag>
+        : <Tooltip title={r.ineligibleReasons.join(', ')}><Tag color="red">Ineligible</Tag></Tooltip>),
+    },
+    col.name, col.rollNo, col.email, col.phone, col.branch, col.batch, col.tenthMark, col.twelfthMark, col.diplomaMark, col.ugCgpa, col.pgCgpa, col.keamRank, col.preferences, col.activeBacklogs, col.backlogs, col.resume, col.details,
+  ], ['decision', 'fitScore', 'eligibility', 'name', 'rollNo', 'branch', 'tenthMark', 'twelfthMark', 'ugCgpa', 'activeBacklogs', 'backlogs', 'resume'])
+  const resumeRows = showIneligible ? filteredCandidates : filteredCandidates.filter((c) => c.eligible)
 
   const resumeContent = (
     <>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+        <Space style={{ marginRight: 'auto' }} wrap>
+          <Switch size="small" checked={showIneligible} onChange={setShowIneligible} />
+          <Text>Show ineligible ({ineligibleCount})</Text>
+          <Popconfirm
+            title={`Shortlist ${toShortlist.length} eligible candidate${toShortlist.length === 1 ? '' : 's'} with no decision yet?`}
+            description="They move on to Rounds."
+            onConfirm={() => shortlistEligibleMutation.mutate(toShortlist)}
+            okText="Shortlist"
+            disabled={toShortlist.length === 0}
+          >
+            <Button size="small" type="primary" disabled={toShortlist.length === 0} loading={shortlistEligibleMutation.isPending}>
+              Shortlist eligible ({toShortlist.length})
+            </Button>
+          </Popconfirm>
+        </Space>
         {resumeColumnPicker}
-        <DownloadExcel title={`${eventTitle} - Resume`} columns={resumeColumns} rows={filteredCandidates} />
+        <DownloadExcel title={`${eventTitle} - Resume`} columns={resumeColumns} rows={resumeRows} />
+        <DevOnly>
+          <Button icon={<UsergroupAddOutlined />} loading={dummyCandidatesMutation.isPending} onClick={() => dummyCandidatesMutation.mutate()}>
+            Add 100 Dummy Candidates
+          </Button>
+        </DevOnly>
         <Button icon={<UserAddOutlined />} onClick={() => addCandidate(id)}>
           Add Candidate
         </Button>
@@ -1234,7 +1321,7 @@ export default function EventDetail() {
         removeFilter={removeCandidateFilter}
       />
       <Table
-        dataSource={filteredCandidates}
+        dataSource={resumeRows}
         loading={candidatesLoading}
         rowKey="id"
         size="small"

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { getEvents, getEvent, createEvent, updateEventStatus, updateEventMode, addEventApplication, updateEventApplication, getRoundGraph, saveRoundGraph, getRoundProgress, getEventPositions, setEventPositionTypes, getCandidatesByEvent, getGroups, generateGroups, updateGroup, deleteAllGroups } from '../../api/events'
+import { addDummyCandidates, updateEventScreening, getEvents, getEvent, createEvent, updateEventStatus, updateEventMode, addEventApplication, updateEventApplication, getRoundGraph, saveRoundGraph, getRoundProgress, getEventPositions, setEventPositionTypes, getCandidatesByEvent, getGroups, generateGroups, updateGroup, deleteAllGroups } from '../../api/events'
 import { getColleges } from '../../api/colleges'
 import { createPosition, deletePosition, getPositionTypes } from '../../api/positions'
 
@@ -57,6 +57,40 @@ describe('Events API', () => {
     expect(res.data.data.status).toBe('ACTIVE')
   })
 
+  // ── Dummy candidates (dev backend only) ───────────────────────────────────
+  // A 400, not a 404, shows the endpoint is there — and it adds nobody to the dev database.
+  it('POST /events/:id/dummy-candidates — an event with no positions returns 400', async () => {
+    if (!createdId) return
+    await expect(addDummyCandidates(createdId)).rejects.toMatchObject({ response: { status: 400 } })
+  })
+
+  // ── Screening ─────────────────────────────────────────────────────────────
+  it('GET /events/:id — a new event screens with the default criteria and weights for its own batch', async () => {
+    if (!createdId) return
+    const { screening } = (await getEvent(createdId)).data.data
+    expect(screening).toMatchObject({
+      minTenth: 60, minTwelfth: 60, minCgpa: 6, maxActiveBacklogs: 0, maxTotalBacklogs: null,
+      batch: YEAR, allowedBranches: [], weightTenth: 0.5, weightTwelfth: 0.5, weightCgpa: 2,
+    })
+  })
+
+  it('PUT /events/:id/screening — replaces the criteria and weights', async () => {
+    if (!createdId) return
+    const res = await updateEventScreening(createdId, {
+      minTenth: null, minTwelfth: 65, minCgpa: 7, maxActiveBacklogs: 1, maxTotalBacklogs: 3,
+      batch: 2027, allowedBranches: ['Information Technology'], weightTenth: 1, weightTwelfth: 1, weightCgpa: 3,
+    })
+    expect(res.data.data.screening).toMatchObject({
+      minTenth: null, minTwelfth: 65, minCgpa: 7, batch: 2027, allowedBranches: ['Information Technology'], weightCgpa: 3,
+    })
+  })
+
+  it('PUT /events/:id/screening — every weight 0 returns 400', async () => {
+    if (!createdId) return
+    await expect(updateEventScreening(createdId, { weightTenth: 0, weightTwelfth: 0, weightCgpa: 0 }))
+      .rejects.toMatchObject({ response: { status: 400 } })
+  })
+
   // ── Round graph ───────────────────────────────────────────────────────────
   describe('Round graph', () => {
     let saved = null
@@ -74,7 +108,7 @@ describe('Events API', () => {
       const res = await saveRoundGraph(createdId, {
         rounds: [
           { key: 'hr', name: 'HR Round', roundType: 'HR', x: 300, y: 0 },
-          { key: 'apt', name: 'Aptitude Test', roundType: 'WRITTEN', x: 0, y: 0 },
+          { key: 'apt', name: 'Aptitude Test', roundType: 'ASSESSMENT', x: 0, y: 0 },
           { key: 'gd', name: 'Group Discussion', roundType: 'GROUP_DISCUSSION', x: 0, y: 120 },
         ],
         edges: [{ from: 'apt', to: 'hr' }, { from: 'gd', to: 'hr' }],

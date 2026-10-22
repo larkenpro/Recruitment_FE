@@ -13,19 +13,17 @@ export const PIPELINE_STAGES = ['Resume', 'Rounds', 'Offer', 'Joining']
  *   ensureStarted — if true, attempts to start the stage before updating
  *                   (use when the stage may not yet exist, e.g. from EventDetail)
  */
+export async function decideStage({ candidateId, eventId, stageName, status, ensureStarted = false }) {
+  if (ensureStarted) {
+    try { await addStageEntry(candidateId, eventId, { stageName }) } catch (_) {}
+  }
+  await updateStageStatusByName(candidateId, eventId, stageName, { status })
+  if (status === 'SHORTLISTED') {
+    const next = PIPELINE_STAGES[PIPELINE_STAGES.indexOf(stageName) + 1]
+    if (next) await addStageEntry(candidateId, eventId, { stageName: next })
+  }
+}
+
 export function useStageDecision({ onSuccess, onError } = {}) {
-  return useMutation({
-    mutationFn: async ({ candidateId, eventId, stageName, status, ensureStarted = false }) => {
-      if (ensureStarted) {
-        try { await addStageEntry(candidateId, eventId, { stageName }) } catch (_) {}
-      }
-      await updateStageStatusByName(candidateId, eventId, stageName, { status })
-      if (status === 'SHORTLISTED') {
-        const next = PIPELINE_STAGES[PIPELINE_STAGES.indexOf(stageName) + 1]
-        if (next) await addStageEntry(candidateId, eventId, { stageName: next })
-      }
-    },
-    onSuccess,
-    onError,
-  })
+  return useMutation({ mutationFn: decideStage, onSuccess, onError })
 }

@@ -4,10 +4,10 @@
 // by their id as text once saved, or a temporary key for a round added but not saved yet.
 
 // What a round's scores are out of when nobody set it.
-export const DEFAULT_MAX_SCORE = 100
+export const DEFAULT_MAX_SCORE = 10
 
-export const ROUND_TYPES = ['WRITTEN', 'TECHNICAL', 'HR', 'GROUP_DISCUSSION', 'CODING']
-export const ROUND_TYPE_COLOR = { WRITTEN: 'purple', TECHNICAL: 'blue', HR: 'green', GROUP_DISCUSSION: 'orange', CODING: 'cyan' }
+export const ROUND_TYPES = ['ASSESSMENT', 'INTERVIEW', 'GROUP_DISCUSSION', 'HR']
+export const ROUND_TYPE_COLOR = { ASSESSMENT: 'purple', INTERVIEW: 'blue', GROUP_DISCUSSION: 'orange', HR: 'green' }
 
 const COLUMN_WIDTH = 260
 const ROW_HEIGHT = 120
@@ -137,7 +137,7 @@ export const toGraphPayload = (nodes, edges) => ({
 export const DEFAULT_TEMPLATE = {
   rounds: [
     { key: 'gd', name: 'Group Discussion', roundType: 'GROUP_DISCUSSION', x: 0, y: 0 },
-    { key: 'interview', name: 'Interview', roundType: 'TECHNICAL', x: COLUMN_WIDTH, y: 0 },
+    { key: 'interview', name: 'Interview', roundType: 'INTERVIEW', x: COLUMN_WIDTH, y: 0 },
     { key: 'hr', name: 'HR Round', roundType: 'HR', x: 2 * COLUMN_WIDTH, y: 0 },
   ],
   edges: [
