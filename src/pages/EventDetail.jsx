@@ -46,6 +46,9 @@ import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import {
   addDummyCandidates,
+  rejectPendingInEvent,
+  rejectPendingInRound,
+  exportStudentSheet,
   setRoundInterviewer,
   exportOfferStatus,
   addEventPositions,
@@ -122,6 +125,9 @@ const GROUP_STRATEGIES = [
 // Rounds whose interviewer can be set for everyone, or per discussion group, at once.
 const BULK_INTERVIEWER_TYPES = ['GROUP_DISCUSSION', 'INTERVIEW']
 
+// A round result that still needs deciding: reached with no result, or put on hold.
+const PENDING_STATUSES = ['OPEN', 'ON_HOLD']
+
 const ROUND_FILTER_KEYS = [
   CANDIDATE_SEARCH,
   { key: 'branch', label: 'Branch', getVal: (r) => r.branch },
@@ -189,6 +195,8 @@ export default function EventDetail() {
   const [pendingPipelineCandidateId, setPendingPipelineCandidateId] = useState(null)
   // The pipeline graph node whose candidates are listed: a stage key, or a round id as text.
   const [selectedStage, setSelectedStage] = useState(stageKey('Resume'))
+  // The Reports card's Student Sheet stage: the pipeline's selection until one is picked there.
+  const [reportStageKey, setReportStageKey] = useState(null)
   const [roundStatusFilter, setRoundStatusFilter] = useState([])
   const columnsFor = useColumnChoice()
 
@@ -485,6 +493,25 @@ export default function EventDetail() {
     onError: (err) => {
       setPendingCandidateId(null)
       message.error(getErrorMessage(err))
+    },
+  })
+
+  // Rejecting the pending moves rounds, stages and offers, so everything they feed is refetched.
+  const refreshPipeline = () => ['eventRoundResults', 'roundProgress', 'eventStageSummary', 'eventCandidates']
+    .forEach((key) => queryClient.invalidateQueries({ queryKey: [key, id] }))
+  const rejectRoundMutation = useMutation({
+    mutationFn: (roundId) => rejectPendingInRound(id, roundId),
+    onSuccess: (res) => message.success(res.data.message),
+    onError: (err) => message.error(getErrorMessage(err)),
+    onSettled: refreshPipeline,
+  })
+  const rejectEventMutation = useMutation({
+    mutationFn: () => rejectPendingInEvent(id),
+    onSuccess: (res) => message.success(res.data.message),
+    onError: (err) => message.error(getErrorMessage(err)),
+    onSettled: () => {
+      refreshPipeline()
+      queryClient.invalidateQueries({ queryKey: ['offers'] })
     },
   })
 
@@ -1287,6 +1314,24 @@ export default function EventDetail() {
               </Space.Compact>
             )
           })()}
+          {!isEditing && (() => {
+            const pending = candidatesReachingRound(shortlistedCandidates, round)
+              .filter((c) => PENDING_STATUSES.includes(roundStatusByCandidate[c.id]?.[round.id])).length
+            return (
+              <Popconfirm
+                title={`Fail all ${pending} pending candidate${pending === 1 ? '' : 's'} in ${round.name}?`}
+                description="Everyone Open or On hold here gets Fail; scores and comments stay."
+                onConfirm={() => rejectRoundMutation.mutate(round.id)}
+                okText="Fail them"
+                okButtonProps={{ danger: true }}
+                disabled={pending === 0}
+              >
+                <Button size="small" danger disabled={pending === 0} loading={rejectRoundMutation.isPending}>
+                  Reject pending ({pending})
+                </Button>
+              </Popconfirm>
+            )
+          })()}
           {roundColumnPicker}
           <DownloadExcel title={`${eventTitle} - ${round.name}`} columns={roundExportColumns} rows={roundExportRows} mergeColumns={byGroup ? [0] : undefined} />
           {isEditing ? (
@@ -1477,6 +1522,57 @@ export default function EventDetail() {
   )
 
   const selectedRound = sortedRounds.find((r) => String(r.id) === selectedStage)
+  // The Reports card: the Student Sheet lists everyone at one stage, best fit first — Resume (every
+  // applicant), a round (everyone who reached it), or Offer.
+  const stageCandidates = (key) => {
+    const round = sortedRounds.find((r) => String(r.id) === key)
+    if (round) {
+      const upTo = [...roundsBefore(roundGraph, String(round.id)).map((r) => r.id), round.id]
+      return candidatesReachingRound(shortlistedCandidates, round)
+        .map((c) => ({ ...c, fitScore: fitScoreUpTo(c, upTo) }))
+        .sort(byFitScore)
+    }
+    return key === stageKey('Offer') ? (lateStageEnrichedData.Offer ?? []) : candidatesWithStatus
+  }
+  const stageName = (key) => sortedRounds.find((r) => String(r.id) === key)?.name ?? stageOf(key)
+  const reportStageOptions = [stageKey('Resume'), ...sortedRounds.map((r) => String(r.id)), stageKey('Offer')]
+    .map((key) => ({ value: key, label: `${stageName(key)} (${stageCandidates(key).length})` }))
+  const reportKey = reportStageOptions.some((o) => o.value === reportStageKey) ? reportStageKey
+    : reportStageOptions.some((o) => o.value === selectedStage) ? selectedStage : stageKey('Resume')
+  const reportStageName = stageName(reportKey)
+  const reportCandidates = stageCandidates(reportKey)
+  const atOffer = lateStageEnrichedData.Offer ?? []
+
+  // Everyone still pending across the event, as "Reject all pending" would take them.
+  const eventPending = (() => {
+    const resume = candidatesWithStatus.filter((c) => !c.resumeStatus).length
+    const rounds = sortedRounds.map((r) => ({
+      name: r.name,
+      count: candidatesReachingRound(shortlistedCandidates, r)
+        .filter((c) => PENDING_STATUSES.includes(roundStatusByCandidate[c.id]?.[r.id])).length,
+    }))
+    const offer = atOffer.filter((r) => !r.stageStatus).length
+    return { resume, rounds, offer, total: resume + offer + rounds.reduce((n, r) => n + r.count, 0) }
+  })()
+  const confirmRejectEvent = () => Modal.confirm({
+    centered: true,
+    title: `Reject everyone still pending in ${eventTitle}?`,
+    content: (
+      <div>
+        <div>No Resume decision: {eventPending.resume} → Resume Rejected</div>
+        {eventPending.rounds.filter((r) => r.count > 0).map((r) => (
+          <div key={r.name}>{r.name}: {r.count} → Fail</div>
+        ))}
+        <div>At Offer, no decision: {eventPending.offer} → Offer Rejected</div>
+        <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
+          Decisions already made stay — Shortlisted, Pass, Fail, Rejected, Hold and WaitList.
+        </Text>
+      </div>
+    ),
+    okText: `Reject ${eventPending.total}`,
+    okButtonProps: { danger: true },
+    onOk: () => rejectEventMutation.mutateAsync().catch(() => {}),
+  })
   const selectedLaterStage = isStageKey(selectedStage) && LATE_STAGE_NAMES.includes(stageOf(selectedStage))
     ? stageOf(selectedStage)
     : null
@@ -1679,6 +1775,50 @@ export default function EventDetail() {
           </Card>
         </Col>
       </Row>
+
+      {/* The two sheets the team works from, one click away for the whole event. */}
+      <Card
+        bordered={false}
+        style={{ borderRadius: 12 }}
+        title={<Text strong style={{ fontSize: 15 }}>Reports &amp; actions</Text>}
+        extra={
+          <Button danger disabled={eventPending.total === 0} loading={rejectEventMutation.isPending} onClick={confirmRejectEvent}>
+            Reject all pending ({eventPending.total})
+          </Button>
+        }
+      >
+        <Space wrap size="middle" style={{ marginBottom: 8 }}>
+          <Space.Compact>
+            <Select
+              value={reportKey}
+              onChange={setReportStageKey}
+              options={reportStageOptions}
+              style={{ minWidth: 240 }}
+              popupMatchSelectWidth={false}
+              aria-label="Student Sheet stage"
+            />
+            <DownloadOfferStatus
+              label="Download Student Sheet"
+              size="middle"
+              type="primary"
+              disabled={reportCandidates.length === 0}
+              fileName={`${eventTitle} - ${reportStageName} - Students.xlsx`}
+              request={() => exportStudentSheet(id, reportCandidates.map((c) => c.id), reportStageName)}
+            />
+          </Space.Compact>
+          <DownloadOfferStatus
+            size="middle"
+            type="primary"
+            disabled={atOffer.length === 0}
+            fileName={`${eventTitle} - Offer Status.xlsx`}
+            request={() => exportOfferStatus(id, atOffer.map((r) => r.id))}
+          />
+        </Space>
+        <Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
+          Student Sheet: everyone at <strong>{reportStageName}</strong> ({reportCandidates.length}), grouped by Group
+          Discussion group — choose the stage beside the button. Offer Status: everyone at Offer ({atOffer.length}).
+        </Text>
+      </Card>
 
       {/* Event config tabs (Positions, Rounds, Groups) */}
       <Card

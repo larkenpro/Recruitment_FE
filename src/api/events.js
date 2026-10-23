@@ -36,6 +36,12 @@ export const getEventStageSummary = (eventId, stageName = 'Resume') =>
   api.get(`/events/${eventId}/candidates/stage-summary?stageName=${encodeURIComponent(stageName)}`)
 export const getEventRoundResults = (eventId) => api.get(`/events/${eventId}/round-results`)
 // The Offer table's rows (candidate ids, in table order) as the team's offer-status .xlsx.
+// The candidates at the pipeline's selected stage (best fit first) as the team's student sheet .xlsx.
+export const exportStudentSheet = (eventId, candidateIds, stage) =>
+  api.post(`/events/${eventId}/student-sheet/xlsx`, { candidateIds, stage }, { responseType: 'blob' })
+// Fail everyone pending (Open or On hold) in a round; reject everyone still pending across the event.
+export const rejectPendingInRound = (eventId, roundId) => api.post(`/events/${eventId}/rounds/${roundId}/reject-pending`)
+export const rejectPendingInEvent = (eventId) => api.post(`/events/${eventId}/reject-pending`)
 export const exportOfferStatus = (eventId, candidateIds) =>
   api.post(`/events/${eventId}/offer-status/xlsx`, { candidateIds }, { responseType: 'blob' })
 // Groups belong to one Group Discussion round of the event.

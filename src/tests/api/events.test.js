@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { addDummyCandidates, exportOfferStatus, setRoundInterviewer, updateEventScreening, getEvents, getEvent, createEvent, updateEventStatus, updateEventMode, addEventApplication, updateEventApplication, getRoundGraph, saveRoundGraph, getRoundProgress, getEventPositions, setEventPositionTypes, getCandidatesByEvent, getGroups, generateGroups, updateGroup, deleteAllGroups } from '../../api/events'
+import { addDummyCandidates, rejectPendingInRound, exportOfferStatus, exportStudentSheet, setRoundInterviewer, updateEventScreening, getEvents, getEvent, createEvent, updateEventStatus, updateEventMode, addEventApplication, updateEventApplication, getRoundGraph, saveRoundGraph, getRoundProgress, getEventPositions, setEventPositionTypes, getCandidatesByEvent, getGroups, generateGroups, updateGroup, deleteAllGroups } from '../../api/events'
 import { getColleges } from '../../api/colleges'
 import { createPosition, deletePosition, getPositionTypes } from '../../api/positions'
 
@@ -96,6 +96,18 @@ describe('Events API', () => {
     if (!createdId) return
     await expect(setRoundInterviewer(createdId, 999999, { interviewer: 'Priya' }))
       .rejects.toMatchObject({ response: { status: 404 } })
+  })
+
+  // ── Reject pending ────────────────────────────────────────────────────────
+  it('POST /events/:id/rounds/:roundId/reject-pending — 404 for a round not in the event', async () => {
+    if (!createdId) return
+    await expect(rejectPendingInRound(createdId, 999999)).rejects.toMatchObject({ response: { status: 404 } })
+  })
+
+  // ── Student sheet ─────────────────────────────────────────────────────────
+  it('POST /events/:id/student-sheet/xlsx — 400 when none of the candidates applied to the event', async () => {
+    if (!createdId) return
+    await expect(exportStudentSheet(createdId, [999999], 'Resume')).rejects.toMatchObject({ response: { status: 400 } })
   })
 
   // ── Offer status export ───────────────────────────────────────────────────

@@ -4,8 +4,9 @@ import { DownloadOutlined } from '@ant-design/icons'
 import { getErrorMessage } from '../utils/errorUtils'
 import { saveFile } from '../utils/download'
 
-// Downloads the team's offer-status sheet: `request()` asks the backend for it (an .xlsx blob).
-export default function DownloadOfferStatus({ request, fileName, disabled }) {
+// Downloads one of the team's sheets — the offer-status one unless `label` says otherwise: `request()`
+// asks the backend for it (an .xlsx blob).
+export default function DownloadOfferStatus({ request, fileName, disabled, label = 'Download Offer Status', size = 'small', type }) {
   const [busy, setBusy] = useState(false)
 
   const download = async () => {
@@ -20,8 +21,8 @@ export default function DownloadOfferStatus({ request, fileName, disabled }) {
   }
 
   return (
-    <Button size="small" icon={<DownloadOutlined />} disabled={disabled} loading={busy} onClick={download}>
-      Download Offer Status
+    <Button size={size} type={type} icon={<DownloadOutlined />} disabled={disabled} loading={busy} onClick={download}>
+      {label}
     </Button>
   )
 }
