@@ -1192,6 +1192,7 @@ export default function EventDetail() {
       {
         key: 'score',
         title: `Score (out of ${round.maxScore ?? DEFAULT_MAX_SCORE})`,
+        exportTitle: `${round.name} score (out of ${round.maxScore ?? DEFAULT_MAX_SCORE})`,
         exportValue: (r) => roundResultMap[round.id]?.[r.id]?.score,
         render: (_, r) => {
           if (isEditing) return (

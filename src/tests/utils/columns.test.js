@@ -78,4 +78,9 @@ describe('tableToSheet', () => {
       rows: [['WaitList', 'Asha', 8.4], [null, 'Ben', null]],
     })
   })
+
+  it('heads a column with its exportTitle when it has one', () => {
+    const score = { title: 'Score (out of 10)', exportTitle: 'GD score (out of 10)', dataIndex: 'score' }
+    expect(tableToSheet([score], [{ score: 7 }]).columns).toEqual(['GD score (out of 10)'])
+  })
 })

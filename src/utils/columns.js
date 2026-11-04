@@ -33,5 +33,5 @@ export const tableToSheet = (columns, rows) => {
     const value = c.exportValue ? c.exportValue(r) : c.dataIndex ? r[c.dataIndex] : null
     return value === undefined || value === '' ? null : value
   }
-  return { columns: exported.map((c) => c.title), rows: rows.map((r) => exported.map((c) => cell(c, r))) }
+  return { columns: exported.map((c) => c.exportTitle ?? c.title), rows: rows.map((r) => exported.map((c) => cell(c, r))) }
 }
