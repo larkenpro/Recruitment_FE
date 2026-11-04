@@ -42,6 +42,9 @@ export const exportStudentSheet = (eventId, candidateIds, stage) =>
 // Fail everyone pending (Open or On hold) in a round; reject everyone still pending across the event.
 export const rejectPendingInRound = (eventId, roundId) => api.post(`/events/${eventId}/rounds/${roundId}/reject-pending`)
 export const rejectPendingInEvent = (eventId) => api.post(`/events/${eventId}/reject-pending`)
+// The same decision ('PASS' | 'FAIL' | 'ON_HOLD') for everyone ticked in a round; scores and comments stay.
+export const setRoundDecisions = (eventId, roundId, candidateIds, result) =>
+  api.post(`/events/${eventId}/rounds/${roundId}/decisions`, { candidateIds, result })
 export const exportOfferStatus = (eventId, candidateIds) =>
   api.post(`/events/${eventId}/offer-status/xlsx`, { candidateIds }, { responseType: 'blob' })
 // Groups belong to one Group Discussion round of the event.

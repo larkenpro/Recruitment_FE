@@ -48,6 +48,7 @@ import {
   addDummyCandidates,
   rejectPendingInEvent,
   rejectPendingInRound,
+  setRoundDecisions,
   exportStudentSheet,
   setRoundInterviewer,
   exportOfferStatus,
@@ -192,6 +193,8 @@ export default function EventDetail() {
   const [groupForm] = Form.useForm()
   const [editingRoundId, setEditingRoundId] = useState(null)
   const [roundTableEdits, setRoundTableEdits] = useState({})
+  // The candidates ticked in each round's table: { [roundId]: candidateIds }.
+  const [roundTicks, setRoundTicks] = useState({})
   const [pendingRoundCandidateId, setPendingRoundCandidateId] = useState(null)
   const [pendingPipelineCandidateId, setPendingPipelineCandidateId] = useState(null)
   // The pipeline graph node whose candidates are listed: a stage key, or a round id as text.
@@ -503,6 +506,15 @@ export default function EventDetail() {
   const rejectRoundMutation = useMutation({
     mutationFn: (roundId) => rejectPendingInRound(id, roundId),
     onSuccess: (res) => message.success(res.data.message),
+    onError: (err) => message.error(getErrorMessage(err)),
+    onSettled: refreshPipeline,
+  })
+  const bulkDecisionMutation = useMutation({
+    mutationFn: ({ roundId, candidateIds, result }) => setRoundDecisions(id, roundId, candidateIds, result),
+    onSuccess: (res, { roundId }) => {
+      setRoundTicks((prev) => ({ ...prev, [roundId]: [] }))
+      message.success(res.data.message)
+    },
     onError: (err) => message.error(getErrorMessage(err)),
     onSettled: refreshPipeline,
   })
@@ -1085,6 +1097,17 @@ export default function EventDetail() {
 
     const isEditing = editingRoundId === round.id
 
+    // Someone ticked and then filtered out isn't part of a bulk decision.
+    const tickedIds = roundTicks[round.id] ?? []
+    const ticked = displayCandidates.filter((c) => tickedIds.includes(c.id))
+    const rowSelection = isEditing ? undefined : {
+      selectedRowKeys: tickedIds,
+      // Group tables share the ticks, and pages keep theirs.
+      preserveSelectedRowKeys: true,
+      selections: [Table.SELECTION_ALL, Table.SELECTION_NONE],
+      onChange: (keys) => setRoundTicks((prev) => ({ ...prev, [round.id]: keys })),
+    }
+
     const updateRoundEdit = (candidateId, field, value) =>
       setRoundTableEdits((prev) => ({ ...prev, [candidateId]: { ...(prev[candidateId] ?? {}), [field]: value } }))
 
@@ -1153,12 +1176,16 @@ export default function EventDetail() {
         render: (_, r) => {
           const t = tracksByCandidate[r.id]?.[round.id]
           if (!t) return '—'
+          const passed = roundStatusByCandidate[r.id]?.[round.id] === 'PASS'
           return (
             <Space size={4}>
               {/* One or several tracks; clearing them all goes back to the top preference. */}
+              <Tooltip title={passed ? undefined : 'Set their round decision to Pass first'}>
+              <span>
               <Select
                 mode="multiple"
                 size="small"
+                disabled={!passed}
                 style={{ minWidth: 210 }}
                 popupMatchSelectWidth={false}
                 placeholder="No next track"
@@ -1181,6 +1208,8 @@ export default function EventDetail() {
                 })}
                 onChange={(tracks) => trackMutation.mutate({ candidateId: r.id, roundId: round.id, tracks })}
               />
+              </span>
+              </Tooltip>
               {!t.picked && t.tracks.length > 0 && <Text type="secondary" style={{ fontSize: 11 }}>top preference</Text>}
             </Space>
           )
@@ -1304,6 +1333,23 @@ export default function EventDetail() {
           maxTagCount="responsive"
         />
         <Space wrap>
+          {ticked.length > 0 && !isEditing && (
+            <Space size={4}>
+              <Text>{ticked.length} selected:</Text>
+              {ROUND_RESULT_OPTIONS.map((o) => (
+                <Popconfirm
+                  key={o.value}
+                  title={`Set ${ticked.length} candidate${ticked.length === 1 ? '' : 's'} to ${o.label} in ${round.name}?`}
+                  description="Replaces any decision they have. Scores and comments stay."
+                  onConfirm={() => bulkDecisionMutation.mutate({ roundId: round.id, candidateIds: ticked.map((c) => c.id), result: o.value })}
+                >
+                  <Button size="small" type={o.value === 'PASS' ? 'primary' : 'default'} loading={bulkDecisionMutation.isPending}>
+                    {o.label}
+                  </Button>
+                </Popconfirm>
+              ))}
+            </Space>
+          )}
           {BULK_INTERVIEWER_TYPES.includes(round.roundType) && !isEditing && (() => {
             const reached = candidatesReachingRound(shortlistedCandidates, round).length
             return (
@@ -1410,6 +1456,7 @@ export default function EventDetail() {
                     rowKey="key"
                     size="small"
                     pagination={false}
+                    rowSelection={rowSelection}
                     columns={roundColumns}
                     scroll={{ x: 'max-content' }}
                   />
@@ -1428,6 +1475,7 @@ export default function EventDetail() {
                 rowKey="id"
                 size="small"
                 pagination={false}
+                rowSelection={rowSelection}
                 columns={roundColumns}
                 scroll={{ x: 'max-content' }}
               />
@@ -1448,6 +1496,7 @@ export default function EventDetail() {
           rowKey="id"
           size="small"
           pagination={{ pageSize: 10 }}
+          rowSelection={rowSelection}
           columns={roundColumns}
           scroll={{ x: 'max-content' }}
         />

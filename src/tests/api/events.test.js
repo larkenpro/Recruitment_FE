@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { addDummyCandidates, rejectPendingInRound, exportOfferStatus, exportStudentSheet, setRoundInterviewer, updateEventScreening, getEvents, getEvent, createEvent, updateEventStatus, updateEventMode, addEventApplication, updateEventApplication, getRoundGraph, saveRoundGraph, getRoundProgress, getEventPositions, setEventPositionTypes, getCandidatesByEvent, getGroups, generateGroups, updateGroup, deleteAllGroups } from '../../api/events'
+import { addDummyCandidates, rejectPendingInRound, setRoundDecisions, exportOfferStatus, exportStudentSheet, setRoundInterviewer, updateEventScreening, getEvents, getEvent, createEvent, updateEventStatus, updateEventMode, addEventApplication, updateEventApplication, getRoundGraph, saveRoundGraph, getRoundProgress, getEventPositions, setEventPositionTypes, getCandidatesByEvent, getGroups, generateGroups, updateGroup, deleteAllGroups } from '../../api/events'
 import { getColleges } from '../../api/colleges'
 import { createPosition, deletePosition, getPositionTypes } from '../../api/positions'
 
@@ -105,6 +105,12 @@ describe('Events API', () => {
   })
 
   // ── Student sheet ─────────────────────────────────────────────────────────
+  it('POST /events/:id/rounds/:roundId/decisions — 404 for a round outside the event, 400 with nobody ticked', async () => {
+    if (!createdId) return
+    await expect(setRoundDecisions(createdId, 999999, [1], 'PASS')).rejects.toMatchObject({ response: { status: 404 } })
+    await expect(setRoundDecisions(createdId, 999999, [], 'PASS')).rejects.toMatchObject({ response: { status: 400 } })
+  })
+
   it('POST /events/:id/student-sheet/xlsx — 400 when none of the candidates applied to the event', async () => {
     if (!createdId) return
     await expect(exportStudentSheet(createdId, [999999], 'Resume')).rejects.toMatchObject({ response: { status: 400 } })
