@@ -34,7 +34,7 @@ export function fitScore(a, s, rounds = []) {
   return Math.round((parts.reduce((sum, [w, x]) => sum + w * x, 0) / total) * 1000) / 10
 }
 
-/** { eligible, reasons, score } — reasons in criterion order, empty when eligible. */
+/** { eligible, reasons, score } — reasons in criterion order, empty when eligible. Same as Screening.ineligibleReasons in the backend, which refuses new applications that fail — change both. */
 export function screen(a, s) {
   if (!s) return { eligible: true, reasons: [], score: null }
   const reasons = []

@@ -6,6 +6,7 @@ import { getApplyForm, submitApplication, checkApplication, getPublicEventPositi
 import { requestSignInLink } from '../api/portal'
 import { eventPairs, hasInternship, hasItPosition, preferenceKey, tickedPairs } from '../utils/preferences'
 import { academicPayload } from '../utils/academic'
+import { screen } from '../utils/screening'
 import { EMAIL_RULE, PHONE_RULE, URL_RULE, requiredRule } from '../components/validation/rules'
 import AcademicFields, { BRANCH_OPTIONS, JOB_LOCATION_OPTIONS } from '../components/AcademicFields'
 import PreferenceRanker from '../components/PreferenceRanker'
@@ -37,6 +38,8 @@ export default function PublicApply() {
   const [sendingLink, setSendingLink] = useState(false)
   // Set by a submit with nothing ticked; the prompt shows by the ranker until one is ticked.
   const [prefError, setPrefError] = useState(false)
+  // Why the details so far fail the event's criteria; the form stops on its step until they pass.
+  const [ineligible, setIneligible] = useState([])
   const rankerRef = useRef(null)
   // GitHub and internship availability are only asked for when a ticked position calls for them.
   const ticked = tickedPairs(rankedPairs, selected)
@@ -63,11 +66,18 @@ export default function PublicApply() {
     return result.exists
   }
 
+  const passes = (criteria) => {
+    const { reasons } = screen(academicPayload(form.getFieldsValue(true)), criteria)
+    setIneligible(reasons)
+    return reasons.length === 0
+  }
+
   const handleFirstStepNext = async () => {
     await form.validateFields(['name', 'email', 'branch'])
     setChecking(true)
     try {
-      if (!(await lookUpExisting())) setStep(1)
+      // Only the branch is known yet, so a student it rules out doesn't fill in the rest.
+      if (!(await lookUpExisting()) && passes({ allowedBranches: eventInfo.data.event.screening?.allowedBranches })) setStep(1)
     } catch (err) {
       // An expired link is the one hard stop; anything else shouldn't block applying.
       const message = err.response?.data?.message
@@ -205,6 +215,15 @@ export default function PublicApply() {
           <Steps current={step} items={steps} style={{ marginBottom: 32 }} />
 
           {error && <Alert message={error} type="error" showIcon style={{ marginBottom: 16 }} closable onClose={() => setError('')} />}
+          {ineligible.length > 0 && (
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message="You don't meet this event's eligibility criteria, so this application can't be submitted"
+              description={<ul style={{ margin: 0, paddingLeft: 20 }}>{ineligible.map((r) => <li key={r}>{r}</li>)}</ul>}
+            />
+          )}
 
           <Form form={form} layout="vertical" onFinish={handleSubmit} onFinishFailed={() => setPrefError(selected.size === 0)}>
 
@@ -298,10 +317,12 @@ export default function PublicApply() {
               </div>
               <AcademicFields />
               <Row gutter={8}>
-                <Col span={12}><Button size="large" block onClick={() => setStep(0)}>← Back</Button></Col>
+                <Col span={12}><Button size="large" block onClick={() => { setIneligible([]); setStep(0) }}>← Back</Button></Col>
                 <Col span={12}>
                   <Button type="primary" size="large" block onClick={() => {
-                    form.validateFields(['graduationYear', 'ugCgpa']).then(() => setStep(2))
+                    form.validateFields(['graduationYear', 'ugCgpa']).then(() => {
+                      if (passes(eventInfo.data.event.screening)) setStep(2)
+                    })
                   }}>Next →</Button>
                 </Col>
               </Row>

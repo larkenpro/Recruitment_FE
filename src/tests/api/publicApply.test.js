@@ -18,21 +18,35 @@ const expectHttpOrConnectionError = async (promise, httpStatus) => {
   }
 }
 import { getApplyForm, submitApplication, uploadResume, getPublicEventPositions, checkApplication } from '../../api/candidates'
-import { getEvents, generateLink } from '../../api/events'
+import { createEvent, generateLink, updateEventScreening } from '../../api/events'
+import { getColleges } from '../../api/colleges'
+import { getPositions, getPositionTypes } from '../../api/positions'
+
+// Events can't be deleted and identical ones are rejected, so each run needs its own year.
+const YEAR = 3000 + Math.floor(Math.random() * 6000)
+// A criterion left out of the body falls back to its default, so off has to be an explicit null.
+const NO_CRITERIA = { minTenth: null, minTwelfth: null, minCgpa: null, maxActiveBacklogs: null, weightTenth: 0.1, weightTwelfth: 0.1, weightCgpa: 2 }
 
 describe('Apply Flow', () => {
   let applyToken = null
   let preference = null
   let candidateId = null
+  let eventId = null
   const firstEmail = `applicant_${Date.now()}@example.com`
 
   // ── Setup: obtain a real apply token and an event-linked position ID ──────
   beforeAll(async () => {
     try {
-      const eventsRes = await getEvents()
-      // Only an ACTIVE event takes applications; with none, the submit tests skip.
-      const event = eventsRes.data.data.find(e => e.status === 'ACTIVE' && e.positions?.length > 0) ?? null
-      if (event) {
+      // An event of its own, with the criteria off so these bare applicants aren't refused; no college or position, and the submit tests skip.
+      const collegeId = (await getColleges()).data.data[0]?.id
+      const positionId = (await getPositions()).data.data[0]?.id
+      const typeId = (await getPositionTypes()).data.data[0]?.id
+      if (collegeId && positionId && typeId) {
+        const event = (await createEvent({
+          collegeId, recruitmentYear: YEAR, status: 'ACTIVE', positions: [{ positionId, typeIds: [typeId] }],
+        })).data.data
+        eventId = event.id
+        await updateEventScreening(eventId, NO_CRITERIA)
         const linkRes = await generateLink(event.id)
         // generate returns the full apply URL (…/apply/<token>), not an object
         applyToken = linkRes.data.data?.split('/apply/').pop() || null
@@ -44,6 +58,26 @@ describe('Apply Flow', () => {
       }
     } catch {
       // backend not reachable — flow tests will be skipped via guard
+    }
+  })
+
+  // ── eligibility ───────────────────────────────────────────────────────────
+  it('submitApplication — failing the criteria returns 400 with the reasons, and saves nobody', async () => {
+    if (!applyToken || !preference) return
+    await updateEventScreening(eventId, { ...NO_CRITERIA, minCgpa: 6, allowedBranches: ['Civil Engineering'] })
+    try {
+      const form = (await getApplyForm(applyToken)).data.data.event.screening
+      expect(form).toMatchObject({ minCgpa: 6, allowedBranches: ['Civil Engineering'] })
+
+      const email = `ineligible_${Date.now()}@example.com`
+      await expect(submitApplication(applyToken, {
+        name: '_Test Ineligible', email, branch: 'Mechanical Engineering', ugCgpa: 5.5, preferences: [preference], consent: true,
+      })).rejects.toMatchObject({
+        response: { status: 400, data: { message: "Doesn't meet this event's criteria: CGPA 5.5 < 6; branch Mechanical Engineering not taken" } },
+      })
+      expect((await checkApplication(applyToken, { email })).data.data.exists).toBe(false)
+    } finally {
+      await updateEventScreening(eventId, NO_CRITERIA)
     }
   })
 

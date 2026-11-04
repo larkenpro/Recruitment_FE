@@ -276,8 +276,15 @@ describe('Events API', () => {
       const typeId = (await getEventPositions(linkedEventId)).data.data.find(p => p.id === positionId).types[0].id
       const walkIn = {
         name: '_Walk-in', email: `walkin_${Date.now()}@example.com`, rollNo: `W${Date.now()}`,
-        ugCgpa: 8.1, consent: true, preferences: [{ positionId, typeId }],
+        tenthMark: 80, twelfthMark: 80, ugCgpa: 8.1, graduationYear: 2026,
+        consent: true, preferences: [{ positionId, typeId }],
       }
+      // This suite's events are named for years past 2100, which no graduation year can match.
+      await updateEventScreening(linkedEventId, { batch: 2026, weightTenth: 0.1, weightTwelfth: 0.1, weightCgpa: 2 })
+
+      await expect(addEventApplication(linkedEventId, { ...walkIn, ugCgpa: 5 })).rejects.toMatchObject({
+        response: { status: 400, data: { message: "Doesn't meet this event's criteria: CGPA 5 < 6" } },
+      })
 
       await expect(addEventApplication(linkedEventId, { ...walkIn, consent: false }))
         .rejects.toMatchObject({ response: { status: 400 } })

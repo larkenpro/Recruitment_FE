@@ -88,6 +88,12 @@ describe('screen', () => {
     expect(screen({ ...good, branch: 'Civil' }, DEFAULTS).eligible).toBe(true)
   })
 
+  it('checks just the branch when given only allowed branches, as the apply form does before marks are known', () => {
+    expect(screen({ branch: 'Civil' }, { allowedBranches: ['CSE'] }).reasons).toEqual(['branch Civil not taken'])
+    expect(screen({ branch: 'CSE' }, { allowedBranches: ['CSE'] }).reasons).toEqual([])
+    expect(screen({ branch: 'Civil' }, { allowedBranches: undefined }).reasons).toEqual([])
+  })
+
   it('skips every criterion that is off', () => {
     const off = { ...DEFAULTS, minTenth: null, minTwelfth: null, minCgpa: null, maxActiveBacklogs: null, batch: null }
     expect(screen({ arrears: 9, backlogs: 9 }, off)).toEqual({ eligible: true, reasons: [], score: 0 })

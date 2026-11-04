@@ -60,6 +60,7 @@ export default function ScreeningSettings({ eventId, screening, applications, ro
     >
       <Divider orientation="left" style={{ marginTop: 0 }}>Eligibility</Divider>
       <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+        Candidates who don&apos;t meet these can&apos;t apply or be added, and import rows that fail them are rejected.
         Leave a field empty to not check it. Diploma % counts as 12th when 12th is blank.
       </Text>
       <Row gutter={GUTTER}>
