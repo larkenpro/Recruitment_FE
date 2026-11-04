@@ -34,6 +34,12 @@ export const selectedPreferences = (ranked, selected) =>
     .filter((p) => selected.has(preferenceKey(p)))
     .map((p) => ({ positionId: p.position.id, typeId: p.type.id }))
 
+// The candidate's preference number for a round graph pair key ('pair:positionId:typeId'), null if they didn't rank it.
+export const rankOfPair = (preferences, pairKey) => {
+  const index = (preferences ?? []).findIndex((p) => `pair:${preferenceKey(p)}` === pairKey)
+  return index < 0 ? null : index + 1
+}
+
 // The offer dropdown: every pair the event hires for with the candidate's rank for it (null if they
 // didn't rank it), ranked pairs first.
 export const offerPairs = (eventPositions, preferences) => {

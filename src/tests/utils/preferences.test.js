@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { hasInternship, hasItPosition, offerPairs, rankedWithChosenFirst, tickedPairs } from '../../utils/preferences'
+import { hasInternship, hasItPosition, offerPairs, rankOfPair, rankedWithChosenFirst, tickedPairs } from '../../utils/preferences'
 
 const pair = (department) => ({ position: { id: 1, title: 'X', department }, type: { id: 1, name: 'FTE' } })
 const typed = (id, name) => ({ position: { id: 1, title: 'X' }, type: { id, name } })
@@ -30,6 +30,19 @@ describe('tickedPairs', () => {
   it('keeps only the ticked pairs, in ranked order', () => {
     const ranked = [typed(2, 'FTE'), typed(1, 'Internship'), typed(3, 'Intern-to-FTE')]
     expect(tickedPairs(ranked, new Set(['1:3', '1:2'])).map((p) => p.type.name)).toEqual(['FTE', 'Intern-to-FTE'])
+  })
+})
+
+describe('rankOfPair', () => {
+  const preferences = [{ position: { id: 2 }, type: { id: 1 } }, { position: { id: 1 }, type: { id: 3 } }]
+
+  it('is the preference number of a round graph pair key', () => {
+    expect(rankOfPair(preferences, 'pair:2:1')).toBe(1)
+    expect(rankOfPair(preferences, 'pair:1:3')).toBe(2)
+  })
+  it('is null for a pair they did not rank, or with no preferences', () => {
+    expect(rankOfPair(preferences, 'pair:2:3')).toBeNull()
+    expect(rankOfPair(undefined, 'pair:2:1')).toBeNull()
   })
 })
 

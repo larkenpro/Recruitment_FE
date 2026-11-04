@@ -88,6 +88,7 @@ import DownloadExcel from '../components/DownloadExcel'
 import DownloadOfferStatus from '../components/DownloadOfferStatus'
 import ScreeningSettings from '../components/ScreeningSettings'
 import { fitScore, screen } from '../utils/screening'
+import { rankOfPair } from '../utils/preferences'
 import { labelFor } from '../utils/columns'
 import { offerResponse, offeredLabel } from '../utils/offers'
 import { DATE_FORMAT, defaultLinkExpiry, formatDate } from '../utils/dates'
@@ -313,7 +314,7 @@ export default function EventDetail() {
     () => Object.fromEntries((roundProgress ?? []).map((p) => [p.candidateId, p.rounds])),
     [roundProgress]
   )
-  // At split rounds: { [candidateId]: { [roundId]: { track, options, picked } } }.
+  // At split rounds: { [candidateId]: { [roundId]: { tracks, options, leadsTo, picked } } }.
   const tracksByCandidate = useMemo(
     () => Object.fromEntries((roundProgress ?? []).map((p) => [p.candidateId, p.tracks ?? {}])),
     [roundProgress]
@@ -1112,7 +1113,7 @@ export default function EventDetail() {
       setRoundTableEdits({})
     }
 
-    // A split for someone here: they applied for more than one of the tracks it leads into.
+    // A split for someone here: the Only for rounds after it give them a track to choose.
     const splitsHere = displayCandidates.some((c) => tracksByCandidate[c.id]?.[round.id])
     const pairByKey = Object.fromEntries((roundGraph?.pairs ?? []).map((p) => [p.key, p]))
     const colorOf = pairColors(roundGraph?.pairs ?? [])
@@ -1146,7 +1147,8 @@ export default function EventDetail() {
         title: 'Next tracks',
         exportValue: (r) => {
           const t = tracksByCandidate[r.id]?.[round.id]
-          return t ? t.tracks.map(trackLabel).join(' + ') + (t.picked ? '' : ' (top preference)') : null
+          if (!t?.tracks.length) return null
+          return t.tracks.map(trackLabel).join(' + ') + (t.picked ? '' : ' (top preference)')
         },
         render: (_, r) => {
           const t = tracksByCandidate[r.id]?.[round.id]
@@ -1158,13 +1160,28 @@ export default function EventDetail() {
                 mode="multiple"
                 size="small"
                 style={{ minWidth: 210 }}
+                popupMatchSelectWidth={false}
+                placeholder="No next track"
                 value={t.tracks}
                 allowClear={t.picked}
                 loading={trackMutation.isPending && trackMutation.variables?.candidateId === r.id}
-                options={t.options.map((k) => ({ value: k, label: <span style={{ color: colorOf[k] }}>{trackLabel(k)}</span> }))}
+                options={t.options.map((k) => {
+                  const leadsOn = t.leadsTo.includes(k)
+                  return {
+                    value: k,
+                    disabled: !leadsOn,
+                    title: leadsOn ? trackLabel(k) : 'No round after this one is for this position',
+                    label: (
+                      <span style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                        <span style={leadsOn ? { color: colorOf[k] } : undefined}>{trackLabel(k)}</span>
+                        <Text type="secondary">{rankOfPair(r.preferences, k) ?? '-'}</Text>
+                      </span>
+                    ),
+                  }
+                })}
                 onChange={(tracks) => trackMutation.mutate({ candidateId: r.id, roundId: round.id, tracks })}
               />
-              {!t.picked && <Text type="secondary" style={{ fontSize: 11 }}>top preference</Text>}
+              {!t.picked && t.tracks.length > 0 && <Text type="secondary" style={{ fontSize: 11 }}>top preference</Text>}
             </Space>
           )
         },
