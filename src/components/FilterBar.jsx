@@ -2,7 +2,8 @@ import { Select, Tag, Space, InputNumber, Input } from 'antd'
 import { FilterOutlined, SearchOutlined } from '@ant-design/icons'
 import { SPACE, FONT_SIZE, INK, RADIUS, useLayoutMetrics } from '../theme'
 
-export default function FilterBar({ filterKeys, optionMap, filters, setFilter, removeFilter }) {
+// `label` captions the row; `children` are extra controls that filter the table too.
+export default function FilterBar({ filterKeys, optionMap, filters, setFilter, removeFilter, label, children }) {
   const activeTags = Object.entries(filters)
   // Fixed control widths leave ragged half-empty rows on a phone; stack them full-width instead.
   const { isNarrow: isMobile } = useLayoutMetrics()
@@ -11,6 +12,7 @@ export default function FilterBar({ filterKeys, optionMap, filters, setFilter, r
   return (
     <div style={{ marginBottom: SPACE.md }}>
       <Space wrap style={{ width: '100%' }} styles={{ item: isMobile ? { width: '100%' } : undefined }}>
+        {label ? <span style={{ fontSize: FONT_SIZE.small, color: INK.muted }}>{label}</span> : null}
         {filterKeys.map(({ key, label, type }) => {
           if (type === 'text') {
             return (
@@ -75,6 +77,7 @@ export default function FilterBar({ filterKeys, optionMap, filters, setFilter, r
             />
           )
         })}
+        {children || null}
       </Space>
 
       {activeTags.length > 0 && (

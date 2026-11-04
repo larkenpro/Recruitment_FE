@@ -78,7 +78,7 @@ function PipelineView({ graph, counts, selectedStage, onSelectStage }) {
   }, [graph, counts, selectedStage, setNodes, setEdges, info, pairsAt]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div style={{ height: 360, border: '1px solid #e5e7eb', borderRadius: 8 }}>
+    <div style={{ height: 300, border: '1px solid #e5e7eb', borderRadius: 8 }}>
       <PairInfo.Provider value={{ info, at: pairsAt }}>
         <ReactFlow
           nodes={nodes}

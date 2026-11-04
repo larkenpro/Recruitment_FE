@@ -1,13 +1,12 @@
 import {
   AppstoreOutlined,
-  CalendarOutlined,
   CopyOutlined,
   DeleteOutlined,
+  DownloadOutlined,
   EditOutlined,
   FilterOutlined,
   LinkOutlined,
-  TeamOutlined,
-  UnorderedListOutlined,
+  SettingOutlined,
   UserAddOutlined,
   UsergroupAddOutlined,
 } from '@ant-design/icons'
@@ -20,8 +19,8 @@ import {
   Checkbox,
   Col,
   DatePicker,
-  Descriptions,
   Divider,
+  Drawer,
   Empty,
   Form,
   Input,
@@ -29,11 +28,11 @@ import {
   List,
   Modal,
   Popconfirm,
+  Popover,
   Radio,
   Row,
   Select,
   Space,
-  Statistic,
   Switch,
   Table,
   Tabs,
@@ -88,6 +87,7 @@ import { useColumnChoice } from '../components/ColumnPicker'
 import DownloadExcel from '../components/DownloadExcel'
 import DownloadOfferStatus from '../components/DownloadOfferStatus'
 import ScreeningSettings from '../components/ScreeningSettings'
+import TableToolbar, { ToolGroup } from '../components/TableToolbar'
 import { fitScore, screen } from '../utils/screening'
 import { rankOfPair } from '../utils/preferences'
 import { labelFor } from '../utils/columns'
@@ -169,6 +169,8 @@ const ROUND_RESULT_OPTIONS = [
   { value: 'FAIL', label: 'Fail' },
   { value: 'ON_HOLD', label: 'On Hold' },
 ]
+
+const ROUND_RESULT_COLOR = { PASS: 'green', FAIL: 'red', ON_HOLD: 'orange' }
 
 const STATUS_COLOR = { UPCOMING: 'blue', ACTIVE: 'green', COMPLETED: 'default', CANCELLED: 'red' }
 
@@ -299,6 +301,7 @@ export default function EventDetail() {
     [candidates, stageSummaryMap, event?.screening]
   )
   const [showIneligible, setShowIneligible] = useState(false)
+  const [setupOpen, setSetupOpen] = useState(false)
   const ineligibleCount = candidatesWithStatus.filter((c) => !c.eligible).length
   // Undecided only: a Hold or Reject set by hand stays.
   const toShortlist = candidatesWithStatus.filter((c) => c.eligible && !c.resumeStatus)
@@ -511,8 +514,8 @@ export default function EventDetail() {
   })
   const bulkDecisionMutation = useMutation({
     mutationFn: ({ roundId, candidateIds, result }) => setRoundDecisions(id, roundId, candidateIds, result),
-    onSuccess: (res, { roundId }) => {
-      setRoundTicks((prev) => ({ ...prev, [roundId]: [] }))
+    onSuccess: (res, { roundId, candidateIds }) => {
+      setRoundTicks((prev) => ({ ...prev, [roundId]: (prev[roundId] ?? []).filter((c) => !candidateIds.includes(c)) }))
       message.success(res.data.message)
     },
     onError: (err) => message.error(getErrorMessage(err)),
@@ -736,15 +739,20 @@ export default function EventDetail() {
     ], ['decision', 'response', 'fitScore', 'name', 'rollNo', 'branch', 'offered'])
     return (
       <>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12 }}>
-          {offerColumnPicker}
-          <DownloadOfferStatus
-            disabled={filteredData.length === 0}
-            fileName={`${eventTitle} - Offer Status.xlsx`}
-            request={() => exportOfferStatus(id, filteredData.map((r) => r.id))}
-          />
-        </div>
+        <TableToolbar
+          tools={(
+            <>
+              {offerColumnPicker}
+              <DownloadOfferStatus
+                disabled={filteredData.length === 0}
+                fileName={`${eventTitle} - Offer Status.xlsx`}
+                request={() => exportOfferStatus(id, filteredData.map((r) => r.id))}
+              />
+            </>
+          )}
+        />
         <FilterBar
+          label="Filter"
           filterKeys={LATE_STAGE_FILTER_KEYS}
           optionMap={optionMap}
           filters={filters}
@@ -794,8 +802,10 @@ export default function EventDetail() {
                     >
                       <Button
                         size="small"
+                        type="text"
                         danger
                         icon={<DeleteOutlined />}
+                        aria-label={`Remove ${p.title} from the event`}
                         loading={removePositionMutation.isPending}
                       />
                     </Popconfirm>,
@@ -904,7 +914,7 @@ export default function EventDetail() {
             okButtonProps={{ danger: true }}
             disabled={!canGenerate}
           >
-            <Button type="primary" loading={generateGroupsMutation.isPending} disabled={!canGenerate}>
+            <Button loading={generateGroupsMutation.isPending} disabled={!canGenerate}>
               Regenerate Groups
             </Button>
           </Popconfirm>
@@ -958,6 +968,7 @@ export default function EventDetail() {
                 extra={
                   <Button
                     size="small"
+                    type="text"
                     icon={<EditOutlined />}
                     onClick={() => {
                       // A group whose members have different interviewers starts blank and is left alone unless one is typed.
@@ -1104,7 +1115,6 @@ export default function EventDetail() {
       selectedRowKeys: tickedIds,
       // Group tables share the ticks, and pages keep theirs.
       preserveSelectedRowKeys: true,
-      selections: [Table.SELECTION_ALL, Table.SELECTION_NONE],
       onChange: (keys) => setRoundTicks((prev) => ({ ...prev, [round.id]: keys })),
     }
 
@@ -1159,10 +1169,20 @@ export default function EventDetail() {
               onChange={(val) => updateRoundEdit(r.id, 'result', val ?? null)}
             />
           )
-          const res = roundResultMap[round.id]?.[r.id]
-          if (!res?.result) return <Tag>Pending</Tag>
-          const color = res.result === 'PASS' ? 'green' : res.result === 'FAIL' ? 'red' : 'orange'
-          return <Tag color={color}>{res.result}</Tag>
+          const deciding = bulkDecisionMutation.isPending && bulkDecisionMutation.variables?.candidateIds.includes(r.id)
+          return (
+            <Select
+              size="small"
+              style={{ width: 120 }}
+              value={roundResultMap[round.id]?.[r.id]?.result ?? null}
+              placeholder="Pending"
+              loading={deciding}
+              disabled={deciding}
+              options={ROUND_RESULT_OPTIONS.map((o) => ({ value: o.value, label: <Tag color={ROUND_RESULT_COLOR[o.value]}>{o.label}</Tag> }))}
+              onChange={(result) => bulkDecisionMutation.mutate({ roundId: round.id, candidateIds: [r.id], result })}
+              aria-label={`Round decision for ${r.name}`}
+            />
+          )
         },
       },
       ...(splitsHere ? [{
@@ -1320,92 +1340,131 @@ export default function EventDetail() {
       ? [...displayCandidates].sort((a, b) => (groupIndex[a.id] ?? Infinity) - (groupIndex[b.id] ?? Infinity))
       : displayCandidates
 
-    const editControls = (
-      <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+    const reachedCount = candidatesReachingRound(shortlistedCandidates, round).length
+    const pendingCount = candidatesReachingRound(shortlistedCandidates, round)
+      .filter((c) => PENDING_STATUSES.includes(roundStatusByCandidate[c.id]?.[round.id])).length
+    const editControls = isEditing ? (
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12 }}>
+        <Button onClick={() => { setEditingRoundId(null); setRoundTableEdits({}) }}>Cancel</Button>
+        <Button type="primary" onClick={handleRoundSave} loading={eventRoundScoreMutation.isPending}>Save</Button>
+      </div>
+    ) : (
+      <TableToolbar
+        tools={(
+          <>
+            {roundColumnPicker}
+            <DownloadExcel title={`${eventTitle} - ${round.name}`} columns={roundExportColumns} rows={roundExportRows} mergeColumns={byGroup ? [0] : undefined} />
+          </>
+        )}
+      >
+        <Button icon={<EditOutlined />} onClick={initRoundEdit}>Edit scores</Button>
+        {(pendingCount > 0 || (BULK_INTERVIEWER_TYPES.includes(round.roundType) && reachedCount > 0)) && (
+          <ToolGroup label="Everyone here">
+            {BULK_INTERVIEWER_TYPES.includes(round.roundType) && reachedCount > 0 && (
+              <Popover
+                trigger="click"
+                title={`Interviewer for everyone in ${round.name}`}
+                content={(
+                  <Space.Compact size="small">
+                    <Input
+                      size="small"
+                      placeholder="Interviewer"
+                      value={bulkInterviewer}
+                      onChange={(e) => setBulkInterviewer(e.target.value)}
+                      style={{ width: 170 }}
+                      aria-label={`Interviewer for everyone in ${round.name}`}
+                    />
+                    <Popconfirm
+                      title={`Set the interviewer for all ${reachedCount} candidate${reachedCount === 1 ? '' : 's'} in ${round.name}?`}
+                      description="Replaces any interviewer already set. Scores and results stay."
+                      onConfirm={() => interviewerMutation.mutate(
+                        { roundId: round.id, interviewer: bulkInterviewer },
+                        { onSuccess: () => setBulkInterviewer('') },
+                      )}
+                      disabled={!bulkInterviewer.trim()}
+                    >
+                      <Button size="small" disabled={!bulkInterviewer.trim()} loading={interviewerMutation.isPending}>
+                        Set for all ({reachedCount})
+                      </Button>
+                    </Popconfirm>
+                  </Space.Compact>
+                )}
+              >
+                <Button size="small">Set interviewer</Button>
+              </Popover>
+            )}
+            {pendingCount > 0 && (
+              <Popconfirm
+                title={`Fail all ${pendingCount} pending candidate${pendingCount === 1 ? '' : 's'} in ${round.name}?`}
+                description="Everyone Open or On hold here gets Fail; scores and comments stay."
+                onConfirm={() => rejectRoundMutation.mutate(round.id)}
+                okText="Fail them"
+                okButtonProps={{ danger: true }}
+              >
+                <Button size="small" type="text" danger loading={rejectRoundMutation.isPending}>
+                  Reject pending ({pendingCount})
+                </Button>
+              </Popconfirm>
+            )}
+          </ToolGroup>
+        )}
+      </TableToolbar>
+    )
+    const roundFilterBar = (
+      <FilterBar label="Filter" filterKeys={roundFilterKeys} optionMap={roundOptionMap} filters={roundFilters} setFilter={setRoundFilter} removeFilter={removeRoundFilter}>
         <Select
           mode="multiple"
           size="small"
-          style={{ minWidth: 260 }}
+          style={{ minWidth: 180 }}
           value={roundStatusFilter}
           onChange={setRoundStatusFilter}
           options={ROUND_STATUS_OPTIONS}
           placeholder="Every status"
           maxTagCount="responsive"
+          aria-label={`Filter ${round.name} by status`}
         />
-        <Space wrap>
-          {ticked.length > 0 && !isEditing && (
-            <Space size={4}>
-              <Text>{ticked.length} selected:</Text>
-              {ROUND_RESULT_OPTIONS.map((o) => (
-                <Popconfirm
-                  key={o.value}
-                  title={`Set ${ticked.length} candidate${ticked.length === 1 ? '' : 's'} to ${o.label} in ${round.name}?`}
-                  description="Replaces any decision they have. Scores and comments stay."
-                  onConfirm={() => bulkDecisionMutation.mutate({ roundId: round.id, candidateIds: ticked.map((c) => c.id), result: o.value })}
-                >
-                  <Button size="small" type={o.value === 'PASS' ? 'primary' : 'default'} loading={bulkDecisionMutation.isPending}>
-                    {o.label}
-                  </Button>
-                </Popconfirm>
-              ))}
-            </Space>
-          )}
-          {BULK_INTERVIEWER_TYPES.includes(round.roundType) && !isEditing && (() => {
-            const reached = candidatesReachingRound(shortlistedCandidates, round).length
-            return (
-              <Space.Compact size="small">
-                <Input
-                  size="small"
-                  placeholder="Interviewer"
-                  value={bulkInterviewer}
-                  onChange={(e) => setBulkInterviewer(e.target.value)}
-                  style={{ width: 150 }}
-                  aria-label={`Interviewer for everyone in ${round.name}`}
-                />
-                <Popconfirm
-                  title={`Set the interviewer for all ${reached} candidate${reached === 1 ? '' : 's'} in ${round.name}?`}
-                  description="Replaces any interviewer already set. Scores and results stay."
-                  onConfirm={() => interviewerMutation.mutate(
-                    { roundId: round.id, interviewer: bulkInterviewer },
-                    { onSuccess: () => setBulkInterviewer('') },
-                  )}
-                  disabled={!bulkInterviewer.trim() || reached === 0}
-                >
-                  <Button size="small" disabled={!bulkInterviewer.trim() || reached === 0} loading={interviewerMutation.isPending}>
-                    Set for all ({reached})
-                  </Button>
-                </Popconfirm>
-              </Space.Compact>
-            )
-          })()}
-          {!isEditing && (() => {
-            const pending = candidatesReachingRound(shortlistedCandidates, round)
-              .filter((c) => PENDING_STATUSES.includes(roundStatusByCandidate[c.id]?.[round.id])).length
-            return (
+      </FilterBar>
+    )
+    // Sits right above the checkboxes, and shows before anyone's ticked so it's clear what ticking is for.
+    const allTicked = ticked.length === displayCandidates.length
+    const decisionBar = !isEditing && displayCandidates.length > 0 && (
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, padding: '8px 12px', marginBottom: 12, background: '#f5f6fa', borderRadius: 8 }}>
+        <Text strong={ticked.length > 0}>
+          {ticked.length > 0
+            ? `${ticked.length} candidate${ticked.length === 1 ? '' : 's'} selected`
+            : 'Tick candidates below to set their round decision together'}
+        </Text>
+        {!allTicked && (
+          <Button size="small" type="link" style={{ padding: 0 }} onClick={() => setRoundTicks((prev) => ({ ...prev, [round.id]: displayCandidates.map((c) => c.id) }))}>
+            Select all {displayCandidates.length}
+          </Button>
+        )}
+        {ticked.length > 0 && (
+          <Button size="small" type="link" style={{ padding: 0 }} onClick={() => setRoundTicks((prev) => ({ ...prev, [round.id]: [] }))}>
+            Clear
+          </Button>
+        )}
+        <Space size={8} style={{ marginLeft: 'auto' }}>
+          <Text type={ticked.length > 0 ? undefined : 'secondary'}>Set them to:</Text>
+          <Space.Compact>
+            {ROUND_RESULT_OPTIONS.map((o) => (
               <Popconfirm
-                title={`Fail all ${pending} pending candidate${pending === 1 ? '' : 's'} in ${round.name}?`}
-                description="Everyone Open or On hold here gets Fail; scores and comments stay."
-                onConfirm={() => rejectRoundMutation.mutate(round.id)}
-                okText="Fail them"
-                okButtonProps={{ danger: true }}
-                disabled={pending === 0}
+                key={o.value}
+                title={`Set ${ticked.length} candidate${ticked.length === 1 ? '' : 's'} to ${o.label} in ${round.name}?`}
+                description="Replaces any decision they have. Scores and comments stay."
+                disabled={ticked.length === 0}
+                onConfirm={() => bulkDecisionMutation.mutate({ roundId: round.id, candidateIds: ticked.map((c) => c.id), result: o.value })}
               >
-                <Button size="small" danger disabled={pending === 0} loading={rejectRoundMutation.isPending}>
-                  Reject pending ({pending})
+                <Button
+                  type={o.value === 'PASS' ? 'primary' : 'default'}
+                  disabled={ticked.length === 0}
+                  loading={bulkDecisionMutation.isPending && bulkDecisionMutation.variables?.result === o.value}
+                >
+                  {o.label}
                 </Button>
               </Popconfirm>
-            )
-          })()}
-          {roundColumnPicker}
-          <DownloadExcel title={`${eventTitle} - ${round.name}`} columns={roundExportColumns} rows={roundExportRows} mergeColumns={byGroup ? [0] : undefined} />
-          {isEditing ? (
-            <>
-              <Button size="small" onClick={() => { setEditingRoundId(null); setRoundTableEdits({}) }}>Cancel</Button>
-              <Button size="small" type="primary" onClick={handleRoundSave} loading={eventRoundScoreMutation.isPending}>Save</Button>
-            </>
-          ) : (
-            <Button size="small" icon={<EditOutlined />} onClick={initRoundEdit}>Edit Scores</Button>
-          )}
+            ))}
+          </Space.Compact>
         </Space>
       </div>
     )
@@ -1420,7 +1479,8 @@ export default function EventDetail() {
       return (
         <>
           {editControls}
-          <FilterBar filterKeys={roundFilterKeys} optionMap={roundOptionMap} filters={roundFilters} setFilter={setRoundFilter} removeFilter={removeRoundFilter} />
+          {roundFilterBar}
+          {decisionBar}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {(groups ?? []).map((group) => {
             const groupData = group.members
@@ -1490,7 +1550,8 @@ export default function EventDetail() {
     return (
       <>
         {editControls}
-        <FilterBar filterKeys={roundFilterKeys} optionMap={roundOptionMap} filters={roundFilters} setFilter={setRoundFilter} removeFilter={removeRoundFilter} />
+        {roundFilterBar}
+        {decisionBar}
         <Table
           dataSource={displayCandidates}
           rowKey="id"
@@ -1540,41 +1601,55 @@ export default function EventDetail() {
 
   const resumeContent = (
     <>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-        <Space style={{ marginRight: 'auto' }} wrap>
-          <Switch size="small" checked={showIneligible} onChange={setShowIneligible} />
-          <Text>Show ineligible ({ineligibleCount})</Text>
-          <Popconfirm
-            title={`Shortlist ${toShortlist.length} eligible candidate${toShortlist.length === 1 ? '' : 's'} with no decision yet?`}
-            description="They move on to Rounds."
-            onConfirm={() => shortlistEligibleMutation.mutate(toShortlist)}
-            okText="Shortlist"
-            disabled={toShortlist.length === 0}
-          >
-            <Button size="small" type="primary" disabled={toShortlist.length === 0} loading={shortlistEligibleMutation.isPending}>
-              Shortlist eligible ({toShortlist.length})
-            </Button>
-          </Popconfirm>
-        </Space>
-        {resumeColumnPicker}
-        <DownloadExcel title={`${eventTitle} - Resume`} columns={resumeColumns} rows={resumeRows} />
-        {/* Testing tool: only for users whose role can use testing tools (the "Testing" role). */}
-        {user?.canUseTestTools && (
-          <Button icon={<UsergroupAddOutlined />} loading={dummyCandidatesMutation.isPending} onClick={() => dummyCandidatesMutation.mutate()}>
-            Add 100 Dummy Candidates
-          </Button>
+      <TableToolbar
+        tools={(
+          <>
+            {resumeColumnPicker}
+            <DownloadExcel title={`${eventTitle} - Resume`} columns={resumeColumns} rows={resumeRows} />
+          </>
         )}
-        <Button icon={<UserAddOutlined />} onClick={() => addCandidate(id)}>
-          Add Candidate
-        </Button>
-      </div>
+      >
+        {toShortlist.length > 0 && (
+          <ToolGroup label="Bulk edit">
+            <Popconfirm
+              title={`Shortlist ${toShortlist.length} eligible candidate${toShortlist.length === 1 ? '' : 's'} with no decision yet?`}
+              description="They move on to Rounds."
+              onConfirm={() => shortlistEligibleMutation.mutate(toShortlist)}
+              okText="Shortlist"
+            >
+              <Button type="primary" loading={shortlistEligibleMutation.isPending}>
+                Shortlist eligible ({toShortlist.length})
+              </Button>
+            </Popconfirm>
+          </ToolGroup>
+        )}
+        <ToolGroup label="Add">
+          <Button size="small" icon={<UserAddOutlined />} onClick={() => addCandidate(id)}>
+            Candidate
+          </Button>
+          {/* Testing tool: only for users whose role can use testing tools (the "Testing" role). */}
+          {user?.canUseTestTools && (
+            <Button size="small" type="text" icon={<UsergroupAddOutlined />} loading={dummyCandidatesMutation.isPending} onClick={() => dummyCandidatesMutation.mutate()}>
+              100 dummy
+            </Button>
+          )}
+        </ToolGroup>
+      </TableToolbar>
       <FilterBar
+        label="Filter"
         filterKeys={CANDIDATE_FILTER_KEYS}
         optionMap={candidateOptionMap}
         filters={candidateFilters}
         setFilter={setCandidateFilter}
         removeFilter={removeCandidateFilter}
-      />
+      >
+        {ineligibleCount > 0 && (
+          <Space size={4}>
+            <Switch size="small" checked={showIneligible} onChange={setShowIneligible} aria-label="Show ineligible candidates" />
+            <Text style={{ fontSize: 12 }}>Show ineligible ({ineligibleCount})</Text>
+          </Space>
+        )}
+      </FilterBar>
       <Table
         dataSource={resumeRows}
         loading={candidatesLoading}
@@ -1673,6 +1748,43 @@ export default function EventDetail() {
   const missingPositions = (eventPositions?.length ?? 0) === 0
   const missingRounds = sortedRounds.length === 0
 
+  const canGenerateLink = event.status === 'ACTIVE' && !missingPositions && !missingRounds && untypedPositions.length === 0
+  const eventFacts = [
+    event.startDate && formatDate(event.startDate),
+    event.college?.city,
+    event.college?.tier,
+    eventMode(event.mode).label,
+    `${candidates?.length ?? 0} candidate${candidates?.length === 1 ? '' : 's'}`,
+  ].filter(Boolean)
+
+  const setupTabs = [
+    ...eventTabItems,
+    {
+      key: 'general',
+      label: 'General',
+      children: (
+        <div>
+          <Text style={{ display: 'block', marginBottom: 4 }}>Mode</Text>
+          <Select
+            value={event.mode}
+            style={{ width: 200 }}
+            loading={modeMutation.isPending}
+            onChange={(val) => modeMutation.mutate(val)}
+            options={EVENT_MODE_OPTIONS.map((m) => ({ value: m.value, label: <Tag color={eventMode(m.value).color}>{m.label}</Tag> }))}
+            aria-label="Event mode"
+          />
+          <Divider titlePlacement="start">Close out the event</Divider>
+          <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+            Rejects everyone still waiting on a decision, at every stage. Decisions already made stay.
+          </Text>
+          <Button danger disabled={eventPending.total === 0} loading={rejectEventMutation.isPending} onClick={confirmRejectEvent}>
+            Reject all pending ({eventPending.total})
+          </Button>
+        </div>
+      ),
+    },
+  ]
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: sectionGap }}>
       {(missingPositions || missingRounds || untypedPositions.length > 0) && (
@@ -1682,225 +1794,144 @@ export default function EventDetail() {
           message="This event isn't ready to accept applications yet"
           description={
             <>
-              {missingPositions && <div>Add at least one position in the Positions tab.</div>}
+              {missingPositions && <div>Add at least one position in Event setup.</div>}
               {missingRounds && <div>Add at least one interview round: Pipeline → Edit rounds.</div>}
               {untypedPositions.length > 0 && (
-                <div>Choose at least one type in the Positions tab for: {untypedPositions.map((p) => p.title).join(', ')}.</div>
+                <div>Choose at least one type in Event setup for: {untypedPositions.map((p) => p.title).join(', ')}.</div>
               )}
             </>
           }
+          action={(missingPositions || untypedPositions.length > 0) && (
+            <Button size="small" onClick={() => setSetupOpen(true)}>Open setup</Button>
+          )}
         />
       )}
 
-      {/* Top row */}
-      <Row gutter={GUTTER} align="stretch">
-        {/* Event info card */}
-        <Col xs={24} md={10}>
-          <Card bordered={false} style={{ borderRadius: 12, height: '100%' }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 14,
-                paddingBottom: 20,
-                borderBottom: '1px solid #f0f0f0',
-                marginBottom: 16,
-              }}
-            >
-              <div
-                style={{
-                  width: 56,
-                  height: 56,
-                  borderRadius: 12,
-                  background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                }}
-              >
-                <CalendarOutlined style={{ fontSize: 24, color: '#fff' }} />
-              </div>
-              <div>
-                <Title level={4} style={{ margin: 0, marginBottom: 2 }}>
-                  {event.college?.name}
-                </Title>
-                <Text type="secondary" style={{ fontSize: 13 }}>
-                  Recruitment {event.recruitmentYear}
-                </Text>
-              </div>
-            </div>
-            <Descriptions column={1} size="small">
-              <Descriptions.Item label="Start Date">{formatDate(event.startDate)}</Descriptions.Item>
-              <Descriptions.Item label="City">{event.college?.city ?? '—'}</Descriptions.Item>
-              <Descriptions.Item label="Tier">{event.college?.tier ?? '—'}</Descriptions.Item>
-              <Descriptions.Item label="Mode">
-                <Select
-                  value={event.mode}
-                  size="small"
-                  style={{ width: 150 }}
-                  loading={modeMutation.isPending}
-                  onChange={(val) => modeMutation.mutate(val)}
-                  options={EVENT_MODE_OPTIONS.map((m) => ({ value: m.value, label: <Tag color={eventMode(m.value).color}>{m.label}</Tag> }))}
-                />
-              </Descriptions.Item>
-              <Descriptions.Item label="Status">
-                <Select
-                  value={event.status}
-                  size="small"
-                  style={{ width: 150 }}
-                  loading={statusMutation.isPending}
-                  onChange={(val) => statusMutation.mutate(val)}
-                  options={['UPCOMING', 'ACTIVE', 'COMPLETED', 'CANCELLED'].map((v) => ({
-                    value: v,
-                    label: <Tag color={STATUS_COLOR[v]}>{v}</Tag>,
-                  }))}
-                />
-              </Descriptions.Item>
-            </Descriptions>
-          </Card>
-        </Col>
-
-        {/* Summary card */}
-        <Col xs={24} md={7}>
-          <Card bordered={false} style={{ borderRadius: 12, height: '100%' }} title="Summary">
-            <Row gutter={[16, 24]}>
-              <Col span={12}>
-                <Statistic
-                  title="Positions"
-                  value={eventPositions?.length ?? 0}
-                  prefix={<AppstoreOutlined />}
-                  valueStyle={{ color: '#4f46e5', fontSize: 22 }}
-                />
-              </Col>
-              <Col span={12}>
-                <Statistic
-                  title="Rounds"
-                  value={sortedRounds.length}
-                  prefix={<UnorderedListOutlined />}
-                  valueStyle={{ fontSize: 22 }}
-                />
-              </Col>
-              <Col span={24}>
-                <Statistic
-                  title="Candidates Applied"
-                  value={candidates?.length ?? 0}
-                  prefix={<TeamOutlined />}
-                  valueStyle={{ fontSize: 22 }}
-                />
-              </Col>
-            </Row>
-          </Card>
-        </Col>
-
-        {/* Application link card */}
-        <Col xs={24} md={7}>
-          <Card bordered={false} style={{ borderRadius: 12, height: '100%' }} title="Application Link">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <Text type="secondary" style={{ fontSize: 13 }}>
-                Generate a shareable link for candidates to apply. Only available when the event is{' '}
-                <Tag color="green" style={{ margin: 0 }}>ACTIVE</Tag> and has at least one position (each with a type) and round set up.
-              </Text>
-              <div>
-                <Text style={{ fontSize: 13 }}>Accepts applications until</Text>
-                <DatePicker
-                  value={linkExpiry}
-                  onChange={setLinkExpiry}
-                  allowClear={false}
-                  format={DATE_FORMAT}
-                  disabledDate={(d) => d.isBefore(dayjs(), 'day')}
-                  style={{ width: '100%', marginTop: 4 }}
-                />
-              </div>
-              <Button
-                type="primary"
-                icon={<LinkOutlined />}
-                onClick={handleGenerateLink}
-                disabled={event.status !== 'ACTIVE' || missingPositions || missingRounds || untypedPositions.length > 0}
-              >
-                Generate Link
-              </Button>
-              {link && (
-                <>
-                  <Space.Compact style={{ width: '100%' }}>
-                    <Input value={link.url} readOnly size="small" />
-                    <Button
-                      size="small"
-                      icon={<CopyOutlined />}
-                      onClick={() => {
-                        navigator.clipboard.writeText(link.url)
-                        message.success('Copied!')
-                      }}
-                    >
-                      Copy
-                    </Button>
-                  </Space.Compact>
-                  <Text type="secondary" style={{ fontSize: 12 }}>Valid through {link.until.format(DATE_FORMAT)}</Text>
-                </>
-              )}
-            </div>
-          </Card>
-        </Col>
-      </Row>
-
-      {/* The two sheets the team works from, one click away for the whole event. */}
-      <Card
-        bordered={false}
-        style={{ borderRadius: 12 }}
-        title={<Text strong style={{ fontSize: 15 }}>Reports &amp; actions</Text>}
-        extra={
-          <Button danger disabled={eventPending.total === 0} loading={rejectEventMutation.isPending} onClick={confirmRejectEvent}>
-            Reject all pending ({eventPending.total})
-          </Button>
-        }
-      >
-        <Space wrap size="middle" style={{ marginBottom: 8 }}>
-          <Space.Compact>
+      <Card bordered={false} style={{ borderRadius: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <Title level={4} style={{ margin: 0 }}>{event.college?.name} {event.recruitmentYear}</Title>
+            <Text type="secondary" style={{ fontSize: 13 }}>{eventFacts.join(' · ')}</Text>
+          </div>
+          <Space wrap>
             <Select
-              value={reportKey}
-              onChange={setReportStageKey}
-              options={reportStageOptions}
-              style={{ minWidth: 240 }}
-              popupMatchSelectWidth={false}
-              aria-label="Student Sheet stage"
+              value={event.status}
+              style={{ width: 150 }}
+              loading={statusMutation.isPending}
+              onChange={(val) => statusMutation.mutate(val)}
+              options={['UPCOMING', 'ACTIVE', 'COMPLETED', 'CANCELLED'].map((v) => ({
+                value: v,
+                label: <Tag color={STATUS_COLOR[v]}>{v}</Tag>,
+              }))}
+              aria-label="Event status"
             />
-            <DownloadOfferStatus
-              label="Download Student Sheet"
-              size="middle"
-              type="primary"
-              disabled={reportCandidates.length === 0}
-              fileName={`${eventTitle} - ${reportStageName} - Students.xlsx`}
-              request={() => exportStudentSheet(id, reportCandidates.map((c) => c.id), reportStageName)}
-            />
-          </Space.Compact>
-          <DownloadOfferStatus
-            size="middle"
-            type="primary"
-            disabled={atOffer.length === 0}
-            fileName={`${eventTitle} - Offer Status.xlsx`}
-            request={() => exportOfferStatus(id, atOffer.map((r) => r.id))}
-          />
-        </Space>
-        <Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
-          Student Sheet: everyone at <strong>{reportStageName}</strong> ({reportCandidates.length}), grouped by Group
-          Discussion group — choose the stage beside the button. Offer Status: everyone at Offer ({atOffer.length}).
-        </Text>
+            <Popover
+              trigger="click"
+              placement="bottomRight"
+              title="Application link"
+              content={(
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: 300 }}>
+                  {!canGenerateLink && (
+                    <Text type="secondary" style={{ fontSize: 13 }}>
+                      Available once the event is <Tag color="green" style={{ margin: 0 }}>ACTIVE</Tag> and has at least one position (each with a type) and round.
+                    </Text>
+                  )}
+                  <div>
+                    <Text style={{ fontSize: 13 }}>Accepts applications until</Text>
+                    <DatePicker
+                      value={linkExpiry}
+                      onChange={setLinkExpiry}
+                      allowClear={false}
+                      format={DATE_FORMAT}
+                      disabledDate={(d) => d.isBefore(dayjs(), 'day')}
+                      style={{ width: '100%', marginTop: 4 }}
+                    />
+                  </div>
+                  <Button type="primary" icon={<LinkOutlined />} onClick={handleGenerateLink} disabled={!canGenerateLink}>
+                    Generate link
+                  </Button>
+                  {link && (
+                    <>
+                      <Space.Compact style={{ width: '100%' }}>
+                        <Input value={link.url} readOnly size="small" />
+                        <Button
+                          size="small"
+                          icon={<CopyOutlined />}
+                          onClick={() => {
+                            navigator.clipboard.writeText(link.url)
+                            message.success('Copied!')
+                          }}
+                        >
+                          Copy
+                        </Button>
+                      </Space.Compact>
+                      <Text type="secondary" style={{ fontSize: 12 }}>Valid through {link.until.format(DATE_FORMAT)}</Text>
+                    </>
+                  )}
+                </div>
+              )}
+            >
+              {/* The first thing to do on an event nobody has applied to yet; rarely needed after. */}
+              <Button type={canGenerateLink && !candidates?.length ? 'primary' : 'default'} icon={<LinkOutlined />}>
+                Application link
+              </Button>
+            </Popover>
+            <Popover
+              trigger="click"
+              placement="bottomRight"
+              title="Reports for the whole event"
+              content={(
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16, width: 340 }}>
+                  <div>
+                    <Text strong style={{ display: 'block', marginBottom: 6 }}>Student Sheet</Text>
+                    <Select
+                      value={reportKey}
+                      onChange={setReportStageKey}
+                      options={reportStageOptions}
+                      style={{ width: '100%', marginBottom: 8 }}
+                      aria-label="Student Sheet stage"
+                    />
+                    <DownloadOfferStatus
+                      label="Download Student Sheet"
+                      size="middle"
+                      disabled={reportCandidates.length === 0}
+                      fileName={`${eventTitle} - ${reportStageName} - Students.xlsx`}
+                      request={() => exportStudentSheet(id, reportCandidates.map((c) => c.id), reportStageName)}
+                    />
+                    <Text type="secondary" style={{ display: 'block', fontSize: 12, marginTop: 6 }}>
+                      Everyone at {reportStageName}, grouped by Group Discussion group.
+                    </Text>
+                  </div>
+                  <div>
+                    <Text strong style={{ display: 'block', marginBottom: 6 }}>Offer Status</Text>
+                    <DownloadOfferStatus
+                      size="middle"
+                      disabled={atOffer.length === 0}
+                      fileName={`${eventTitle} - Offer Status.xlsx`}
+                      request={() => exportOfferStatus(id, atOffer.map((r) => r.id))}
+                    />
+                    <Text type="secondary" style={{ display: 'block', fontSize: 12, marginTop: 6 }}>
+                      Everyone at Offer ({atOffer.length}).
+                    </Text>
+                  </div>
+                </div>
+              )}
+            >
+              <Button icon={<DownloadOutlined />}>Reports</Button>
+            </Popover>
+            <Button icon={<SettingOutlined />} onClick={() => setSetupOpen(true)}>Event setup</Button>
+          </Space>
+        </div>
       </Card>
 
-      {/* Event config tabs (Positions, Rounds, Groups) */}
-      <Card
-        bordered={false}
-        style={{ borderRadius: 12 }}
-        title={<Text strong style={{ fontSize: 15 }}>Event Details</Text>}
-      >
-        <Tabs items={eventTabItems} />
-      </Card>
+      <Drawer title="Event setup" open={setupOpen} onClose={() => setSetupOpen(false)} size={720}>
+        <Tabs items={setupTabs} />
+      </Drawer>
 
       {/* The pipeline as one graph; the clicked stage's candidates are listed under it */}
       <Card
         bordered={false}
         style={{ borderRadius: 12 }}
-        title={<Text strong style={{ fontSize: 15 }}>Pipeline</Text>}
       >
         <PipelineGraph
           eventId={id}
