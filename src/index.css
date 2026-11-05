@@ -82,3 +82,8 @@ body {
 
 /* Recharts legend items that toggle a series on click */
 .recharts-legend-item:hover .legend-toggle { text-decoration: underline; }
+
+/* Tables inside SheetKeys: the active cell and a selected range */
+.sheet td.ant-table-cell:focus,
+.sheet td.ant-table-cell:focus-within { outline: 2px solid #4f46e5; outline-offset: -2px; }
+.sheet td[data-sheet-range] { background: #eef2ff !important; }

@@ -87,6 +87,7 @@ import { useColumnChoice } from '../components/ColumnPicker'
 import DownloadExcel from '../components/DownloadExcel'
 import DownloadOfferStatus from '../components/DownloadOfferStatus'
 import ScreeningSettings from '../components/ScreeningSettings'
+import SheetKeys from '../components/SheetKeys'
 import TableToolbar, { ToolGroup } from '../components/TableToolbar'
 import { fitScore, screen } from '../utils/screening'
 import { rankOfPair } from '../utils/preferences'
@@ -1177,7 +1178,6 @@ export default function EventDetail() {
               value={roundResultMap[round.id]?.[r.id]?.result ?? null}
               placeholder="Pending"
               loading={deciding}
-              disabled={deciding}
               options={ROUND_RESULT_OPTIONS.map((o) => ({ value: o.value, label: <Tag color={ROUND_RESULT_COLOR[o.value]}>{o.label}</Tag> }))}
               onChange={(result) => bulkDecisionMutation.mutate({ roundId: round.id, candidateIds: [r.id], result })}
               aria-label={`Round decision for ${r.name}`}
@@ -1946,8 +1946,13 @@ export default function EventDetail() {
           }}
         />
         <div style={{ marginTop: 20 }}>
-          <Title level={5} style={{ marginTop: 0 }}>{stagePanel.title}</Title>
-          {stagePanel.content}
+          <div style={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: 12, marginBottom: 8 }}>
+            <Title level={5} style={{ margin: 0 }}>{stagePanel.title}</Title>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              Click a cell, then use the arrow keys. Enter opens it. Shift+arrows and Ctrl+C copy for Excel.
+            </Text>
+          </div>
+          <SheetKeys>{stagePanel.content}</SheetKeys>
         </div>
       </Card>
 
