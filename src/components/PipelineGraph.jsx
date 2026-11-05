@@ -4,8 +4,9 @@ import '@xyflow/react/dist/style.css'
 import { Modal, Segmented, Typography } from 'antd'
 import { EditOutlined, EyeOutlined } from '@ant-design/icons'
 import RoundGraphEditor, {
-  HANDLE_STYLE, PairInfo, PairNode, RoundNode, colorEdges, pairInfoOf, toFlowEdge, toPairNode, toRoundNode,
+  FullscreenButton, HANDLE_STYLE, PairInfo, PairNode, RoundNode, colorEdges, pairInfoOf, toFlowEdge, toPairNode, toRoundNode,
 } from './RoundGraphEditor'
+import { FULLSCREEN_STYLE, useFullscreen } from '../hooks/useFullscreen'
 import { pipelineLayout, roundPairs, spreadOut } from '../utils/roundGraph'
 
 const { Text } = Typography
@@ -38,6 +39,7 @@ const viewNodeTypes = { stage: StageNode, round: RoundNode, pair: PairNode }
 function PipelineView({ graph, counts, selectedStage, onSelectStage }) {
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges] = useEdgesState([])
+  const [fullscreen, toggleFullscreen] = useFullscreen()
   const info = useMemo(() => pairInfoOf(graph.pairs), [graph])
   const pairsAt = useMemo(() => roundPairs(graph.rounds, graph.edges, (graph.pairs ?? []).map((p) => p.key)), [graph])
   // Each node's measured { w, h }: rounds placed close together in the editor can overlap once
@@ -77,8 +79,15 @@ function PipelineView({ graph, counts, selectedStage, onSelectStage }) {
     setEdges(colorEdges(view.edges.map((e) => toFlowEdge(e.from, e.to)), pairsAt, info))
   }, [graph, counts, selectedStage, setNodes, setEdges, info, pairsAt]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The candidates are listed under the graph, so full screen has to end for them to be seen.
+  const selectNode = (_, node) => {
+    if (node.type === 'pair') return
+    onSelectStage(node.id)
+    if (fullscreen) toggleFullscreen()
+  }
+
   return (
-    <div style={{ height: 300, border: '1px solid #e5e7eb', borderRadius: 8 }}>
+    <div style={fullscreen ? FULLSCREEN_STYLE : { height: 300, border: '1px solid #e5e7eb', borderRadius: 8 }}>
       <PairInfo.Provider value={{ info, at: pairsAt }}>
         <ReactFlow
           nodes={nodes}
@@ -86,7 +95,7 @@ function PipelineView({ graph, counts, selectedStage, onSelectStage }) {
           nodeTypes={viewNodeTypes}
           onNodesChange={onNodesChange}
           onInit={(instance) => { flow.current = instance }}
-          onNodeClick={(_, node) => node.type !== 'pair' && onSelectStage(node.id)}
+          onNodeClick={selectNode}
           nodesDraggable={false}
           nodesConnectable={false}
           elementsSelectable={false}
@@ -96,7 +105,9 @@ function PipelineView({ graph, counts, selectedStage, onSelectStage }) {
           proOptions={{ hideAttribution: true }}
         >
           <Background gap={16} />
-          <Controls showInteractive={false} />
+          <Controls showInteractive={false}>
+            <FullscreenButton on={fullscreen} onToggle={toggleFullscreen} />
+          </Controls>
         </ReactFlow>
       </PairInfo.Provider>
     </div>

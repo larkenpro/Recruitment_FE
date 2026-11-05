@@ -1,16 +1,21 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import {
-  Background, Controls, Handle, MarkerType, Position, ReactFlow, addEdge, useEdgesState, useNodesState,
+  Background, ControlButton, Controls, Handle, MarkerType, Position, ReactFlow, addEdge, useEdgesState, useNodesState,
+  useReactFlow, useStore,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { Button, Empty, Input, InputNumber, Modal, Select, Space, Tag, Typography, message } from 'antd'
-import { DeleteOutlined, DisconnectOutlined, PlusOutlined, SaveOutlined, SnippetsOutlined, UndoOutlined } from '@ant-design/icons'
+import {
+  DeleteOutlined, DisconnectOutlined, FullscreenExitOutlined, FullscreenOutlined, PlusOutlined, SaveOutlined,
+  SnippetsOutlined, UndoOutlined,
+} from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createRoundGraphTemplate, deleteRoundGraphTemplate, getRoundGraphTemplates, saveRoundGraph,
 } from '../api/events'
 import { getErrorMessage } from '../utils/errorUtils'
 import { useDefaults } from '../hooks/useDefaults'
+import { FULLSCREEN_STYLE, useFullscreen } from '../hooks/useFullscreen'
 import {
   DEFAULT_MAX_SCORE, ROUND_TYPES, ROUND_TYPE_COLOR, arrowStyle, createsCycle, fitTemplate, isPairKey, layoutPairs,
   layoutRounds, pairColors, pairLabel, roundPairs, toGraphPayload,
@@ -42,6 +47,28 @@ export const colorEdges = (edges, at, info) => {
       style: { stroke: look.color, strokeWidth: 2, ...(look.dashed && { strokeDasharray: '6 4' }) },
     }
   })
+}
+
+// Goes in the canvas's Controls. Refits as the canvas resizes while full screen (the browser grants it
+// a moment after we fill the window) and once more on leaving; other resizes leave the user's view alone.
+export function FullscreenButton({ on, onToggle }) {
+  const { fitView } = useReactFlow()
+  const width = useStore((s) => s.width)
+  const height = useStore((s) => s.height)
+  const wasOn = useRef(on)
+
+  useEffect(() => {
+    if (!on && !wasOn.current) return
+    wasOn.current = on
+    fitView({ maxZoom: 1 })
+  }, [width, height]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const label = on ? 'Exit full screen' : 'Full screen'
+  return (
+    <ControlButton onClick={onToggle} title={label} aria-label={label}>
+      {on ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
+    </ControlButton>
+  )
 }
 
 // Whose candidates can be at a round, each in its colour, when that's not everyone: solid when the
@@ -171,6 +198,7 @@ export default function RoundGraphEditor({ eventId, graph, onSaved, onDirtyChang
   const [saving, setSaving] = useState(false)
   const newRounds = useRef(0)
   const [templateName, setTemplateName] = useState(null)
+  const [fullscreen, toggleFullscreen] = useFullscreen()
   const queryClient = useQueryClient()
   const { data: defaults } = useDefaults()
   const defaultMaxScore = defaults?.roundMaxScore ?? DEFAULT_MAX_SCORE
@@ -334,7 +362,7 @@ export default function RoundGraphEditor({ eventId, graph, onSaved, onDirtyChang
   }
 
   return (
-    <div>
+    <div style={fullscreen ? { ...FULLSCREEN_STYLE, display: 'flex', flexDirection: 'column', padding: 16 } : undefined}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 12 }}>
         <Button icon={<PlusOutlined />} onClick={addRound}>Add round</Button>
         <Button icon={<DisconnectOutlined />} disabled={edges.length === 0} onClick={clearArrows}>Clear arrows</Button>
@@ -373,8 +401,8 @@ export default function RoundGraphEditor({ eventId, graph, onSaved, onDirtyChang
         </Button>
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-        <div style={{ flex: '1 1 420px', height: 440, border: '1px solid #e5e7eb', borderRadius: 8 }}>
+      <div style={{ display: 'flex', flexWrap: fullscreen ? 'nowrap' : 'wrap', gap: 12, ...(fullscreen && { flex: 1, minHeight: 0 }) }}>
+        <div style={{ flex: '1 1 420px', height: fullscreen ? undefined : 440, border: '1px solid #e5e7eb', borderRadius: 8 }}>
           <PairInfo.Provider value={{ info: pairInfo, at: pairsAt }}>
             <ReactFlow
               nodes={nodes}
@@ -391,12 +419,14 @@ export default function RoundGraphEditor({ eventId, graph, onSaved, onDirtyChang
               proOptions={{ hideAttribution: true }}
             >
               <Background gap={16} />
-              <Controls showInteractive={false} />
+              <Controls showInteractive={false}>
+                <FullscreenButton on={fullscreen} onToggle={toggleFullscreen} />
+              </Controls>
             </ReactFlow>
           </PairInfo.Provider>
         </div>
 
-        <div style={{ flex: '0 1 260px', minWidth: 220 }}>
+        <div style={{ flex: '0 1 260px', minWidth: 220, overflowY: fullscreen ? 'auto' : undefined }}>
           {selected ? (
             <Space orientation="vertical" style={{ width: '100%' }}>
               <Text strong>Round</Text>
