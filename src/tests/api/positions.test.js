@@ -26,13 +26,11 @@ describe('Positions API', () => {
     const res = await createPosition({
       title: '_Test Engineer',
       department: 'QA',
-      jobDescription: 'Test the product end to end.',
     })
     expect(res.data.status).toBe('success')
     expect(res.data.data).toMatchObject({
       title: '_Test Engineer',
       department: 'QA',
-      jobDescription: 'Test the product end to end.',
     })
     expect(typeof res.data.data.id).toBe('number')
     createdId = res.data.data.id
@@ -61,48 +59,52 @@ describe('Positions API', () => {
     expect(res.data.data.map(t => t.name)).toEqual(['Internship', 'FTE', 'Intern-to-FTE'])
   })
 
-  it('POST /positions — missing job description returns 400', async () => {
-    await expect(createPosition({ title: '_No JD' })).rejects.toMatchObject({ response: { status: 400 } })
-  })
-
   // ── PUT ───────────────────────────────────────────────────────────────────
   it('PUT /positions/:id — updates the position', async () => {
     const res = await updatePosition(createdId, {
       title: '_Senior Test Engineer',
       department: 'QA',
-      jobDescription: 'Lead QA for the product.',
     })
     expect(res.data.status).toBe('success')
     expect(res.data.data.title).toBe('_Senior Test Engineer')
     expect(res.data.data.id).toBe(createdId)
   })
 
-  // ── JD PDF ────────────────────────────────────────────────────────────────
+  // ── JD letters ────────────────────────────────────────────────────────────
   const pdf = (body) => new Blob([body], { type: 'application/pdf' })
+  const file = (name = 'test-jd.pdf', body = '%PDF-1.4 test') => new File([pdf(body)], name, { type: 'application/pdf' })
+  const letters = async () => (await getPosition(createdId)).data.data.jdLetters
 
-  it('POST /positions/:id/jd — stores a PDF and the position lists its name', async () => {
-    const res = await uploadPositionJd(createdId, new File([pdf('%PDF-1.4 test')], 'test-jd.pdf', { type: 'application/pdf' }))
-    expect(res.data.data).toBe('test-jd.pdf')
-    expect((await getPosition(createdId)).data.data.jdFileName).toBe('test-jd.pdf')
+  it('POST /positions/:id/jd — one letter per location, listed on the position', async () => {
+    expect((await uploadPositionJd(createdId, '_Chennai', file('chennai.pdf'))).data.data).toBe('chennai.pdf')
+    await uploadPositionJd(createdId, '_Pune', file('pune.pdf'))
+    expect((await letters()).map(l => [l.location, l.fileName])).toEqual([['_Chennai', 'chennai.pdf'], ['_Pune', 'pune.pdf']])
   })
 
-  it('GET /positions/:id/jd — returns the PDF', async () => {
-    const res = await getPositionJd(createdId)
+  it('POST /positions/:id/jd — the same location replaces its letter', async () => {
+    await uploadPositionJd(createdId, '_chennai', file('chennai-v2.pdf'))
+    const ls = await letters()
+    expect(ls).toHaveLength(2)
+    expect(ls.find(l => l.location === '_Chennai').fileName).toBe('chennai-v2.pdf')
+  })
+
+  it('GET /positions/:id/jd/:letterId — returns the PDF', async () => {
+    const res = await getPositionJd(createdId, (await letters())[0].id)
     expect(res.status).toBe(200)
     expect(res.headers['content-type']).toContain('application/pdf')
   })
 
   it('POST /positions/:id/jd — a file that is not a PDF returns 400', async () => {
-    await expect(uploadPositionJd(createdId, new File([pdf('<html>')], 'fake.pdf', { type: 'application/pdf' })))
+    await expect(uploadPositionJd(createdId, '_Chennai', file('fake.pdf', '<html>')))
       .rejects.toMatchObject({ response: { status: 400 } })
   })
 
-  it('DELETE /positions/:id/jd — removes it', async () => {
-    await deletePositionJd(createdId)
-    expect((await getPosition(createdId)).data.data.jdFileName).toBeNull()
-    await expect(getPositionJd(createdId)).rejects.toMatchObject({ response: { status: 404 } })
-    // Re-added so deleting the position below also covers a position that has a JD.
-    await uploadPositionJd(createdId, new File([pdf('%PDF-1.4 test')], 'test-jd.pdf', { type: 'application/pdf' }))
+  it('DELETE /positions/:id/jd/:letterId — removes it', async () => {
+    const [first] = await letters()
+    await deletePositionJd(createdId, first.id)
+    expect(await letters()).toHaveLength(1)
+    await expect(getPositionJd(createdId, first.id)).rejects.toMatchObject({ response: { status: 404 } })
+    // One left so deleting the position below also covers a position that has a JD letter.
   })
 
   // ── DELETE ────────────────────────────────────────────────────────────────

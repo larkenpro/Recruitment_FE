@@ -18,6 +18,7 @@ export default function Positions() {
   const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState(null)
+  const [newLoc, setNewLoc] = useState({}) // location typed per position row, for the next JD upload
   const [form] = Form.useForm()
 
   const { data: positions, isLoading } = useQuery({
@@ -43,22 +44,22 @@ export default function Positions() {
   })
 
   const jdUploadMutation = useMutation({
-    mutationFn: ({ id, file }) => uploadPositionJd(id, file),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['positions'] }); message.success('JD PDF uploaded') },
+    mutationFn: ({ id, location, file }) => uploadPositionJd(id, location, file),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['positions'] }); message.success('JD letter uploaded') },
     onError: (err) => message.error(getErrorMessage(err)),
   })
 
   const jdDeleteMutation = useMutation({
-    mutationFn: deletePositionJd,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['positions'] }); message.success('JD PDF removed') },
+    mutationFn: ({ id, letterId }) => deletePositionJd(id, letterId),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['positions'] }); message.success('JD letter removed') },
     onError: (err) => message.error(getErrorMessage(err)),
   })
 
   // The tab is opened before the fetch so the popup blocker treats it as part of the click.
-  const viewJd = async (id) => {
+  const viewJd = async (id, letterId) => {
     const tab = window.open('', '_blank')
     try {
-      const res = await getPositionJd(id)
+      const res = await getPositionJd(id, letterId)
       tab.location = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
     } catch (err) {
       tab.close()
@@ -72,7 +73,6 @@ export default function Positions() {
     form.setFieldsValue({
       title: titles[Math.floor(Math.random() * titles.length)],
       department: departments[Math.floor(Math.random() * departments.length)],
-      jobDescription: 'Work with the team to design, build and test features end to end. Freshers welcome; training provided.',
     })
   }
 
@@ -108,24 +108,36 @@ export default function Positions() {
     { title: 'Title', dataIndex: 'title', render: t => <strong>{t}</strong> },
     { title: 'Department', dataIndex: 'department', render: d => d || '—' },
     {
-      // Sent to colleges in automated emails, so a missing one is flagged rather than hidden.
-      title: 'Job Description', dataIndex: 'jobDescription', width: 360, ellipsis: true,
-      render: jd => jd || <Tag color="red">Missing</Tag>,
-    },
-    {
-      title: 'JD PDF', dataIndex: 'jdFileName', render: (name, r) => (
-        <Space size={4}>
-          {name && <Button size="small" type="link" icon={<FilePdfOutlined />} onClick={() => viewJd(r.id)} style={{ padding: 0 }}>{name}</Button>}
-          <Upload accept="application/pdf,.pdf" showUploadList={false} beforeUpload={(file) => { jdUploadMutation.mutate({ id: r.id, file }); return false }}>
-            <Button size="small" icon={<UploadOutlined />} loading={jdUploadMutation.isPending && jdUploadMutation.variables?.id === r.id}>
-              {name ? 'Replace' : 'Upload'}
-            </Button>
-          </Upload>
-          {name && (
-            <Popconfirm title="Remove this JD PDF?" onConfirm={() => jdDeleteMutation.mutate(r.id)} okText="Remove" cancelText="No">
-              <Button size="small" type="text" danger icon={<DeleteOutlined />} aria-label="Remove JD PDF" />
-            </Popconfirm>
-          )}
+      title: 'JD Letters', dataIndex: 'jdLetters', render: (letters, r) => (
+        <Space direction="vertical" size={4}>
+          {(letters ?? []).map(l => (
+            <Space key={l.id} size={4}>
+              <Tag>{l.location}</Tag>
+              <Button size="small" type="link" icon={<FilePdfOutlined />} onClick={() => viewJd(r.id, l.id)} style={{ padding: 0 }}>{l.fileName}</Button>
+              <Popconfirm title={`Remove the ${l.location} JD letter?`} onConfirm={() => jdDeleteMutation.mutate({ id: r.id, letterId: l.id })} okText="Remove" cancelText="No">
+                <Button size="small" type="text" danger icon={<DeleteOutlined />} aria-label="Remove JD letter" />
+              </Popconfirm>
+            </Space>
+          ))}
+          <Space.Compact size="small">
+            <Input
+              placeholder="Location" style={{ width: 120 }} value={newLoc[r.id] ?? ''}
+              onChange={e => setNewLoc({ ...newLoc, [r.id]: e.target.value })}
+            />
+            <Upload
+              accept="application/pdf,.pdf" showUploadList={false}
+              beforeUpload={(file) => {
+                const location = (newLoc[r.id] ?? '').trim()
+                if (!location) message.warning('Enter a location first')
+                else jdUploadMutation.mutate({ id: r.id, location, file }, { onSuccess: () => setNewLoc(({ [r.id]: _, ...rest }) => rest) })
+                return false
+              }}
+            >
+              <Button size="small" icon={<UploadOutlined />} loading={jdUploadMutation.isPending && jdUploadMutation.variables?.id === r.id}>
+                Upload
+              </Button>
+            </Upload>
+          </Space.Compact>
         </Space>
       ),
     },
@@ -179,14 +191,6 @@ export default function Positions() {
           </Form.Item>
           <Form.Item name="department" label="Department">
             <Input placeholder="Engineering" />
-          </Form.Item>
-          <Form.Item
-            name="jobDescription"
-            label="Job Description"
-            extra="Included in the automated emails sent to colleges."
-            rules={[{ required: true, whitespace: true, message: 'Job description is required' }]}
-          >
-            <Input.TextArea rows={6} placeholder="Responsibilities, skills, eligibility…" />
           </Form.Item>
         </Form>
       </Modal>
