@@ -813,7 +813,7 @@ export default function EventDetail() {
                   ]}
                 >
                   <List.Item.Meta
-                    title={<Text strong>{p.title}</Text>}
+                    title={<><Text strong>{p.title}</Text>{p.deleted && <Tag color="red" style={{ marginLeft: 8 }}>No longer exists</Tag>}</>}
                     description={
                       <>
                         {p.department && <div>{p.department}</div>}

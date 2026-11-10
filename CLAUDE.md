@@ -228,7 +228,7 @@ The Offer table and the Offers page keep their own Offer Status buttons for filt
 
 ### Positions (`src/pages/Positions.jsx`)
 - CRUD for job positions (title, department, job description — required, sent to colleges in automated emails; the table flags positions without one as "Missing"). One row per title — the type (Internship / FTE / Intern-to-FTE) is chosen per event on EventDetail, not here.
-- Delete with Popconfirm.
+- Delete with Popconfirm. It is a soft delete: events that used the position still list it, tagged "No longer exists" (`deleted` on the position); `eventPairs` leaves it out so apply forms don't offer it.
 - JD PDF column: Upload / Replace (PDF only), the file name opens it in a new tab (fetched as a blob — the endpoint needs the JWT), and a remove button.
 - Filter keys: department.
 - API: `src/api/positions.js` — `getPositions`, `createPosition`, `updatePosition`, `deletePosition`, `uploadPositionJd`, `getPositionJd`, `deletePositionJd`.

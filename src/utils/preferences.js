@@ -5,7 +5,7 @@ export const preferenceKey = (p) => `${p.position.id}:${p.type.id}`
 
 // Every (position, type) pair an event is hiring for, from GET /events/{id}/positions.
 export const eventPairs = (eventPositions) =>
-  (eventPositions ?? []).flatMap((position) => (position.types ?? []).map((type) => ({ position, type })))
+  (eventPositions ?? []).filter((position) => !position.deleted).flatMap((position) => (position.types ?? []).map((type) => ({ position, type })))
 
 // Ranker state for an existing application: its chosen pairs first in their order, then the event's
 // other open pairs unticked. A chosen pair the event no longer offers is dropped.

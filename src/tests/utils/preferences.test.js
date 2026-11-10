@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { hasInternship, hasItPosition, offerPairs, rankOfPair, rankedWithChosenFirst, tickedPairs } from '../../utils/preferences'
+import { eventPairs, hasInternship, hasItPosition, offerPairs, rankOfPair, rankedWithChosenFirst, tickedPairs } from '../../utils/preferences'
 
 const pair = (department) => ({ position: { id: 1, title: 'X', department }, type: { id: 1, name: 'FTE' } })
 const typed = (id, name) => ({ position: { id: 1, title: 'X' }, type: { id, name } })
@@ -76,5 +76,16 @@ describe('rankedWithChosenFirst', () => {
 
     expect(ranked.map((p) => `${p.position.id}:${p.type.id}`)).toEqual(['2:1', '1:1', '3:1'])
     expect([...selected]).toEqual(['2:1', '1:1'])
+  })
+})
+
+describe('eventPairs', () => {
+  it('leaves out deleted positions so nobody can apply to them', () => {
+    const type = { id: 2, name: 'FTE' }
+    const pairs = eventPairs([
+      { id: 1, title: 'Dev', types: [type] },
+      { id: 2, title: 'Gone', deleted: true, types: [type] },
+    ])
+    expect(pairs.map((p) => p.position.id)).toEqual([1])
   })
 })

@@ -30,6 +30,7 @@ export const updateEventApplication =(eventId, candidateId, data) => api.put(`/e
 export const getEventPositions = (eventId) => api.get(`/events/${eventId}/positions`)
 // positions: [{ positionId, typeIds }] — every position needs at least one type
 export const addEventPositions = (eventId, positions) => api.post(`/events/${eventId}/positions`, positions)
+export const deleteEvent = (id) => api.delete(`/events/${id}`)
 export const removeEventPosition = (eventId, positionId) => api.delete(`/events/${eventId}/positions/${positionId}`)
 export const setEventPositionTypes = (eventId, positionId, typeIds) => api.put(`/events/${eventId}/positions/${positionId}/types`, typeIds)
 export const getEventStageSummary = (eventId, stageName = 'Resume') =>

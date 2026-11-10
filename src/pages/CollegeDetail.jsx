@@ -57,7 +57,7 @@ export default function CollegeDetail() {
       render: (positions) => (positions?.length
         ? positions.map((p) => (
           <Tag key={p.id} style={{ marginBottom: 4 }}>
-            {p.title}{p.types?.length ? ` · ${p.types.map((t) => t.name).join(', ')}` : ''}
+            {p.title}{p.deleted ? ' (no longer exists)' : ''}{p.types?.length ? ` · ${p.types.map((t) => t.name).join(', ')}` : ''}
           </Tag>
         ))
         : '—'),
