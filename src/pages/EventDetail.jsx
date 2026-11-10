@@ -48,6 +48,7 @@ import {
   rejectPendingInEvent,
   rejectPendingInRound,
   setRoundDecisions,
+  setRoundGrades,
   exportStudentSheet,
   setRoundInterviewer,
   exportOfferStatus,
@@ -82,7 +83,7 @@ import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
 import { useCandidateColumns } from '../components/CandidateColumns'
 import PipelineGraph from '../components/PipelineGraph'
-import { DEFAULT_MAX_SCORE, hasReached, isStageKey, pairColors, pairLabel, roundsBefore, stageKey, stageOf } from '../utils/roundGraph'
+import { DEFAULT_MAX_SCORE, GRADES, gradeLabel, hasReached, isStageKey, pairColors, pairLabel, roundsBefore, stageKey, stageOf } from '../utils/roundGraph'
 import { useColumnChoice } from '../components/ColumnPicker'
 import DownloadExcel from '../components/DownloadExcel'
 import DownloadOfferStatus from '../components/DownloadOfferStatus'
@@ -515,6 +516,15 @@ export default function EventDetail() {
   })
   const bulkDecisionMutation = useMutation({
     mutationFn: ({ roundId, candidateIds, result }) => setRoundDecisions(id, roundId, candidateIds, result),
+    onSuccess: (res, { roundId, candidateIds }) => {
+      setRoundTicks((prev) => ({ ...prev, [roundId]: (prev[roundId] ?? []).filter((c) => !candidateIds.includes(c)) }))
+      message.success(res.data.message)
+    },
+    onError: (err) => message.error(getErrorMessage(err)),
+    onSettled: refreshPipeline,
+  })
+  const bulkGradeMutation = useMutation({
+    mutationFn: ({ roundId, candidateIds, grade }) => setRoundGrades(id, roundId, candidateIds, grade),
     onSuccess: (res, { roundId, candidateIds }) => {
       setRoundTicks((prev) => ({ ...prev, [roundId]: (prev[roundId] ?? []).filter((c) => !candidateIds.includes(c)) }))
       message.success(res.data.message)
@@ -1120,14 +1130,19 @@ export default function EventDetail() {
     }
 
     const updateRoundEdit = (candidateId, field, value) =>
-      setRoundTableEdits((prev) => ({ ...prev, [candidateId]: { ...(prev[candidateId] ?? {}), [field]: value } }))
+      setRoundTableEdits((prev) => ({
+        ...prev,
+        // The grade decides the round, as the backend does on save.
+        [candidateId]: { ...(prev[candidateId] ?? {}), [field]: value, ...(field === 'grade' && value ? { result: value === 'OUT' ? 'FAIL' : 'PASS' } : {}) },
+      }))
 
     const initRoundEdit = () => {
       const initial = {}
       displayCandidates.forEach((c) => {
         const ex = roundResultMap[round.id]?.[c.id]
         initial[c.id] = {
-          score: ex?.score != null ? Number(ex.score) : null,
+          grade: ex?.grade ?? null,
+          score: ex?.grade ? null : (ex?.score != null ? Number(ex.score) : null), // a score from before grades stays until a grade replaces it
           result: ex?.result ?? null,
           interviewer: ex?.interviewer ?? null,
           comments: ex?.comments ?? null,
@@ -1139,7 +1154,7 @@ export default function EventDetail() {
 
     const handleRoundSave = () => {
       Object.entries(roundTableEdits).forEach(([cidStr, data]) => {
-        if (data.score != null || data.result != null) {
+        if (data.grade != null || data.score != null || data.result != null) {
           eventRoundScoreMutation.mutate({ candidateId: Number(cidStr), roundId: round.id, ...data })
         }
       })
@@ -1240,28 +1255,42 @@ export default function EventDetail() {
       col.rollNo,
       {
         key: 'score',
+        title: 'Grade',
+        exportTitle: `${round.name} grade`,
+        exportValue: (r) => gradeLabel(roundResultMap[round.id]?.[r.id]),
+        render: (_, r) => {
+          if (isEditing) {
+            const edit = roundTableEdits[r.id]
+            return (
+              <Select
+                size="small"
+                style={{ width: 150 }}
+                allowClear
+                placeholder="Grade"
+                options={GRADES}
+                value={edit?.grade ?? null}
+                onChange={(val) => updateRoundEdit(r.id, 'grade', val ?? null)}
+              />
+            )
+          }
+          return gradeLabel(roundResultMap[round.id]?.[r.id])
+        },
+      },
+      {
+        key: 'scoreValue',
         title: `Score (out of ${round.maxScore ?? DEFAULT_MAX_SCORE})`,
         exportTitle: `${round.name} score (out of ${round.maxScore ?? DEFAULT_MAX_SCORE})`,
         exportValue: (r) => roundResultMap[round.id]?.[r.id]?.score,
-        render: (_, r) => {
-          if (isEditing) return (
-            <InputNumber
-              size="small"
-              style={{ width: 80 }}
-              min={0}
-              max={round.maxScore ?? DEFAULT_MAX_SCORE}
-              step={0.5}
-              precision={2}
-              value={roundTableEdits[r.id]?.score ?? null}
-              onChange={(val) => updateRoundEdit(r.id, 'score', val)}
-            />
-          )
-          const res = roundResultMap[round.id]?.[r.id]
-          return res?.score != null ? String(res.score) : '—'
-        },
+        render: (_, r) => roundResultMap[round.id]?.[r.id]?.score ?? '—',
       },
       ...earlierRounds.map((prev) => ({
         key: `score:${prev.key}`,
+        title: `${prev.name} grade`,
+        exportValue: (r) => gradeLabel(roundResultMap[prev.id]?.[r.id]),
+        render: (_, r) => gradeLabel(roundResultMap[prev.id]?.[r.id]),
+      })),
+      ...earlierRounds.map((prev) => ({
+        key: `scoreValue:${prev.key}`,
         title: `${prev.name} score (out of ${prev.maxScore ?? DEFAULT_MAX_SCORE})`,
         exportValue: (r) => roundResultMap[prev.id]?.[r.id]?.score,
         render: (_, r) => roundResultMap[prev.id]?.[r.id]?.score ?? '—',
@@ -1432,7 +1461,7 @@ export default function EventDetail() {
         <Text strong={ticked.length > 0}>
           {ticked.length > 0
             ? `${ticked.length} candidate${ticked.length === 1 ? '' : 's'} selected`
-            : 'Tick candidates below to set their round decision together'}
+            : 'Tick candidates below to set their grade or round decision together'}
         </Text>
         {!allTicked && (
           <Button size="small" type="link" style={{ padding: 0 }} onClick={() => setRoundTicks((prev) => ({ ...prev, [round.id]: displayCandidates.map((c) => c.id) }))}>
@@ -1444,7 +1473,22 @@ export default function EventDetail() {
             Clear
           </Button>
         )}
-        <Space size={8} style={{ marginLeft: 'auto' }}>
+        <Space size={8} style={{ marginLeft: 'auto' }} wrap>
+          <Text type={ticked.length > 0 ? undefined : 'secondary'}>Grade them:</Text>
+          <Select
+            style={{ width: 170 }}
+            placeholder="Grade"
+            disabled={ticked.length === 0}
+            loading={bulkGradeMutation.isPending}
+            options={GRADES}
+            value={null}
+            onChange={(grade) => Modal.confirm({
+              centered: true,
+              title: `Grade ${ticked.length} candidate${ticked.length === 1 ? '' : 's'} ${GRADES.find((g) => g.value === grade).label} in ${round.name}?`,
+              content: `Replaces their grade, and sets their round decision to ${grade === 'OUT' ? 'Fail' : 'Pass'}.`,
+              onOk: () => bulkGradeMutation.mutate({ roundId: round.id, candidateIds: ticked.map((c) => c.id), grade }),
+            })}
+          />
           <Text type={ticked.length > 0 ? undefined : 'secondary'}>Set them to:</Text>
           <Space.Compact>
             {ROUND_RESULT_OPTIONS.map((o) => (

@@ -46,6 +46,9 @@ export const rejectPendingInEvent = (eventId) => api.post(`/events/${eventId}/re
 // The same decision ('PASS' | 'FAIL' | 'ON_HOLD') for everyone ticked in a round; scores and comments stay.
 export const setRoundDecisions = (eventId, roundId, candidateIds, result) =>
   api.post(`/events/${eventId}/rounds/${roundId}/decisions`, { candidateIds, result })
+// The same grade ('EXCELLENT' | 'VERY_GOOD' | 'GOOD' | 'NOT_BAD' | 'OUT') for everyone ticked in a round; Out fails them, any other grade passes them.
+export const setRoundGrades = (eventId, roundId, candidateIds, grade) =>
+  api.post(`/events/${eventId}/rounds/${roundId}/grades`, { candidateIds, grade })
 export const exportOfferStatus = (eventId, candidateIds) =>
   api.post(`/events/${eventId}/offer-status/xlsx`, { candidateIds }, { responseType: 'blob' })
 // Groups belong to one Group Discussion round of the event.

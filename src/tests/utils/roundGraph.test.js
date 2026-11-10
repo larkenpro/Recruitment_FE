@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { PAIR_COLORS, arrowStyle, roundPairs, spreadOut, createsCycle, fitTemplate, pairColors, hasReached, isPairKey, isStageKey, layoutPairs, layoutRounds, pairLabel, pipelineLayout, roundsBefore, stageOf, toGraphPayload } from '../../utils/roundGraph'
+import { PAIR_COLORS, gradeLabel, arrowStyle, roundPairs, spreadOut, createsCycle, fitTemplate, pairColors, hasReached, isPairKey, isStageKey, layoutPairs, layoutRounds, pairLabel, pipelineLayout, roundsBefore, stageOf, toGraphPayload } from '../../utils/roundGraph'
 
 const edges = [{ from: 'coding', to: 'tech' }, { from: 'tech', to: 'hr' }, { from: 'aptitude', to: 'hr' }]
 
@@ -205,5 +205,15 @@ describe('roundsBefore', () => {
 
   it('a starting round has none', () => {
     expect(roundsBefore(graph, '9')).toEqual([])
+  })
+})
+
+describe('gradeLabel', () => {
+  it('names the grade without its percentage, falls back to a score from before grades, else a dash', () => {
+    expect(gradeLabel({ grade: 'VERY_GOOD', score: 8 })).toBe('Very Good')
+    expect(gradeLabel({ grade: 'OUT', score: null })).toBe('Out')
+    expect(gradeLabel({ grade: null, score: 7.5 })).toBe('7.5')
+    expect(gradeLabel({ grade: null, score: null })).toBe('—')
+    expect(gradeLabel(undefined)).toBe('—')
   })
 })

@@ -210,6 +210,17 @@ function Defaults() {
         {number('roundMaxScore', 'Maximum marks', { min: 1, max: 999, precision: 0 })}
         {number('roundWeight', 'Fit score weight', { min: 0, step: 0.1 })}
       </Row>
+      <Divider orientation="left">Round grades</Divider>
+      <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+        What share of a round&apos;s maximum marks each grade scores. Unlike the rest, these apply to every round:
+        grades already given keep the score they were saved with. Out scores nothing and fails the candidate.
+      </Text>
+      <Row gutter={GUTTER}>
+        {number('gradeExcellent', 'Excellent %', { min: 0, max: 100, precision: 0 })}
+        {number('gradeVeryGood', 'Very Good %', { min: 0, max: 100, precision: 0 })}
+        {number('gradeGood', 'Good %', { min: 0, max: 100, precision: 0 })}
+        {number('gradeNotBad', 'Not Bad %', { min: 0, max: 100, precision: 0 })}
+      </Row>
       <Button type="primary" htmlType="submit" loading={save.isPending}>Save defaults</Button>
     </Form>
   )

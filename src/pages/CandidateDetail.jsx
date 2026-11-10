@@ -23,7 +23,6 @@ import {
   Empty,
   Form,
   Input,
-  InputNumber,
   Modal,
   Popconfirm,
   Radio,
@@ -67,9 +66,8 @@ import { OFFER_RESPONSES, offerResponse } from '../utils/offers'
 import { getErrorMessage } from '../utils/errorUtils'
 import { GUTTER, useLayoutMetrics } from '../theme'
 import { PIPELINE_STAGES, useStageDecision } from '../hooks/useStageDecision'
-import { numberRule } from '../components/validation/rules'
 import { DATE_FORMAT, formatDate, formatDateTime } from '../utils/dates'
-import { DEFAULT_MAX_SCORE } from '../utils/roundGraph'
+import { DEFAULT_MAX_SCORE, GRADES, gradeLabel } from '../utils/roundGraph'
 
 const { Title, Text } = Typography
 const STATUS_COLOR = { SHORTLISTED: 'green', HOLD: 'orange', REJECTED: 'red' }
@@ -239,7 +237,7 @@ export default function CandidateDetail() {
   const openEditRound = (eventId, round) => {
     setEditingRound({ eventId, roundId: round.roundId, roundName: round.roundName, maxScore: round.maxScore ?? DEFAULT_MAX_SCORE })
     scoreForm.setFieldsValue({
-      score: round.score,
+      grade: round.grade,
       result: round.result,
       interviewer: round.interviewer,
       comments: round.comments,
@@ -424,10 +422,10 @@ export default function CandidateDetail() {
               <Row gutter={[16, 8]}>
                 <Col xs={12} sm={6}>
                   <Text type="secondary" style={{ fontSize: 12 }}>
-                    Score
+                    Grade
                   </Text>
                   <div style={{ fontWeight: 600, fontSize: 15 }}>
-                    {round.score != null ? `${round.score} / ${round.maxScore ?? DEFAULT_MAX_SCORE}` : '—'}
+                    {gradeLabel(round)}
                   </div>
                 </Col>
                 <Col xs={12} sm={6}>
@@ -1215,12 +1213,12 @@ export default function CandidateDetail() {
         okText="Save"
       >
         <Form form={scoreForm} layout="vertical" style={{ marginTop: 8 }}>
-          <Form.Item
-            name="score"
-            label={`Score (out of ${editingRound?.maxScore ?? DEFAULT_MAX_SCORE})`}
-            rules={[numberRule({ max: editingRound?.maxScore ?? DEFAULT_MAX_SCORE, decimals: 2, message: `Must be between 0 and ${editingRound?.maxScore ?? DEFAULT_MAX_SCORE}` })]}
-          >
-            <InputNumber style={{ width: '100%' }} min={0} max={editingRound?.maxScore ?? DEFAULT_MAX_SCORE} step={0.5} />
+          <Form.Item name="grade" label="Grade">
+            <Select
+              allowClear
+              options={GRADES}
+              onChange={(grade) => grade && scoreForm.setFieldValue('result', grade === 'OUT' ? 'FAIL' : 'PASS')}
+            />
           </Form.Item>
           <Form.Item name="result" label="Result" rules={[{ required: true, message: 'Select a result' }]}>
             <Select options={['PASS', 'FAIL', 'ON_HOLD'].map((v) => ({ value: v }))} />

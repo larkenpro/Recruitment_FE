@@ -6,6 +6,20 @@
 // What a round's scores are out of when nobody set it.
 export const DEFAULT_MAX_SCORE = 10
 
+// How a candidate did in a round, shown by name. The backend stores that grade's % of the round's max as their
+// score (the percentages are the Defaults page's) and the grade decides the round: Out fails, any other grade
+// passes. The number is only shown by the round tables' optional Score columns.
+export const GRADES = [
+  { value: 'EXCELLENT', label: 'Excellent' },
+  { value: 'VERY_GOOD', label: 'Very Good' },
+  { value: 'GOOD', label: 'Good' },
+  { value: 'NOT_BAD', label: 'Not Bad' },
+  { value: 'OUT', label: 'Out' },
+]
+// A result's grade as text; a score from before grades existed shows as the number.
+export const gradeLabel = (res) =>
+  GRADES.find((g) => g.value === res?.grade)?.label ?? (res?.score != null ? String(res.score) : '—')
+
 export const ROUND_TYPES = ['ASSESSMENT', 'INTERVIEW', 'GROUP_DISCUSSION', 'HR']
 export const ROUND_TYPE_COLOR = { ASSESSMENT: 'purple', INTERVIEW: 'blue', GROUP_DISCUSSION: 'orange', HR: 'green' }
 
