@@ -3,10 +3,11 @@ import { Card, Table, Button, Modal, Form, Input, Select, Tag, message } from 'a
 import { PlusOutlined, EditOutlined, ExperimentOutlined, DeleteOutlined, TeamOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { getColleges, createCollege, updateCollege } from '../api/colleges'
+import { getColleges, createCollege, updateCollege, deleteCollege } from '../api/colleges'
 import { useColumnFilter } from '../hooks/useColumnFilter'
 import FilterBar from '../components/FilterBar'
 import { EMAIL_RULE, PHONE_RULE } from '../components/validation/rules'
+import confirmByTyping from '../components/confirmByTyping'
 import DevOnly from '../components/DevOnly'
 import { SPACE } from '../theme'
 import { isSimilar, isSimilarOrBlank } from '../utils/similarity'
@@ -55,6 +56,12 @@ export default function Colleges() {
     mutationFn: ({ id, data }) => updateCollege(id, data),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['colleges'] }); closeContactsModal(); message.success('Contacts updated!') },
     onError: (err) => message.error(err.response?.data?.message || `Failed to update contacts (${err.response?.status ?? 'network error'})`),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteCollege,
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['colleges'] }); message.success('College deleted') },
+    onError: (err) => message.error(err.response?.data?.message || 'Failed to delete college'),
   })
 
   const fillTestData = () => {
@@ -139,8 +146,16 @@ export default function Colleges() {
       }
     },
     {
-      title: 'Actions', width: 80, render: (_, record) => (
-        <Button icon={<EditOutlined />} size="small" onClick={() => openEdit(record)} />
+      title: 'Actions', width: 110, render: (_, record) => (
+        <>
+          <Button icon={<EditOutlined />} size="small" onClick={() => openEdit(record)} />
+          <Button icon={<DeleteOutlined />} size="small" danger style={{ marginLeft: 8 }} onClick={() => confirmByTyping({
+            title: 'Delete this college?',
+            content: 'Only possible once it has no events.',
+            phrase: record.name,
+            onOk: () => deleteMutation.mutateAsync(record.id).catch(() => {}),
+          })} />
+        </>
       )
     },
   ]

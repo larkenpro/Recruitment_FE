@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { Card, Table, Button, Modal, Form, Select, Tag, message, Space, Popover, DatePicker } from 'antd'
 import dayjs from 'dayjs'
-import { PlusOutlined, LinkOutlined, ExperimentOutlined, ImportOutlined } from '@ant-design/icons'
+import { PlusOutlined, LinkOutlined, DeleteOutlined, ExperimentOutlined, ImportOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { getEvents, createEvent, updateEventStatus } from '../api/events'
+import { getEvents, createEvent, updateEventStatus, deleteEvent } from '../api/events'
 import { getColleges } from '../api/colleges'
 import { getPositions, getPositionTypes } from '../api/positions'
 import PositionTypeFields, { toEventPositions } from '../components/PositionTypeFields'
+import confirmByTyping from '../components/confirmByTyping'
 import DevOnly from '../components/DevOnly'
 import { SPACE } from '../theme'
 import { useColumnFilter } from '../hooks/useColumnFilter'
@@ -51,6 +52,12 @@ export default function Events() {
   const statusMutation = useMutation({
     mutationFn: ({ id, status }) => updateEventStatus(id, status),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['events'] }); message.success('Status updated!') },
+    onError: (err) => message.error(getErrorMessage(err)),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteEvent,
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['events'] }); message.success('Event deleted') },
     onError: (err) => message.error(getErrorMessage(err)),
   })
 
@@ -112,9 +119,17 @@ export default function Events() {
     },
     {
       title: 'Actions', render: (_, r) => (
-        <Button size="small" icon={<LinkOutlined />} onClick={() => navigate(`/events/${r.id}`)}>
-          Generate Link
-        </Button>
+        <Space>
+          <Button size="small" icon={<LinkOutlined />} onClick={() => navigate(`/events/${r.id}`)}>
+            Generate Link
+          </Button>
+          <Button size="small" danger icon={<DeleteOutlined />} onClick={() => confirmByTyping({
+            title: 'Delete this event?',
+            content: "Its candidates' applications, rounds and results go with it.",
+            phrase: r.college?.name,
+            onOk: () => deleteMutation.mutateAsync(r.id).catch(() => {}),
+          })} />
+        </Space>
       )
     },
   ]
