@@ -1,0 +1,11 @@
+# Lives on the UAT server at /opt/rec_fe_uat/docker-compose.yml (image is built by GitHub Actions).
+services:
+  recruitment-fe:
+    image: rajathhebbark/recruitment-fe:uat
+    container_name: recruitment-fe-uat
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "50m", max-file: "3" }
+    ports:
+      - "80:80"
